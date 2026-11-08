@@ -1,10 +1,8 @@
 import { IconRefresh, IconX } from '@tabler/icons-react'
-import { App as CapacitorApp } from '@capacitor/app'
-import { registerPlugin } from '@capacitor/core'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useLocalSettings } from '@/features/settings/local-settings'
-import { fetchLatestApps, isNewer } from '@/lib/apps'
+import { applyUpdate, checkForUpdate, setReadyUpdate, useReadyUpdate } from '@/lib/app-update'
 import { inCapacitor } from '@/lib/capacitor'
 import { desktop } from '@/lib/desktop'
 import { defineMessages, useMessages } from '@/lib/i18n'
@@ -30,23 +28,6 @@ const messages = defineMessages({
   },
 })
 
-interface UpdaterPlugin {
-  download(options: { url: string }): Promise<{ path: string }>
-  install(): Promise<void>
-}
-
-const Updater = registerPlugin<UpdaterPlugin>('LumioUpdater')
-
-/** Android checks at most this often (the desktop app checks in its main process at every start). */
-const CHECK_EVERY_MS = 6 * 60 * 60_000
-const CHECKED_KEY = 'lumio.updateCheckedAt'
-
-/** A new version that is downloaded and waits to be installed (Lumio's own apps). */
-interface Ready {
-  version: string
-  kind: 'android' | 'desktop' | 'deb'
-}
-
 /**
  * Lumio's apps updating themselves. Android: now and then the newest release is looked up; a newer APK is downloaded in
  * the background and offered for installing. Desktop: the main process downloads it (electron/main.mjs) and tells the
@@ -55,45 +36,26 @@ interface Ready {
 export function UpdateReady() {
   const t = useMessages(messages)
   const { settings } = useLocalSettings()
-  const [ready, setReady] = useState<Ready | null>(null)
+  const ready = useReadyUpdate()
   const [hidden, setHidden] = useState(false)
 
   // Desktop: the main process announces a downloaded update (also one found before the page loaded).
   useEffect(() => {
     const app = desktop()
     if (!app) return
-    const show = (update: { version: string; kind: 'desktop' | 'deb' } | null) => update && setReady(update)
+    const show = (update: { version: string; kind: 'desktop' | 'deb' } | null) => update && setReadyUpdate(update)
     void app.getUpdate().then(show)
     return app.onUpdateReady(show)
   }, [])
 
   // Android: look for a newer release, download it in the background.
   useEffect(() => {
-    if (!inCapacitor() || !settings.autoUpdate) return
-    let stopped = false
-    void (async () => {
-      try {
-        const last = Number(localStorage.getItem(CHECKED_KEY) ?? 0)
-        if (Date.now() - last < CHECK_EVERY_MS) return
-        localStorage.setItem(CHECKED_KEY, String(Date.now()))
-        const [info, release] = await Promise.all([CapacitorApp.getInfo(), fetchLatestApps()])
-        const apk = release?.assets.find((asset) => asset.kind === 'android')
-        if (!release || !apk || !isNewer(release.version, info.version)) return
-        await Updater.download({ url: apk.url })
-        if (!stopped) setReady({ version: release.version, kind: 'android' })
-      } catch {
-        // Offline or the download failed: the next check tries again.
-      }
-    })()
-    return () => {
-      stopped = true
-    }
+    if (inCapacitor() && settings.autoUpdate) void checkForUpdate()
   }, [settings.autoUpdate])
 
   if (!ready || hidden) return null
   const apply = () => {
-    if (ready.kind === 'android') void Updater.install().catch(() => undefined)
-    else void desktop()?.applyUpdate()
+    applyUpdate()
     setHidden(true)
   }
   return (

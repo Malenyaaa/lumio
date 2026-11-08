@@ -25,6 +25,9 @@ export interface DesktopUpdate {
   kind: 'desktop' | 'deb'
 }
 
+/** What looking for an update found: one is downloaded and ready, this is the newest, or it couldn't be checked. */
+export type UpdateCheck = 'ready' | 'current' | 'failed' | 'off'
+
 interface LumioDesktop {
   platform: string
   getSettings(): Promise<DesktopSettings>
@@ -37,6 +40,10 @@ interface LumioDesktop {
   onUpdateReady(handler: (update: DesktopUpdate) => void): () => void
   /** Installs the downloaded update now (restarting Lumio), or opens the package. */
   applyUpdate(): Promise<void>
+  /** Looks for a newer version now (also with automatic updates off) and downloads it. Older apps lack it. */
+  checkUpdate?(): Promise<UpdateCheck>
+  /** The app's version. Older apps lack it. */
+  getVersion?(): Promise<string>
 }
 
 export const desktop = (): LumioDesktop | undefined => (typeof window === 'undefined' ? undefined : (window as { lumioDesktop?: LumioDesktop }).lumioDesktop)

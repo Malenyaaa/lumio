@@ -53,6 +53,7 @@ jobs:
           build-args: |
             VITE_JELLYFIN_URL=/
             VITE_SERVER_LOCKED=true
+            LUMIO_BUILD=${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
           # Layers are cached in the Actions cache, not the registry (keeps package storage small).
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -18,3 +18,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+/** Which build this is (a tag or commit), set by vite.config. */
+declare const __LUMIO_BUILD__: string

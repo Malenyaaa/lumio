@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { createBrowserRouter, createRoutesFromElements, Navigate, Outlet, Route, RouterProvider, ScrollRestoration } from 'react-router'
+import { createBrowserRouter, createRoutesFromElements, Outlet, Route, RouterProvider, ScrollRestoration } from 'react-router'
 import { ErrorBoundary, RouteError } from '@/components/error-boundary'
 import { NotFound } from '@/components/not-found'
 import { AppShell, RequireSession } from '@/components/app-shell'
@@ -49,7 +49,10 @@ import { SearchPage } from '@/features/search/search-page'
 import { ControlsPage } from '@/features/settings/controls-page'
 import { HomeSettingsPage } from '@/features/settings/home-settings-page'
 import { InterfacePage } from '@/features/settings/interface-page'
-import { DownloadsPage, PlaybackPage } from '@/features/settings/playback-page'
+import { AppPage } from '@/features/settings/app-page'
+import { MusicPage } from '@/features/settings/music-page'
+import { PlaybackPage } from '@/features/settings/playback-page'
+import { DownloadsPage } from '@/features/settings/storage-page'
 import { PrivacyPage } from '@/features/settings/privacy-page'
 import { ProfilePage } from '@/features/settings/profile-page'
 import { SettingsLayout } from '@/features/settings/settings-layout'
@@ -93,11 +96,14 @@ function SocialHostWhenSignedIn() {
 function settingsRoutes() {
   return (
     <Route path="settings" element={<SettingsLayout />}>
-      <Route index element={<Navigate to="profile" replace />} />
+      {/* Phones show the list of pages here; wide screens go on to the first (see SettingsLayout). */}
+      <Route index element={null} />
       <Route path="profile" element={<ProfilePage />} />
       <Route path="home" element={<HomeSettingsPage />} />
       <Route path="playback" element={<PlaybackPage />} />
+      <Route path="music" element={<MusicPage />} />
       <Route path="downloads" element={<DownloadsPage />} />
+      <Route path="app" element={<AppPage />} />
       <Route path="subtitles" element={<SubtitlesPage />} />
       <Route path="controls" element={<ControlsPage />} />
       <Route path="interface" element={<InterfacePage />} />

@@ -1,6 +1,6 @@
 import { inCapacitor } from '@/lib/capacitor'
 import { useMessages } from '@/lib/i18n'
-import { Row, Section, SelectField, SettingsPage, SwitchField } from './fields'
+import { Section, SelectField, SettingsPage, SwitchField } from './fields'
 import { useLocalSettings } from './local-settings'
 import { controlsMessages, fieldMessages } from './messages'
 
@@ -74,11 +74,9 @@ export function ControlsPage() {
         />
       </Section>
 
-      {/* Only Lumio's Android app can shrink a video into a floating window on its own. */}
+      {/* Only Lumio's Android app reads swipes in the video player. */}
       {inCapacitor() && (
-        <Section title={t.app} scope="device">
-          <SwitchField id="auto-pip" label={t.autoPipLabel} hint={t.autoPipHint} checked={settings.autoPip} onChange={(checked) => update({ autoPip: checked })} />
-          <SwitchField id="auto-update" label={t.autoUpdateLabel} hint={t.autoUpdateHint} checked={settings.autoUpdate} onChange={(checked) => update({ autoUpdate: checked })} />
+        <Section title={t.touch} scope="device">
           <SwitchField
             id="player-gestures"
             label={t.gesturesLabel}
@@ -88,12 +86,6 @@ export function ControlsPage() {
           />
         </Section>
       )}
-
-      <Section title={t.controller} scope="device">
-        <Row label={t.gamepadLabel} hint={t.gamepadHint}>
-          <p className="text-sm text-muted-foreground sm:text-right">{t.notAvailable}</p>
-        </Row>
-      </Section>
     </SettingsPage>
   )
 }

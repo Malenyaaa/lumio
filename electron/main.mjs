@@ -251,20 +251,22 @@ function updateAsset(assets) {
  * when Lumio quits; an AppImage replaces itself right away and runs the new one from the next start; a deb waits to be
  * opened. The page shows a card about it ("quit Lumio to update"), the tray an entry.
  */
-async function checkForUpdate() {
-  if (!readSettings().autoUpdate) return
+async function checkForUpdate({ force = false } = {}) {
+  if (!force && !readSettings().autoUpdate) return 'off'
+  // Already downloaded: nothing more to fetch.
+  if (update) return 'ready'
   try {
     const response = await net.fetch(RELEASES, { headers: { Accept: 'application/vnd.github+json' } })
-    if (!response.ok) return
+    if (!response.ok) return 'failed'
     const release = await response.json()
-    if (!release.tag_name || !newer(release.tag_name, app.getVersion())) return
+    if (!release.tag_name || !newer(release.tag_name, app.getVersion())) return 'current'
     const asset = updateAsset(release.assets ?? [])
-    if (!asset) return
+    if (!asset) return 'current'
     const folder = join(app.getPath('userData'), 'updates')
     mkdirSync(folder, { recursive: true })
     const file = join(folder, asset.name)
     const download = await net.fetch(asset.browser_download_url)
-    if (!download.ok || !download.body) return
+    if (!download.ok || !download.body) return 'failed'
     await pipeline(Readable.fromWeb(download.body), createWriteStream(`${file}.part`))
     renameSync(`${file}.part`, file)
     const version = release.tag_name.replace(/^v/, '')
@@ -276,8 +278,10 @@ async function checkForUpdate() {
     } else update = { version, kind: file.endsWith('.deb') ? 'deb' : 'desktop', file }
     window?.webContents.send('desktop:update-ready', { version, kind: update.kind })
     updateTray()
+    return 'ready'
   } catch {
     // Offline or GitHub unreachable: next start.
+    return 'failed'
   }
 }
 
@@ -301,6 +305,9 @@ function installUpdate({ restart }) {
 }
 
 ipcMain.handle('desktop:update', () => (update ? { version: update.version, kind: update.kind } : null))
+// Settings → App: "Check for updates" (also with automatic updates off).
+ipcMain.handle('desktop:check-update', () => checkForUpdate({ force: true }))
+ipcMain.handle('desktop:version', () => app.getVersion())
 ipcMain.handle('desktop:apply-update', () => {
   if (installUpdate({ restart: true })) {
     quitting = true
