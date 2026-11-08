@@ -156,8 +156,9 @@ export function ArtistDiscographyPage() {
               {filters[filter]} <IconChevronDown className="size-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuLabel>{t.show}</DropdownMenuLabel>
+              {/* A label belongs inside its group (Base UI). */}
               <DropdownMenuRadioGroup value={filter} onValueChange={(value) => setFilter(value as Filter)}>
+                <DropdownMenuLabel>{t.show}</DropdownMenuLabel>
                 {(Object.keys(filters) as Filter[]).map((value) => (
                   <DropdownMenuRadioItem key={value} value={value}>
                     {filters[value]}
@@ -171,8 +172,9 @@ export function ArtistDiscographyPage() {
               {sorts[sort]} <IconChevronDown className="size-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuLabel>{t.sortBy}</DropdownMenuLabel>
+              {/* A label belongs inside its group (Base UI). */}
               <DropdownMenuRadioGroup value={sort} onValueChange={(value) => setSort(value as Sort)}>
+                <DropdownMenuLabel>{t.sortBy}</DropdownMenuLabel>
                 {(Object.keys(sorts) as Sort[]).map((value) => (
                   <DropdownMenuRadioItem key={value} value={value}>
                     {sorts[value]}
