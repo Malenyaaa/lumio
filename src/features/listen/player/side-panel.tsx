@@ -204,25 +204,36 @@ function SlidingViews({ view, titles, track }: { view: ListenPanel; titles: Reco
   const [leaving, setLeaving] = useState(false)
   // A view already open when the panel appears (back from big) is simply there; one opened meanwhile slides in.
   const [slideIn, setSlideIn] = useState(false)
+  // Switching from one view to another: the old one stays underneath until the new one has slid over it.
+  const [below, setBelow] = useState<ListenPanel | null>(null)
   // Follow the panel's view during render: a new view slides in; closing lets the shown one slide out first.
   if (over && over !== shown) {
+    setBelow(shown && !leaving ? shown : null)
     setShown(over)
     setLeaving(false)
     setSlideIn(true)
   } else if (!over && shown && !leaving) setLeaving(true)
   return (
     <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-      <PanelLayer view="nowPlaying" title={titles.nowPlaying} track={track} expanded={false} />
+      <PanelLayer key="now-playing" view="nowPlaying" title={titles.nowPlaying} track={track} expanded={false} />
+      {/* Keyed by view: the one that was shown stays the same element underneath (not rebuilt). */}
+      {below && below !== shown && (
+        <div key={below} className="absolute inset-0 z-10 flex flex-col bg-surface">
+          <PanelLayer view={below} title={titles[below]} track={track} expanded={false} />
+        </div>
+      )}
       {shown && (
         <div
           key={shown}
           onAnimationEnd={(event) => {
             // Only its own slide (animations inside it, such as the playing bars, bubble up too).
-            if (!leaving || event.target !== event.currentTarget) return
+            if (event.target !== event.currentTarget) return
+            setBelow(null)
+            if (!leaving) return
             setShown(null)
             setLeaving(false)
           }}
-          className={cn('absolute inset-0 z-10 flex flex-col bg-surface', leaving ? 'panel-slide-out' : slideIn && 'panel-slide-in')}
+          className={cn('absolute inset-0 z-20 flex flex-col bg-surface', leaving ? 'panel-slide-out' : slideIn && 'panel-slide-in')}
         >
           <PanelLayer view={shown} title={titles[shown]} track={track} expanded={false} />
         </div>
@@ -706,7 +717,13 @@ function LyricsView({ track, big }: { track: BaseItemDto; big: boolean }) {
   const placed = useRef(false)
   useLayoutEffect(() => {
     if (current < 0) return
-    list.current?.querySelector<HTMLElement>(`[data-line="${current}"]`)?.scrollIntoView({ block: 'center', behavior: placed.current ? 'smooth' : 'instant' })
+    // Only the lyrics' own scroll box moves (scrollIntoView would also shift the layers around it, mid-slide).
+    const line = list.current?.querySelector<HTMLElement>(`[data-line="${current}"]`)
+    const box = list.current?.parentElement
+    if (line && box) {
+      const offset = line.getBoundingClientRect().top - box.getBoundingClientRect().top - (box.clientHeight - line.offsetHeight) / 2
+      box.scrollTo({ top: box.scrollTop + offset, behavior: placed.current ? 'smooth' : 'instant' })
+    }
     placed.current = true
   }, [current])
 
