@@ -28,6 +28,7 @@ import { defineMessages, useMessages } from '@/lib/i18n'
 import { portraitImageUrl } from '@/lib/images'
 import { cn } from '@/lib/utils'
 import { TrackMenu } from '../track-menu'
+import { SleepTimerMenu } from './sleep-timer-menu'
 import { useLyrics } from './lyrics'
 import { playerBarMessages } from './messages'
 import { music as musicPlayer, useMusic } from './music-player'
@@ -167,6 +168,7 @@ function Player({ track }: { track: BaseItemDto }) {
           <div className="flex items-center justify-between">
             <DeviceMenu />
             <div className="flex items-center gap-1">
+              <SleepTimerMenu className="size-11" iconClassName="size-5" activeClassName="text-listen" />
               <Toggle label={hasLyrics ? bar.lyrics : bar.noLyrics} active={false} disabled={!hasLyrics} onClick={() => setPhoneSheet('lyrics')}>
                 <IconMicrophone2 className="size-5" />
               </Toggle>

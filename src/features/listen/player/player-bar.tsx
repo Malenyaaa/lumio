@@ -41,6 +41,7 @@ import { toggleListenPanel, useListenPanel, type ListenPanel } from './panel'
 import { playCircle } from '../play-circle'
 import { endTrackDrag, startTrackDrag, useTrackDrop } from '../track-drag'
 import { TrackContextMenu } from '../track-menu'
+import { SleepTimerMenu } from './sleep-timer-menu'
 import { usePlayerControls, usePlayerTime } from './player-controls'
 import { lengthLabel, toggleRemainingTime, useRemainingTime } from '@/lib/remaining-time'
 import { artistHref, useTrackArtists } from '../credits'
@@ -315,6 +316,7 @@ function Extras() {
           </ToggleButton>
         ),
       )}
+      <SleepTimerMenu className="size-8" />
       <IconButton label={state.muted ? t.unmute : t.mute} onClick={state.toggleMute}>
         <VolumeIcon className="size-4" />
       </IconButton>

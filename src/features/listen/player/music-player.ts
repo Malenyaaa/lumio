@@ -20,6 +20,7 @@ import { MediaSession as NativeMediaSession } from '@capgo/capacitor-media-sessi
 import { flushPlays, logBuffering, logPlay, type EndReason, type PlayContext, type StartReason } from './play-log'
 import { downloadedAudioUrl, downloadId, isDownloaded, setDownloadQuality, setDownloadSource, setReleaseHandler } from './downloads'
 import { DIRECT_FORMATS } from './quality'
+import { setSleepHandler, stopsAfterTrack } from './sleep-timer'
 
 /**
  * Listen's player: one <audio> element for the whole app, so music keeps playing while the user moves between pages
@@ -623,6 +624,8 @@ async function cacheAhead() {
 
 function onEnded() {
   report('stopped', currentTrack(), 'trackdone')
+  // The sleep timer was set to the end of this track.
+  if (stopsAfterTrack()) return setState({ playing: false })
   if (state.repeat === 'one') return void go(state.index, 0, 'trackdone')
   if (state.index < state.queue.length - 1) return void go(state.index + 1, undefined, 'trackdone')
   if (state.repeat === 'all' && state.queue.length) return void go(0, undefined, 'trackdone')
@@ -1062,6 +1065,8 @@ if (inJellyfinApp()) {
     },
   })
 }
+
+setSleepHandler(() => music.pause())
 
 // The desktop app's tray menu: play/pause and next.
 desktop()?.onMediaCommand((command) => (command === 'next' ? music.next() : music.toggle()))
