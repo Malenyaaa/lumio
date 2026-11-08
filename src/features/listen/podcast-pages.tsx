@@ -776,7 +776,9 @@ export function EpisodePage() {
   const itemId = `podcast-episode-${episodeId}`
   // Apple lists a show's latest 200 episodes; older ones the user saved or started are still known from there.
   const known = savedEpisodes.find((item) => item.Id === itemId) ?? Object.values(progressAll).find((entry) => entry.item?.Id === itemId)?.item
-  const episode = podcast.data?.episodes.find((entry) => entry.trackId === episodeId) ?? (known ? episodeFromItem(known) : undefined)
+  // Addressed by its Apple id, or by its feed GUID (the history knows only that).
+  const episode =
+    podcast.data?.episodes.find((entry) => entry.trackId === episodeId || entry.guid === episodeId) ?? (known ? episodeFromItem(known) : undefined)
   const extras = useEpisodeExtras(episode, podcast.data?.podcast.feedUrl)
   const tint = useDominantColor(artworkSize(episode?.image, 64)).data
   const transcriptBox = useRef<HTMLDivElement>(null)
