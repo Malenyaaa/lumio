@@ -58,9 +58,14 @@ function forwardedHeaders(request: IncomingMessage, upstream?: ReturnType<typeof
 export function proxyToJellyfin(base: string, request: IncomingMessage, response: ServerResponse, url: URL) {
   const upstream = upstreamOf(base)
   const headers = forwardedHeaders(request, upstream)
-  // jellyfin-web's page gets the admin script: asked for uncompressed, so it can be put in.
-  const isWebPage = request.method === 'GET' && /^\/web\/?(index\.html)?$/i.test(url.pathname)
-  if (isWebPage) headers['accept-encoding'] = 'identity'
+  // jellyfin-web's page gets the admin script: asked for uncompressed, so it can be put in, and always in full (a copy
+  // the browser kept from before Lumio fronted Jellyfin has no script, and a "not modified" would keep it).
+  const isWebPage = (request.method === 'GET' || request.method === 'HEAD') && /^\/web\/?(index\.html)?$/i.test(url.pathname)
+  if (isWebPage) {
+    headers['accept-encoding'] = 'identity'
+    delete headers['if-none-match']
+    delete headers['if-modified-since']
+  }
   const outgoing = (upstream.secure ? httpsRequest : httpRequest)(
     {
       hostname: upstream.url.hostname,
@@ -72,13 +77,13 @@ export function proxyToJellyfin(base: string, request: IncomingMessage, response
     },
     (answer) => {
       const type = String(answer.headers['content-type'] ?? '')
-      if (isWebPage && answer.statusCode === 200 && type.includes('text/html')) {
+      if (isWebPage && request.method === 'GET' && answer.statusCode === 200 && type.includes('text/html')) {
         const chunks: Buffer[] = []
         answer.on('data', (chunk: Buffer) => chunks.push(chunk))
         answer.on('end', () => {
           const page = Buffer.concat(chunks).toString('utf8').replace(/<head([^>]*)>/i, (tag) => `${tag}<script>${ADMIN_SCRIPT}</script>`)
-          const { 'content-length': _length, 'content-encoding': _encoding, etag: _etag, ...rest } = answer.headers
-          response.writeHead(200, { ...rest, 'Content-Length': Buffer.byteLength(page), 'Cache-Control': 'no-cache' })
+          const { 'content-length': _length, 'content-encoding': _encoding, etag: _etag, 'last-modified': _modified, ...rest } = answer.headers
+          response.writeHead(200, { ...rest, 'Content-Length': Buffer.byteLength(page), 'Cache-Control': 'no-store' })
           response.end(page)
         })
         return

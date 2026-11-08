@@ -20,18 +20,43 @@ Internet ─► your reverse proxy (TLS) ─► lumio:8097
 
 ## The bare minimum
 
-1. **Add Lumio to your Jellyfin stack.** Start from [`deploy/docker-compose.yml`](../deploy/docker-compose.yml): the
+Set Jellyfin up first, on its own, and put Lumio in front of it last. Once Lumio fronts it, jellyfin-web only opens its
+administration pages, so the first-run wizard and anything you'd rather do in the familiar Jellyfin UI comes first.
+
+### 1. Set up Jellyfin directly
+
+With your reverse proxy still pointing at Jellyfin (`jellyfin:8096`):
+
+1. Run Jellyfin's setup wizard: administrator account, libraries, metadata language.
+2. Install the plugins you want (Dashboard → Plugins; see [Recommended](#recommended): SSO, Meilisearch, Intro
+   Skipper) and restart Jellyfin.
+3. If you use SSO, set the provider up in the SSO plugin now and check that signing in through jellyfin-web works.
+   In the provider's settings, set **Scheme override** to `https`: behind proxies the plugin otherwise builds its
+   redirect address with `http://`, which the identity provider rejects ("mismatching redirect URI").
+
+### 2. Prepare Jellyfin for Lumio in front
+
+In Jellyfin (Dashboard → Networking), while you can still reach it directly:
+
+- **Known proxies**: your reverse proxy and the Lumio container. Docker containers often share more than one network
+  with Jellyfin, so add their names (e.g. `lumio, npm-app`) or the networks' ranges (e.g. `172.22.0.0/16`) rather
+  than single addresses, which change when containers are recreated. Then Jellyfin trusts the forwarded headers: it
+  sees people's real addresses (not Lumio's) and that they came over `https`.
+- **Published server URL** (or `JELLYFIN_PublishedServerUrl` on the container): the public `https://` address.
+- Restart Jellyfin (it reads the known proxies at start).
+
+### 3. Add Lumio and switch over
+
+1. **Add Lumio to the Jellyfin stack.** Start from [`deploy/docker-compose.yml`](../deploy/docker-compose.yml): the
    `lumio` service, with `JELLYFIN_URL` pointing at Jellyfin *inside* the stack (`http://jellyfin:8096`) and
-   `PROXY_JELLYFIN: "true"`. Its data (follows, settings, caches, looked-up credits) lives in the `lumio-data` volume.
-   The image is `ghcr.io/palmarhealer/lumio:latest`, built from `main` by GitHub Actions.
+   `PROXY_JELLYFIN: "true"`. Declare its `lumio-data` volume under `volumes:` too (Docker refuses a stack that uses
+   an undeclared volume; Portainer shows that as a bare "500"). The image is `ghcr.io/palmarhealer/lumio:latest`,
+   built from `main` by GitHub Actions.
 2. **Point your reverse proxy at Lumio** instead of Jellyfin: `lumio:8097`, with WebSocket support on (Nginx Proxy
-   Manager: "Websockets Support"; Caddy and Traefik pass them by default). Lumio and the proxy need a network in common;
-   Jellyfin no longer needs to be reachable from outside.
-3. **Tell Jellyfin about the proxies** (Dashboard → Networking):
-   - *Known proxies*: your reverse proxy and the Lumio container (their addresses on the Docker network, or the
-     network's range). Then Jellyfin sees people's real addresses, not Lumio's.
-   - *Published server URL* (or `JELLYFIN_PublishedServerUrl`): the public `https://` address.
-4. **Open the address** and sign in with a Jellyfin account (password or Quick Connect).
+   Manager: "Websockets Support"; Caddy and Traefik pass them by default). Lumio and the proxy need a network in
+   common; Jellyfin no longer needs to be reachable from outside.
+3. **Open the address** and sign in (SSO, password or Quick Connect). If you used jellyfin-web in that browser
+   before, reload once: an old copy of jellyfin-web's page in the browser's cache doesn't know about Lumio yet.
 
 That's all Lumio needs. Everything below makes it better.
 
