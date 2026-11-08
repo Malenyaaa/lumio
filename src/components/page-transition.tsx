@@ -28,13 +28,30 @@ export function PageTransition({ children }: { children: ReactNode }) {
       if (navigationType !== 'POP') window.scrollTo(0, 0)
       return
     }
-    // The browser only restores the window's position; a panel's is put back here.
+    // Remembered while scrolling: by the time the page is left, the next one may already have cut the panel short.
+    const remember = () => positions.set(key, root.scrollTop)
+    root.addEventListener('scroll', remember, { passive: true })
+    let frame = 0
+    // The browser only restores the window's position; a panel's is put back here, once the page is tall enough
+    // (its content may still be loading), for at most a couple of seconds.
     if (navigationType === 'POP') {
       const top = positions.get(key) ?? 0
-      requestAnimationFrame(() => root.scrollTo(0, top))
+      const until = performance.now() + 2500
+      const restore = () => {
+        root.scrollTo(0, top)
+        if (Math.abs(root.scrollTop - top) > 1 && performance.now() < until) frame = requestAnimationFrame(restore)
+      }
+      restore()
     } else root.scrollTo(0, 0)
+    // Scrolling by hand while it waits for the page means the user is elsewhere already: stop restoring.
+    const stop = () => cancelAnimationFrame(frame)
+    root.addEventListener('wheel', stop, { passive: true })
+    root.addEventListener('touchstart', stop, { passive: true })
     return () => {
-      positions.set(key, root.scrollTop)
+      cancelAnimationFrame(frame)
+      root.removeEventListener('scroll', remember)
+      root.removeEventListener('wheel', stop)
+      root.removeEventListener('touchstart', stop)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
