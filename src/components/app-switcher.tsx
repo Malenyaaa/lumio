@@ -25,7 +25,7 @@ const messages = defineMessages({
 /** Each app's mark: its own icon on its own color, so the two read as sibling products (like Photoshop and After Effects). */
 export const MODE_STYLE: Record<AppMode, { icon: typeof IconMovie; tile: string; text: string }> = {
   watch: { icon: IconMovie, tile: 'bg-linear-to-br from-rose-500 to-orange-500', text: 'text-rose-400' },
-  listen: { icon: IconHeadphones, tile: 'bg-linear-to-br from-listen to-teal-600', text: 'text-listen' },
+  listen: { icon: IconHeadphones, tile: 'bg-linear-to-br from-listen to-teal-800', text: 'text-listen' },
 }
 
 export function ModeTile({ mode, className }: { mode: AppMode; className?: string }) {

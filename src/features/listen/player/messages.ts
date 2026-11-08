@@ -20,11 +20,12 @@ export const playerBarMessages = defineMessages({
     unmute: 'Ton an',
     volume: 'Lautstärke',
     position: 'Position',
-    like: 'Zu Lieblingssongs hinzufügen',
-    unlike: 'Aus Lieblingssongs entfernen',
+    like: 'Zu Favoriten hinzufügen',
+    unlike: 'Aus Favoriten entfernen',
     openListen: 'In Listen öffnen',
     stop: 'Wiedergabe beenden',
     addedToQueue: (n: number) => (n === 1 ? 'Zur Warteschlange hinzugefügt' : `${n} Songs zur Warteschlange hinzugefügt`),
+    playingNext: (n: number) => (n === 1 ? 'Wird als Nächstes abgespielt' : `${n} Songs werden als Nächstes abgespielt`),
   },
   en: {
     player: 'Music player',
@@ -50,5 +51,6 @@ export const playerBarMessages = defineMessages({
     openListen: 'Open in Listen',
     stop: 'Stop playback',
     addedToQueue: (n: number) => (n === 1 ? 'Added to queue' : `${n} songs added to queue`),
+    playingNext: (n: number) => (n === 1 ? 'Playing next' : `${n} songs playing next`),
   },
 })

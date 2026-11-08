@@ -1,7 +1,20 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
 import { FriendActivityButton } from '@/features/social/social-ui'
 import { getImageApi } from '@jellyfin/sdk/lib/utils/api/image-api'
-import { IconArrowLeft, IconDeviceMobile, IconExternalLink, IconHistory, IconLayoutDashboard, IconLogout, IconSettings, IconTags, IconUser } from '@tabler/icons-react'
+import {
+  IconArrowLeft,
+  IconDeviceDesktop,
+  IconDeviceMobile,
+  IconExternalLink,
+  IconHistory,
+  IconLayoutDashboard,
+  IconLogout,
+  IconMoon,
+  IconSettings,
+  IconSun,
+  IconTags,
+  IconUser,
+} from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
 import { Navigate, Outlet, useLocation, useMatch, useNavigate } from 'react-router'
 import { AppBrand } from '@/components/app-switcher'
@@ -16,7 +29,12 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { PluginSlot, useHidden, usePluginRegistry } from '@/features/admin/plugins'
@@ -35,6 +53,7 @@ import { useMessages } from '@/lib/i18n'
 import { markAppReady } from '@/lib/boot'
 import { inMode, isLaunchAtRoot, lastMode, modeHome, rememberMode, rememberPath, useAppMode } from '@/lib/app-mode'
 import { nameColor } from '@/lib/name-color'
+import { useTheme, useThemePreference, type ThemePreference } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 
 /**
@@ -319,6 +338,7 @@ export function HeaderActions({ search = true }: { search?: boolean }) {
             <DropdownMenuItem render={<Link to={inMode(mode, '/settings')} />}>
               <IconSettings /> {t.settings}
             </DropdownMenuItem>
+            <ThemeMenu />
             <AdminMenuItems pages={settingsPages.filter((page) => page.admin)} />
             {plugins.menuItems.length > 0 && <DropdownMenuSeparator />}
             {plugins.menuItems.map((item) =>
@@ -345,5 +365,33 @@ export function HeaderActions({ search = true }: { search?: boolean }) {
       </div>
       <ConnectDeviceDialog open={connectOpen} onOpenChange={setConnectOpen} />
     </>
+  )
+}
+
+/** The theme right from the profile menu: like the device, dark or light (also in settings → interface). */
+function ThemeMenu() {
+  const t = useMessages(shellMessages)
+  const [preference, setPreference] = useThemePreference()
+  const theme = useTheme()
+  const options: Array<{ value: ThemePreference; label: string; icon: typeof IconSun }> = [
+    { value: 'system', label: t.themeSystem, icon: IconDeviceDesktop },
+    { value: 'dark', label: t.themeDark, icon: IconMoon },
+    { value: 'light', label: t.themeLight, icon: IconSun },
+  ]
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>
+        {theme === 'dark' ? <IconMoon /> : <IconSun />} {t.theme}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="w-48">
+        <DropdownMenuRadioGroup value={preference} onValueChange={(value) => setPreference(value as ThemePreference)}>
+          {options.map(({ value, label, icon: Icon }) => (
+            <DropdownMenuRadioItem key={value} value={value} closeOnClick>
+              <Icon /> {label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   )
 }

@@ -20,7 +20,6 @@ import {
 } from '@tabler/icons-react'
 import { Fragment, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
-import { toast } from 'sonner'
 import { Link } from '@/components/link'
 import { FadeImage } from '@/components/media/fade-image'
 import { Slider } from '@/components/ui/slider'
@@ -304,11 +303,7 @@ function Extras() {
 
 /** Songs dropped here are added to the end of the queue (the queue button, and the open queue panel). */
 export function QueueDrop({ className, children }: { className?: string; children: ReactNode }) {
-  const t = useMessages(playerBarMessages)
-  const drop = useTrackDrop((tracks) => {
-    music.addToQueue(tracks)
-    toast.success(t.addedToQueue(tracks.length))
-  })
+  const drop = useTrackDrop((tracks) => music.addToQueue(tracks))
   return (
     <div
       {...drop.handlers}

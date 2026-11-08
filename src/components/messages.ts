@@ -13,6 +13,10 @@ export const shellMessages = defineMessages({
     metadata: 'Metadaten',
     quickConnect: 'Quick Connect',
     logout: 'Abmelden',
+    theme: 'Design',
+    themeSystem: 'Wie das Gerät',
+    themeDark: 'Dunkel',
+    themeLight: 'Hell',
   },
   en: {
     back: 'Back',
@@ -26,6 +30,10 @@ export const shellMessages = defineMessages({
     metadata: 'Metadata',
     quickConnect: 'Quick Connect',
     logout: 'Sign out',
+    theme: 'Theme',
+    themeSystem: 'Match device',
+    themeDark: 'Dark',
+    themeLight: 'Light',
   },
 })
 

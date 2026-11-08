@@ -471,6 +471,21 @@ function shuffled<T>(items: T[]) {
 }
 
 /** `music.play`'s start for "the collection as a whole" (its play button), rather than one picked track. */
+/** Tracks put into the queue (at its end, or next): the app confirms it with a short message (see music-host). */
+type QueuedListener = (how: 'queue' | 'next', items: BaseItemDto[]) => void
+const queuedListeners = new Set<QueuedListener>()
+
+export function onQueued(listener: QueuedListener) {
+  queuedListeners.add(listener)
+  return () => {
+    queuedListeners.delete(listener)
+  }
+}
+
+function announceQueued(how: 'queue' | 'next', items: BaseItemDto[]) {
+  for (const listener of queuedListeners) listener(how, items)
+}
+
 export const START = -1
 
 export const music = {
@@ -497,15 +512,19 @@ export const music = {
   },
   /** Puts tracks right after the current one. */
   playNext(items: BaseItemDto[]) {
+    if (!items.length) return
     if (state.index < 0) return music.play(items)
     const queue = [...state.queue]
     queue.splice(state.index + 1, 0, ...items)
     setState({ queue })
+    announceQueued('next', items)
   },
   /** Appends tracks to the end of the queue. */
   addToQueue(items: BaseItemDto[]) {
+    if (!items.length) return
     if (state.index < 0) return music.play(items)
     setState({ queue: [...state.queue, ...items] })
+    announceQueued('queue', items)
   },
   toggle() {
     if (!audio || state.index < 0) return

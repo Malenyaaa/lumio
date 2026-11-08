@@ -47,7 +47,6 @@ const messages = defineMessages({
     createPlaylist: 'Playlist erstellen',
     createFolder: 'Ordner erstellen',
     addedTo: (name: string) => `Zu „${name}“ hinzugefügt`,
-    addedToQueue: 'Zur Warteschlange hinzugefügt',
     rename: 'Umbenennen',
     deleteFolder: 'Ordner löschen',
   },
@@ -71,7 +70,6 @@ const messages = defineMessages({
     createPlaylist: 'Create playlist',
     createFolder: 'Create folder',
     addedTo: (name: string) => `Added to "${name}"`,
-    addedToQueue: 'Added to queue',
     rename: 'Rename',
     deleteFolder: 'Delete folder',
   },
@@ -196,10 +194,7 @@ export function AlbumMenuItems({ album }: { album: BaseItemDto }) {
       </DropdownMenuItem>
       <DropdownMenuItem
         onClick={() =>
-          void tracks().then((list) => {
-            music.addToQueue(list)
-            toast.success(t.addedToQueue)
-          })
+          void tracks().then((list) => music.addToQueue(list))
         }
       >
         <IconPlaylistAdd /> {t.addToQueue}
@@ -218,10 +213,7 @@ export function PlaylistMenuItems({ playlist, onCreatePlaylist, onCreateFolder }
   return (
     <>
       <DropdownMenuItem
-        onClick={() => {
-          music.addToQueue(list.data ?? [])
-          toast.success(t.addedToQueue)
-        }}
+        onClick={() => music.addToQueue(list.data ?? [])}
       >
         <IconPlaylistAdd /> {t.addToQueue}
       </DropdownMenuItem>
@@ -248,10 +240,7 @@ export function OfficialMenuItems({ playlist }: { playlist: OfficialPlaylist }) 
         <IconCircleCheckFilled className="text-listen" /> {t.removeFromLibrary}
       </DropdownMenuItem>
       <DropdownMenuItem
-        onClick={() => {
-          music.addToQueue(playlist.tracks)
-          toast.success(t.addedToQueue)
-        }}
+        onClick={() => music.addToQueue(playlist.tracks)}
       >
         <IconPlaylistAdd /> {t.addToQueue}
       </DropdownMenuItem>

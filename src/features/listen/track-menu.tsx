@@ -48,8 +48,8 @@ const messages = defineMessages({
     addedTo: (name: string) => `Zu „${name}“ hinzugefügt`,
     addToQueue: 'Zur Warteschlange hinzufügen',
     playNext: 'Als Nächstes abspielen',
-    like: 'Zu Lieblingssongs hinzufügen',
-    unlike: 'Aus Lieblingssongs entfernen',
+    like: 'Zu Favoriten hinzufügen',
+    unlike: 'Aus Favoriten entfernen',
     goToAlbum: 'Zum Album',
     goToArtist: 'Zum Künstler',
     removeFromPlaylist: 'Aus dieser Playlist entfernen',
@@ -68,14 +68,14 @@ const messages = defineMessages({
     addedTo: (name: string) => `Added to "${name}"`,
     addToQueue: 'Add to queue',
     playNext: 'Play next',
-    like: 'Add to Liked Songs',
-    unlike: 'Remove from Liked Songs',
+    like: 'Add to Favorites',
+    unlike: 'Remove from Favorites',
     goToAlbum: 'Go to album',
     goToArtist: 'Go to artist',
     removeFromPlaylist: 'Remove from this playlist',
     goToPodcast: 'Go to podcast',
-    saveEpisode: 'Save to Your Episodes',
-    unsaveEpisode: 'Remove from Your Episodes',
+    saveEpisode: 'Save episode',
+    unsaveEpisode: 'Remove from saved episodes',
     copyLink: 'Copy link',
     songInfo: 'Credits',
     linkCopied: 'Link copied',
@@ -195,7 +195,7 @@ function TrackMenuItems({ track, onRemove }: { track: BaseItemDto; onRemove?: ()
           favorite.mutate(!isLiked)
         }}
       >
-        {/* Liked Songs' own cover as the icon, as in Spotify. */}
+        {/* The Favorites' own cover as the icon. */}
         <LikedCover className="size-4 shrink-0 rounded-[3px] [&_svg]:size-2.5!" /> {isLiked ? t.unlike : t.like}
       </DropdownMenuItem>
       <DropdownMenuSeparator />

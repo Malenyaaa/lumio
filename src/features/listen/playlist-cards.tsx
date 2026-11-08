@@ -15,20 +15,22 @@ import { hasCustomCover, mosaicSources, usePlaylistTracks } from './playlists'
 
 const messages = defineMessages({
   de: {
-    liked: 'Lieblingssongs',
+    liked: 'Favoriten',
     songs: (n: number) => (n === 1 ? '1 Song' : `${n} Songs`),
     playlistBy: (owner: string) => `Playlist · ${owner}`,
     playlist: 'Playlist',
-    thisIs: 'Das ist',
-    forYou: 'Für dich',
+    thisIs: 'Best of',
+    forYou: 'Aus deiner Bibliothek',
+    charts: 'Charts',
   },
   en: {
-    liked: 'Liked Songs',
+    liked: 'Favorites',
     songs: (n: number) => (n === 1 ? '1 song' : `${n} songs`),
     playlistBy: (owner: string) => `Playlist · ${owner}`,
     playlist: 'Playlist',
-    thisIs: 'This is',
-    forYou: 'Made for you',
+    thisIs: 'Best of',
+    forYou: 'From your library',
+    charts: 'Charts',
   },
 })
 
@@ -90,9 +92,9 @@ export function OfficialCover({ playlist, className }: { playlist: OfficialPlayl
       ? portraitImageUrl(api, leader, { fillHeight: 720 })
       : undefined
   const style: CoverStyle = playlist.kind === 'genre' ? 'mix' : playlist.kind === 'artist' ? 'foto' : playlist.kind === 'chart' ? 'block' : 'stimmung'
-  const title = playlist.kind === 'artist' ? (playlist.artist?.Name ?? playlist.title) : playlist.kind === 'chart' ? 'Top 50' : playlist.title
+  const title = playlist.kind === 'artist' ? (playlist.artist?.Name ?? playlist.title) : playlist.kind === 'chart' ? t.charts : playlist.title
   const subtitle =
-    playlist.kind === 'artist' ? t.thisIs : playlist.kind === 'genre' ? undefined : playlist.kind === 'chart' ? playlist.title.replace(/^Top 50 – /, '') : t.forYou
+    playlist.kind === 'artist' ? t.thisIs : playlist.kind === 'genre' ? undefined : playlist.kind === 'chart' ? playlist.title.replace(/^Charts\s*/, '') : t.forYou
 
   useEffect(() => {
     const element = canvas.current
@@ -126,19 +128,19 @@ export function OfficialCover({ playlist, className }: { playlist: OfficialPlayl
   return <canvas ref={canvas} role="img" aria-label={playlist.title} className={cn('block size-full', className)} />
 }
 
-/** The "Your Episodes" tile: deep green with a white bookmark, as in Spotify. */
+/** The saved episodes tile: Lumio's own deep blue to cyan with a white bookmark. */
 export function SavedEpisodesCover({ className }: { className?: string }) {
   return (
-    <div className={cn('grid size-full place-items-center bg-linear-to-br from-emerald-900 via-emerald-700 to-teal-500', className)}>
+    <div className={cn('grid size-full place-items-center bg-linear-to-br from-blue-900 via-sky-700 to-cyan-400', className)}>
       <IconBookmarkFilled className="size-[38%] text-white drop-shadow" />
     </div>
   )
 }
 
-/** The "Liked Songs" tile: violet to blue with a white heart, as in Spotify. */
+/** The Favorites tile: Lumio's own warm pink to amber with a white heart. */
 export function LikedCover({ className }: { className?: string }) {
   return (
-    <div className={cn('grid size-full place-items-center bg-linear-to-br from-indigo-700 via-violet-500 to-sky-300', className)}>
+    <div className={cn('grid size-full place-items-center bg-linear-to-br from-fuchsia-700 via-pink-500 to-amber-300', className)}>
       <IconHeartFilled className="size-[38%] text-white drop-shadow" />
     </div>
   )

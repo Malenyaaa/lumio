@@ -6,12 +6,13 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    /* Listen's accent (play buttons, active toggles, the playing track): a bright green by default, the branding's
-       accent colour when one is set (--listen-accent, see BrandingEffects). Hover is a lighter tone of it; text on it
-       stays readable (--listen-accent-foreground). */
-    --color-listen: var(--listen-accent, #1ed760);
-    --color-listen-hover: color-mix(in srgb, var(--listen-accent, #1ed760) 82%, white);
-    --color-listen-foreground: var(--listen-accent-foreground, #000000);
+    /* Listen's accent (play buttons, active toggles, the playing track): Lumio's own jade green by default (cooler than the usual music-app green) (a lighter
+       tone on dark, a deeper one on light, so text in it stays readable on both), the branding's accent colour when
+       one is set (--listen-accent, see BrandingEffects). Hover is a lighter tone of it; text on it stays readable
+       (--listen-accent-foreground). */
+    --color-listen: var(--listen-accent, var(--listen-default));
+    --color-listen-hover: color-mix(in srgb, var(--listen-accent, var(--listen-default)) 82%, white);
+    --color-listen-foreground: var(--listen-accent-foreground, var(--listen-default-foreground));
     --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', sans-serif;
     --color-sidebar-ring: var(--sidebar-ring);
@@ -59,6 +60,8 @@
 
 :root {
     --background: oklch(1 0 0);
+    --listen-default: #0f8f6e;
+    --listen-default-foreground: #ffffff;
     --surface: oklch(0.965 0 0);
     --surface-hover: oklch(0.93 0 0);
     --foreground: oklch(0.145 0 0);
@@ -97,6 +100,8 @@
 
 .dark {
     --background: oklch(0.145 0 0);
+    --listen-default: #2dd4a7;
+    --listen-default-foreground: #04221a;
     --surface: oklch(0.195 0 0);
     --surface-hover: oklch(0.24 0 0);
     --foreground: oklch(0.985 0 0);
@@ -305,4 +310,9 @@ html.no-page-animations::view-transition-new(*) {
   background: var(--color-listen);
   border: 3px solid var(--background);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-listen) 25%, transparent), 0 4px 12px rgb(0 0 0 / 0.6);
+}
+
+/* In Listen, messages rise above the player bar instead of covering it. */
+html:has([data-app-shell][data-mode='listen']) [data-sonner-toaster][data-y-position='bottom'] {
+  bottom: 6rem !important;
 }

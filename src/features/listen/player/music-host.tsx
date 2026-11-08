@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import { toast } from 'sonner'
 import { useSession } from '@/features/auth/session'
 import { itemOptions } from '@/features/items/queries'
 import { externalOf } from '@/lib/external-items'
@@ -8,7 +9,9 @@ import { artistsOf } from '@/lib/item-links'
 import { connectPodcastProgress } from '../podcasts'
 import { connectRecent } from '../recent'
 import { lyricsOptions } from './lyrics'
-import { connectMusicPlayer, setArtworkResolver, setAutoplayProvider, useMusic } from './music-player'
+import { useMessages } from '@/lib/i18n'
+import { playerBarMessages } from './messages'
+import { connectMusicPlayer, onQueued, setArtworkResolver, setAutoplayProvider, useMusic } from './music-player'
 import { continuation } from '../radio'
 
 /** How many of the next tracks get their pictures, artist and lyrics loaded ahead. */
@@ -17,6 +20,9 @@ const AHEAD_ASSETS = 2
 /** Connects the music player to the signed-in server (stream URLs, play reporting, lock-screen artwork, podcast progress). */
 export function MusicPlayerHost() {
   const { session, api } = useSession()
+  const t = useMessages(playerBarMessages)
+  // Wherever songs are queued (menus, dragging onto the queue), a short message says it worked.
+  useEffect(() => onQueued((how, items) => void toast.success(how === 'next' ? t.playingNext(items.length) : t.addedToQueue(items.length))), [t])
   useEffect(() => {
     connectMusicPlayer(session && api ? { api, userId: session.userId, accessToken: session.accessToken } : null)
     if (api) setArtworkResolver((item) => portraitImageUrl(api, item, { fillHeight: 512 }))
