@@ -12,7 +12,7 @@ import { flushPlayback, rememberPlayback } from '@/lib/playback-outbox'
 import { recordRecent } from '../recent'
 import { adoptIntoCache, audioCacheAvailable, cachedAudioUrl, isCached, prefetchAudio, recordCachedPlay } from './audio-cache'
 import { isOffline } from '@/lib/network'
-import { flushPodcastPlays, logPodcastPlay } from './play-log'
+import { flushPlays, logBuffering, logPlay, type EndReason, type PlayContext, type StartReason } from './play-log'
 import { downloadedAudioUrl, downloadId, isDownloaded, setDownloadQuality, setDownloadSource, setReleaseHandler } from './downloads'
 import { DIRECT_FORMATS } from './quality'
 
@@ -176,11 +176,11 @@ let playSessionId = ''
 let progressTimer: number | undefined
 
 export function connectMusicPlayer(next: typeof connection) {
-  if (!next && connection) stop()
+  if (!next && connection) stop('logout')
   connection = next
   if (next && state.index < 0) restoreSession(next.userId)
-  // Podcast listening time that couldn't be sent before (offline) goes out now.
-  if (next) flushPodcastPlays()
+  // Plays that couldn't be sent before (offline) go out now.
+  if (next) flushPlays()
   // Songs that leave the downloads go into the cache, if they are at least as good as what streams (else they'd play
   // worse than streaming would); otherwise they are dropped.
   setReleaseHandler(
@@ -320,9 +320,9 @@ if (audio) {
   audio.addEventListener('play', () => {
     setState({ playing: true })
     shareActivity(true)
-    // A podcast's listening time counts again from here (it stopped at the pause).
+    // Listening time counts again from here (it stopped at the pause).
     const item = currentTrack()
-    if (item && externalOf(item)) logPodcastPlay('progress', item, true, playSessionId)
+    if (item) logPlay('progress', item, true, playSessionId)
   })
   audio.addEventListener('pause', () => {
     setState({ playing: false })
@@ -330,8 +330,14 @@ if (audio) {
     report('progress')
     writeSession()
   })
-  audio.addEventListener('waiting', () => setState({ buffering: true }))
-  audio.addEventListener('playing', () => setState({ buffering: false }))
+  audio.addEventListener('waiting', () => {
+    setState({ buffering: true })
+    logBuffering(true)
+  })
+  audio.addEventListener('playing', () => {
+    setState({ buffering: false })
+    logBuffering(false)
+  })
   audio.addEventListener('canplay', () => setState({ buffering: false }))
   audio.addEventListener('timeupdate', () => {
     setTime({ position: audio.currentTime, duration: durationOf() })
@@ -342,7 +348,7 @@ if (audio) {
   audio.addEventListener('error', () => {
     setState({ buffering: false })
     // A track that can't be played is skipped rather than stopping the whole queue.
-    if (state.index < state.queue.length - 1) void go(state.index + 1)
+    if (state.index < state.queue.length - 1) void go(state.index + 1, undefined, 'trackerror')
   })
 }
 
@@ -354,14 +360,14 @@ function durationOf() {
 
 // ---- reporting (play counts, "recently played", resume points) ----
 
-function report(kind: 'start' | 'progress' | 'stopped', item = currentTrack()) {
+function report(kind: 'start' | 'progress' | 'stopped', item = currentTrack(), reasonEnd?: EndReason) {
   if (!connection || !item?.Id || !audio) return
+  // Lumio's own play log: how long, and (songs) how the play went.
+  logPlay(kind, item, !audio.paused, playSessionId, { context: kind === 'start' ? startContext : undefined, reasonEnd })
   // Jellyfin doesn't know podcast episodes; Lumio keeps their progress itself.
   const external = externalOf(item)
   if (external) {
     if (kind !== 'start') recordPodcastProgress(external.guid, item, audio.currentTime, durationOf(), kind === 'stopped' || audio.paused)
-    // And how long it was listened to, for the statistics (Jellyfin's Playback Reporting never sees podcasts).
-    logPodcastPlay(kind, item, !audio.paused, playSessionId)
     return
   }
   const info = {
@@ -406,7 +412,21 @@ function report(kind: 'start' | 'progress' | 'stopped', item = currentTrack()) {
 // ---- transport ----
 
 /** Plays the queue's track at `index`, from `startAt` or else from where it was left (long tracks, podcasts). */
-async function go(index: number, startAt?: number) {
+/** How the track playing now came to play (for the play log). */
+let startContext: PlayContext | undefined
+
+/** Why the track playing until now ended, given why the next one starts. */
+function endFor(reason: StartReason): EndReason {
+  return reason === 'appload' ? 'endplay' : reason
+}
+
+/** Where the track at `index` plays from: the collection, the user's queue or autoplay. */
+function sourceOf(index: number) {
+  const kind = state.entries[index]?.kind
+  return kind === 'user' ? 'queue' : kind === 'autoplay' ? 'autoplay' : (state.source ?? undefined)
+}
+
+async function go(index: number, startAt?: number, reason: StartReason = 'clickrow') {
   if (!audio || !connection) return
   // Offline, songs that need the network are skipped: on to the next one that is here (downloaded or cached).
   if (isOffline() && state.queue[index] && !playableOffline(state.queue[index])) {
@@ -420,7 +440,9 @@ async function go(index: number, startAt?: number) {
   startAt ??= resumePoint(item)
   pendingStart = null
   const previous = currentTrack()
-  if (previous && !audio.paused) report('stopped', previous)
+  if (previous && !audio.paused) report('stopped', previous, endFor(reason))
+  // Paused: Jellyfin was told already; the play log still learns why it ended.
+  else if (previous) logPlay('stopped', previous, false, playSessionId, { reasonEnd: endFor(reason) })
   playSessionId = crypto.randomUUID()
   setState({ index, buffering: true })
   setTime({ position: startAt, duration: ticksToSeconds(item.RunTimeTicks ?? 0) })
@@ -432,6 +454,7 @@ async function go(index: number, startAt?: number) {
   // Another track may have been chosen meanwhile.
   if (currentTrack() !== item) return
   audio.src = downloaded ?? cached ?? streamUrl(item)
+  startContext = { reasonStart: reason, source: sourceOf(index), shuffle: state.shuffle, offline: !!(downloaded ?? cached) }
   if (key && cached) recordCachedPlay(key)
   // The position can only be set once the stream's metadata is in.
   if (startAt) audio.addEventListener('loadedmetadata', () => (audio.currentTime = startAt), { once: true })
@@ -549,10 +572,10 @@ async function cacheAhead() {
 }
 
 function onEnded() {
-  report('stopped')
-  if (state.repeat === 'one') return void go(state.index, 0)
-  if (state.index < state.queue.length - 1) return void go(state.index + 1)
-  if (state.repeat === 'all' && state.queue.length) return void go(0)
+  report('stopped', currentTrack(), 'trackdone')
+  if (state.repeat === 'one') return void go(state.index, 0, 'trackdone')
+  if (state.index < state.queue.length - 1) return void go(state.index + 1, undefined, 'trackdone')
+  if (state.repeat === 'all' && state.queue.length) return void go(0, undefined, 'trackdone')
   setState({ playing: false })
 }
 
@@ -648,7 +671,7 @@ export const music = {
    * Replaces the queue with `items` and plays from `startIndex` (a track picked by the user), or with `START` (the
    * collection's play button) from the beginning, or from a random track when shuffling.
    */
-  play(items: BaseItemDto[], startIndex: number = START, options: { shuffle?: boolean; source?: string; startAt?: number } = {}) {
+  play(items: BaseItemDto[], startIndex: number = START, options: { shuffle?: boolean; source?: string; startAt?: number; reason?: StartReason } = {}) {
     const playable = items.filter((item) => item.Id)
     if (!playable.length) return
     if (forRemote(playable)) {
@@ -674,7 +697,8 @@ export const music = {
     }
     setState({ queue, entries: queue.map(() => entry('context')), shuffle, unshuffled: shuffle ? playable : null, source: options.source ?? null })
     if (options.source) recordRecent(options.source)
-    void go(index, options.startAt)
+    // A track picked in a list, or the collection's play button.
+    void go(index, options.startAt, options.reason ?? (startIndex === START ? 'playbtn' : 'clickrow'))
   },
   /** Puts tracks at the front of the user's queue: they play right after the current one. */
   playNext(items: BaseItemDto[]) {
@@ -715,7 +739,7 @@ export const music = {
   toggle() {
     if (!audio || state.index < 0) return
     // Restored after a reload: the track is loaded only now, from where it was left.
-    if (pendingStart !== null) return void go(state.index, pendingStart)
+    if (pendingStart !== null) return void go(state.index, pendingStart, 'appload')
     if (audio.paused) void audio.play().catch(() => undefined)
     else audio.pause()
   },
@@ -750,14 +774,14 @@ export const music = {
     const sink = remoteSink
     remoteSink = null
     try {
-      music.play(items, startIndex, { startAt })
+      music.play(items, startIndex, { startAt, reason: 'remote' })
     } finally {
       remoteSink = sink
     }
   },
   next() {
-    if (state.index < state.queue.length - 1) void go(state.index + 1)
-    else if (state.repeat === 'all' && state.queue.length) void go(0)
+    if (state.index < state.queue.length - 1) void go(state.index + 1, undefined, 'fwdbtn')
+    else if (state.repeat === 'all' && state.queue.length) void go(0, undefined, 'fwdbtn')
   },
   previous() {
     if (!audio) return
@@ -771,10 +795,10 @@ export const music = {
       audio.currentTime = 0
       return
     }
-    void go(state.index - 1)
+    void go(state.index - 1, undefined, 'backbtn')
   },
   jump(index: number) {
-    void go(index)
+    void go(index, undefined, 'clickrow')
   },
   seek(seconds: number) {
     if (!audio) return
@@ -851,7 +875,7 @@ export const music = {
   },
   /** Ends playback and empties the queue (the mini player's close button). */
   stop() {
-    stop()
+    stop('endplay')
   },
   /** Moves a queued track to another position. */
   move(from: number, to: number) {
@@ -866,10 +890,12 @@ export const music = {
   },
 }
 
-/** Stops and forgets everything (signing out). */
-function stop() {
+/** Stops and forgets everything (the mini player's close button, or signing out). */
+function stop(reason: EndReason = 'endplay') {
   if (!audio) return
-  report('stopped')
+  const item = currentTrack()
+  if (item && !audio.paused) report('stopped', item, reason)
+  else if (item) logPlay('stopped', item, false, playSessionId, { reasonEnd: reason })
   pendingStart = null
   reportActivity(null)
   audio.pause()

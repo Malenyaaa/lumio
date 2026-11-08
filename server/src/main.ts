@@ -1101,8 +1101,9 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
   const user = path.match(/^\/users\/([0-9a-f-]{32,36})$/i)
   if (user && request.method === 'GET') return send(response, 200, profileFor(me.id, user[1]!))
 
-  // POST /me/plays {session, key, title, subtitle, contextId, image, client, startedAt, seconds}: how long the user has
-  // been listening to a podcast episode in this session (sent while it plays; Jellyfin never sees podcasts).
+  // POST /me/plays {session, kind, key, title, subtitle, contextId, image, client, startedAt, seconds, source,
+  // reasonStart, reasonEnd, shuffle, offline, bufferingMs}: a listening session, sent while it plays. Podcasts (which
+  // Jellyfin never sees) are counted here; for songs Jellyfin counts the play and Lumio keeps how it went.
   // GET /me/plays?limit=&before=: their plays, newest first.
   if (path === '/me/plays') {
     if (request.method === 'POST') {
@@ -1114,10 +1115,11 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
       const startedAt = Number(body?.startedAt)
       const seconds = Math.round(Number(body?.seconds))
       if (!session || !key || !title || !Number.isFinite(startedAt) || !Number.isFinite(seconds) || seconds < 0 || seconds > 24 * 3600) return send(response, 400, { error: 'Bad play' })
+      const reason = (value: unknown) => (typeof value === 'string' && /^[a-z]{2,20}$/.test(value) ? value : undefined)
       store.recordPlay({
         session,
         userId: me.id,
-        kind: 'podcast',
+        kind: body?.kind === 'audio' ? 'audio' : 'podcast',
         key,
         title,
         subtitle: text(body?.subtitle),
@@ -1126,6 +1128,12 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
         client: text(body?.client, 100),
         startedAt: Math.min(startedAt, Date.now()),
         seconds,
+        source: text(body?.source, 200),
+        reasonStart: reason(body?.reasonStart),
+        reasonEnd: reason(body?.reasonEnd),
+        shuffle: typeof body?.shuffle === 'boolean' ? body.shuffle : undefined,
+        offline: typeof body?.offline === 'boolean' ? body.offline : undefined,
+        bufferingMs: Number.isFinite(Number(body?.bufferingMs)) ? Math.max(0, Math.round(Number(body?.bufferingMs))) : undefined,
       })
       return send(response, 204)
     }

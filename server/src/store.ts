@@ -45,25 +45,37 @@ export interface Activity {
 export interface Play {
   session: string
   userId: string
-  kind: 'podcast'
-  /** The episode's feed GUID. */
+  /** A podcast episode (Jellyfin never sees those), or a song (Jellyfin counts it; Lumio keeps how the play went). */
+  kind: 'podcast' | 'audio'
+  /** The episode's feed GUID, or the song's Jellyfin id. */
   key: string
   title: string
-  /** The podcast's name. */
+  /** The podcast's name, or the song's artists. */
   subtitle?: string
-  /** The podcast's id. */
+  /** The podcast's id, or the album's. */
   contextId?: string
   image?: string
   client?: string
   startedAt: number
   seconds: number
+  /** Where it was played from: `album:<id>`, `playlist:<id>`, `official:<slug>`, `liked`, `queue` (the user's), `autoplay` … */
+  source?: string
+  /** Why it started: clickrow, playbtn, fwdbtn, backbtn, trackdone, trackerror, remote, appload. */
+  reasonStart?: string
+  /** Why it ended: trackdone, fwdbtn, backbtn, clickrow, playbtn, remote, trackerror, endplay, logout. */
+  reasonEnd?: string
+  shuffle?: boolean
+  /** Played from the device (downloaded or cached), not streamed. */
+  offline?: boolean
+  /** How long it waited for data while playing. */
+  bufferingMs?: number
 }
 
 function playOf(row: Record<string, string | number | null>): Play {
   return {
     session: String(row.session),
     userId: String(row.user_id),
-    kind: 'podcast',
+    kind: row.kind === 'audio' ? 'audio' : 'podcast',
     key: String(row.item_key),
     title: String(row.title),
     subtitle: row.subtitle === null ? undefined : String(row.subtitle),
@@ -72,6 +84,12 @@ function playOf(row: Record<string, string | number | null>): Play {
     client: row.client === null ? undefined : String(row.client),
     startedAt: Number(row.started_at),
     seconds: Number(row.seconds),
+    source: row.source === null || row.source === undefined ? undefined : String(row.source),
+    reasonStart: row.reason_start === null || row.reason_start === undefined ? undefined : String(row.reason_start),
+    reasonEnd: row.reason_end === null || row.reason_end === undefined ? undefined : String(row.reason_end),
+    shuffle: row.shuffle === null || row.shuffle === undefined ? undefined : !!row.shuffle,
+    offline: row.offline === null || row.offline === undefined ? undefined : !!row.offline,
+    bufferingMs: row.buffering_ms === null || row.buffering_ms === undefined ? undefined : Number(row.buffering_ms),
   }
 }
 
@@ -94,6 +112,11 @@ export class Store {
       CREATE INDEX IF NOT EXISTS plays_started ON plays (started_at);
       CREATE TABLE IF NOT EXISTS playlist_adds (playlist_id TEXT NOT NULL, item_id TEXT NOT NULL, user_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (playlist_id, item_id));
     `)
+    // How a play went (music too): why it started and ended, where it came from, shuffle, from the device, buffering.
+    const playColumns = (this.db.prepare('PRAGMA table_info(plays)').all() as Array<{ name: string }>).map((column) => column.name)
+    for (const [name, type] of [['source', 'TEXT'], ['reason_start', 'TEXT'], ['reason_end', 'TEXT'], ['shuffle', 'INTEGER'], ['offline', 'INTEGER'], ['buffering_ms', 'INTEGER']]) {
+      if (!playColumns.includes(name!)) this.db.exec(`ALTER TABLE plays ADD COLUMN ${name} ${type}`)
+    }
     // What the track was (title, artist, album), so a list of misses can name them.
     const columns = this.db.prepare('PRAGMA table_info(track_credits)').all() as Array<{ name: string }>
     if (!columns.some((column) => column.name === 'meta')) this.db.exec('ALTER TABLE track_credits ADD COLUMN meta TEXT')
@@ -194,12 +217,32 @@ export class Store {
   recordPlay(play: Play) {
     this.db
       .prepare(
-        `INSERT INTO plays (session, user_id, kind, item_key, title, subtitle, context_id, image, client, started_at, seconds, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(session) DO UPDATE SET seconds = MAX(plays.seconds, excluded.seconds), updated_at = excluded.updated_at
+        `INSERT INTO plays (session, user_id, kind, item_key, title, subtitle, context_id, image, client, started_at, seconds, updated_at, source, reason_start, reason_end, shuffle, offline, buffering_ms)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(session) DO UPDATE SET seconds = MAX(plays.seconds, excluded.seconds), updated_at = excluded.updated_at,
+           reason_end = COALESCE(excluded.reason_end, plays.reason_end), buffering_ms = MAX(COALESCE(plays.buffering_ms, 0), COALESCE(excluded.buffering_ms, 0))
          WHERE plays.user_id = excluded.user_id`,
       )
-      .run(play.session, play.userId, play.kind, play.key, play.title, play.subtitle ?? null, play.contextId ?? null, play.image ?? null, play.client ?? null, play.startedAt, play.seconds, Date.now())
+      .run(
+        play.session,
+        play.userId,
+        play.kind,
+        play.key,
+        play.title,
+        play.subtitle ?? null,
+        play.contextId ?? null,
+        play.image ?? null,
+        play.client ?? null,
+        play.startedAt,
+        play.seconds,
+        Date.now(),
+        play.source ?? null,
+        play.reasonStart ?? null,
+        play.reasonEnd ?? null,
+        play.shuffle === undefined ? null : Number(play.shuffle),
+        play.offline === undefined ? null : Number(play.offline),
+        play.bufferingMs ?? null,
+      )
   }
 
   /** Someone's plays, newest first (for their history). */

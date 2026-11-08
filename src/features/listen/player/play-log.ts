@@ -4,13 +4,29 @@ import { externalOf } from '@/lib/external-items'
 import { browserName } from '@/lib/jellyfin'
 
 /**
- * Counts how long podcast episodes are listened to and tells the Lumio server, which keeps it with everyone's plays
- * (Jellyfin never sees podcasts: Lumio plays them from their hosts, so its Playback Reporting can't count them). One
- * listening session per episode played; only time actually playing counts. What can't be sent (offline) is kept and
- * sent later.
+ * Lumio's own play log, kept on the Lumio server: one session per track played.
+ * - Podcast episodes: how long they were listened to (Jellyfin never sees them, so its Playback Reporting can't count
+ *   them).
+ * - Songs: Jellyfin counts the play itself; Lumio keeps how it went, as Spotify does: why it started and why it ended
+ *   (played to the end, skipped, …), where it was played from (album, playlist, the user's queue, autoplay), whether
+ *   shuffle was on, whether it came from the device, and how long it buffered.
+ * Only time actually playing counts. What can't be sent (offline) is kept and sent later.
  */
+export type StartReason = 'clickrow' | 'playbtn' | 'fwdbtn' | 'backbtn' | 'trackdone' | 'trackerror' | 'remote' | 'appload'
+export type EndReason = 'trackdone' | 'fwdbtn' | 'backbtn' | 'clickrow' | 'playbtn' | 'remote' | 'trackerror' | 'endplay' | 'logout'
+
+/** How a track came to play, told by the player when it starts. */
+export interface PlayContext {
+  reasonStart: StartReason
+  /** `album:<id>`, `playlist:<id>`, `official:<slug>`, `liked`, `queue` (the user's), `autoplay` … */
+  source?: string
+  shuffle: boolean
+  offline: boolean
+}
+
 interface Session {
   session: string
+  kind: 'podcast' | 'audio'
   key: string
   title: string
   subtitle?: string
@@ -19,6 +35,12 @@ interface Session {
   client: string
   startedAt: number
   seconds: number
+  source?: string
+  reasonStart?: StartReason
+  reasonEnd?: EndReason
+  shuffle?: boolean
+  offline?: boolean
+  bufferingMs: number
 }
 
 const PENDING_KEY = 'lumio.plays.pending'
@@ -32,6 +54,8 @@ let lastTick = 0
 let lastSent = 0
 /** Whether it was playing at the last report: the time since then counts only if so. */
 let wasPlaying = false
+/** When the current wait for data began (0: not waiting). */
+let bufferingSince = 0
 
 function readPending(): Record<string, Session> {
   try {
@@ -59,50 +83,88 @@ async function send(session: Session) {
     if (!response?.ok) return
     const left = readPending()
     // Only done when nothing newer was kept for it meanwhile.
-    if (left[entry.session]?.seconds === entry.seconds) delete left[entry.session]
+    if (left[entry.session]?.seconds === entry.seconds && left[entry.session]?.reasonEnd === entry.reasonEnd) delete left[entry.session]
     writePending(left)
   }
 }
 
+function snapshot(session: Session): Session {
+  const waiting = bufferingSince ? Date.now() - bufferingSince : 0
+  return { ...session, seconds: Math.round(session.seconds), bufferingMs: Math.round(session.bufferingMs + waiting) }
+}
+
 /**
- * Called with the player's reports: `start` opens a session for a podcast episode, `progress` and `stopped` count the
- * time since the last report (if it was playing) and send it now and then, or at once when it stops.
+ * Called with the player's reports. `start` opens a session (with `context`: how the track came to play), `progress`
+ * counts the time since the last report (if it was playing) and sends it now and then, `stopped` sends it at once
+ * with `reasonEnd`.
  */
-export function logPodcastPlay(kind: 'start' | 'progress' | 'stopped', item: BaseItemDto, playing: boolean, sessionId: string) {
+export function logPlay(
+  kind: 'start' | 'progress' | 'stopped',
+  item: BaseItemDto,
+  playing: boolean,
+  sessionId: string,
+  details: { context?: PlayContext; reasonEnd?: EndReason } = {},
+) {
   const external = externalOf(item)
-  if (!external) return
+  if (!external && !item.Id) return
   const now = Date.now()
   if (kind === 'start' || !current || current.session !== sessionId) {
+    // A session that wasn't stopped yet (it shouldn't happen) is sent as it is.
+    if (current && current.session !== sessionId && current.seconds > 0) void send(snapshot(current))
     current = {
       session: sessionId,
-      key: external.guid,
+      kind: external ? 'podcast' : 'audio',
+      key: external ? external.guid : item.Id!,
       title: item.Name ?? '',
-      subtitle: item.Album ?? item.AlbumArtist ?? undefined,
-      contextId: external.podcastId,
-      image: external.image,
+      subtitle: external ? (item.Album ?? item.AlbumArtist ?? undefined) : (item.Artists?.join(', ') || item.AlbumArtist || undefined),
+      contextId: external ? external.podcastId : (item.AlbumId ?? undefined),
+      image: external?.image,
       client: `Lumio · ${browserName()}`,
       startedAt: now,
       seconds: 0,
+      source: details.context?.source,
+      reasonStart: details.context?.reasonStart,
+      shuffle: details.context?.shuffle,
+      offline: details.context?.offline,
+      bufferingMs: 0,
     }
+    bufferingSince = 0
     lastTick = now
     lastSent = now
     wasPlaying = playing
     return
   }
-  const step = now - lastTick
-  if (wasPlaying) current.seconds += Math.min(step, MAX_STEP_MS) / 1000
+  if (wasPlaying) current.seconds += Math.min(now - lastTick, MAX_STEP_MS) / 1000
   lastTick = now
   wasPlaying = playing
-  if (kind === 'stopped' || now - lastSent >= SEND_EVERY_MS) {
+  if (kind === 'stopped') {
+    current.reasonEnd = details.reasonEnd ?? 'endplay'
+    const session = snapshot(current)
+    current = null
+    bufferingSince = 0
+    // A song touched for less than a second isn't a play worth keeping.
+    if (session.seconds > 0 || session.kind === 'audio') void send(session)
+    return
+  }
+  if (now - lastSent >= SEND_EVERY_MS) {
     lastSent = now
-    const session = { ...current, seconds: Math.round(current.seconds) }
+    const session = snapshot(current)
     if (session.seconds > 0) void send(session)
-    if (kind === 'stopped') current = null
+  }
+}
+
+/** The player waits for data (buffering) or has it again: counted for the current session. */
+export function logBuffering(waiting: boolean) {
+  if (!current) return
+  if (waiting && !bufferingSince) bufferingSince = Date.now()
+  else if (!waiting && bufferingSince) {
+    current.bufferingMs += Date.now() - bufferingSince
+    bufferingSince = 0
   }
 }
 
 /** Sends what was kept while offline (called when the connection to the Lumio server is there). */
-export function flushPodcastPlays() {
+export function flushPlays() {
   const pending = Object.values(readPending())
   if (pending[0]) void send(pending[0])
 }

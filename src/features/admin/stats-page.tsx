@@ -45,6 +45,34 @@ const messages = defineMessages({
     noReporting:
       'Jellyfins Plugin „Playback Reporting“ antwortet nicht: Filme, Folgen und Musik fehlen hier. Installiere es in Jellyfin (Dashboard → Plugins), dann erscheinen sie.',
     noLumio: 'Der Lumio-Server ist nicht erreichbar: Podcasts fehlen hier.',
+    musicTitle: 'Musik in Lumio',
+    musicHint: 'Wie Songs in Lumio laufen: wie sie gestartet wurden, warum sie endeten und woher sie kamen. Gezählt werden die Wiedergaben weiter von Jellyfin.',
+    started: 'Wie gestartet',
+    ended: 'Warum beendet',
+    from: 'Woher',
+    skipRate: 'Übersprungen',
+    fromDevice: 'Vom Gerät',
+    buffering: 'Gepuffert',
+    songs: 'Songs',
+    reason_clickrow: 'Angeklickt',
+    reason_playbtn: 'Abspielen-Knopf',
+    reason_fwdbtn: 'Weiter / übersprungen',
+    reason_backbtn: 'Zurück',
+    reason_trackdone: 'Bis zum Ende',
+    reason_trackerror: 'Fehler',
+    reason_remote: 'Von einem anderen Gerät',
+    reason_appload: 'Nach dem Neuladen',
+    reason_endplay: 'Gestoppt',
+    reason_logout: 'Abgemeldet',
+    source_album: 'Alben',
+    source_playlist: 'Playlists',
+    source_official: 'Offizielle Playlists',
+    source_radio: 'Radios',
+    source_liked: 'Favoriten',
+    source_artist: 'Künstler*innen',
+    source_queue: 'Warteschlange',
+    source_autoplay: 'Autoplay (empfohlen)',
+    source_other: 'Sonstiges',
   },
   en: {
     title: 'Playback statistics',
@@ -80,6 +108,34 @@ const messages = defineMessages({
     empty: 'No plays in this period.',
     noReporting: "Jellyfin's Playback Reporting plugin doesn't answer: films, episodes and music are missing here. Install it in Jellyfin (Dashboard → Plugins) and they show up.",
     noLumio: "The Lumio server can't be reached: podcasts are missing here.",
+    musicTitle: 'Music in Lumio',
+    musicHint: 'How songs play in Lumio: how they were started, why they ended and where they came from. Jellyfin still counts the plays.',
+    started: 'How started',
+    ended: 'Why ended',
+    from: 'Where from',
+    skipRate: 'Skipped',
+    fromDevice: 'From the device',
+    buffering: 'Buffered',
+    songs: 'Songs',
+    reason_clickrow: 'Clicked',
+    reason_playbtn: 'Play button',
+    reason_fwdbtn: 'Next / skipped',
+    reason_backbtn: 'Back',
+    reason_trackdone: 'To the end',
+    reason_trackerror: 'Error',
+    reason_remote: 'From another device',
+    reason_appload: 'After reloading',
+    reason_endplay: 'Stopped',
+    reason_logout: 'Signed out',
+    source_album: 'Albums',
+    source_playlist: 'Playlists',
+    source_official: 'Official playlists',
+    source_radio: 'Radios',
+    source_liked: 'Favorites',
+    source_artist: 'Artists',
+    source_queue: 'Queue',
+    source_autoplay: 'Autoplay (recommended)',
+    source_other: 'Other',
   },
 })
 
@@ -114,6 +170,12 @@ interface Reporting {
 }
 
 interface PodcastPlay {
+  kind?: 'podcast' | 'audio'
+  source?: string
+  reasonStart?: string
+  reasonEnd?: string
+  offline?: boolean
+  bufferingMs?: number
   session: string
   userId: string
   userName: string
@@ -216,7 +278,9 @@ export function StatsPage() {
 
   // ---- merging the two sources ----
   const report = reporting.data
-  const plays = showPodcasts ? (podcasts.data ?? []) : []
+  // Lumio's log holds podcasts (counted here) and songs (counted by Jellyfin; Lumio adds how they played).
+  const songPlays = (podcasts.data ?? []).filter((play) => play.kind === 'audio')
+  const plays = showPodcasts ? (podcasts.data ?? []).filter((play) => play.kind !== 'audio') : []
   const counted = plays.filter((play) => play.seconds >= MIN_PLAY_SECONDS)
   const podcastSeconds = plays.reduce((sum, play) => sum + play.seconds, 0)
   const typed = (report?.byType ?? []).filter((entry) => jellyfinKinds.includes(entry.label as Kind))
@@ -316,6 +380,29 @@ export function StatsPage() {
   const clients = jellyfinKinds.length ? [...(report?.byClient ?? []), ...podcastClients.values()] : [...podcastClients.values()]
 
   const weekdays = t.weekdays.split(',')
+
+  // Songs in Lumio: how they started, why they ended, where from.
+  const tally = (values: Array<string | undefined>, label: (value: string) => string) => {
+    const counts = new Map<string, Breakdown>()
+    for (const value of values) {
+      if (!value) continue
+      const name = label(value)
+      const entry = counts.get(name) ?? { label: name, count: 0, time: 0 }
+      entry.count++
+      counts.set(name, entry)
+    }
+    return [...counts.values()]
+  }
+  const reasonName = (value: string) => (t as unknown as Record<string, string>)[`reason_${value}`] ?? value
+  const sourceGroup = (value: string) => {
+    const group = value === 'liked' || value === 'queue' || value === 'autoplay' ? value : value.startsWith('official:radio-') ? 'radio' : value.split(':')[0]!
+    return (t as unknown as Record<string, string>)[`source_${group}`] ?? t.source_other
+  }
+  const songsTotal = songPlays.length
+  const skipped = songPlays.filter((play) => play.reasonEnd === 'fwdbtn').length
+  const fromDevice = songPlays.filter((play) => play.offline).length
+  const bufferingSeconds = songPlays.reduce((sum, play) => sum + (play.bufferingMs ?? 0), 0) / 1000
+  const percent = (part: number) => (songsTotal ? `${Math.round((part / songsTotal) * 100)} %` : '–')
   const empty = !loading && !totalPlays && !userRows.length
 
   return (
@@ -487,6 +574,31 @@ export function StatsPage() {
               ))}
             </div>
           </Section>
+
+          {songsTotal > 0 && kinds.includes('Audio') && (
+            <Section title={t.musicTitle} description={t.musicHint}>
+              <div className="space-y-4 p-4">
+                <dl className="grid gap-3 sm:grid-cols-4">
+                  {[
+                    [t.songs, number.format(songsTotal)],
+                    [t.skipRate, percent(skipped)],
+                    [t.fromDevice, percent(fromDevice)],
+                    [t.buffering, duration(bufferingSeconds)],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-lg bg-muted/40 p-3">
+                      <dt className="text-xs text-muted-foreground">{label}</dt>
+                      <dd className="mt-0.5 text-lg font-bold tabular-nums">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <div className="grid gap-4 lg:grid-cols-3">
+                  <BarList title={t.started} entries={tally(songPlays.map((play) => play.reasonStart), reasonName)} measure="count" duration={duration} number={number} />
+                  <BarList title={t.ended} entries={tally(songPlays.map((play) => play.reasonEnd), reasonName)} measure="count" duration={duration} number={number} />
+                  <BarList title={t.from} entries={tally(songPlays.map((play) => play.source ?? 'other'), sourceGroup)} measure="count" duration={duration} number={number} />
+                </div>
+              </div>
+            </Section>
+          )}
 
           {plays.length > 0 && (
             <Section title={t.recentPodcasts}>
