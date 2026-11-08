@@ -1,5 +1,6 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
-import { useState } from 'react'
+import { IconChevronDown } from '@tabler/icons-react'
+import { useState, type ReactNode } from 'react'
 import { Navigate, useLocation, useParams, useSearchParams } from 'react-router'
 import { ItemGrid } from '@/components/media/item-grid'
 import { LoadMoreSentinel } from '@/components/media/load-more-sentinel'
@@ -9,7 +10,7 @@ import { modeHome, useAppMode } from '@/lib/app-mode'
 import { useMessages } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { CATEGORY_MODE, categoryPath, isCategoryId, useCategories } from './categories'
-import { LibraryToolbar, useLibraryQuery } from './library-toolbar'
+import { LibraryToolbar, useLibraryQuery, type LibraryKind } from './library-toolbar'
 import { libraryMessages } from './messages'
 
 /** How many merged titles are rendered at first and added per scroll step (they are all loaded already). */
@@ -24,7 +25,8 @@ export function CategoryPage() {
   const t = useMessages(libraryMessages)
   const { categories, isLoading } = useCategories()
   const [params, setParams] = useSearchParams()
-  const [query, setQuery] = useLibraryQuery()
+  const kind: LibraryKind = category === 'music' ? 'music' : 'video'
+  const [query, setQuery] = useLibraryQuery(kind)
   const location = useLocation()
 
   const mode = useAppMode()
@@ -63,12 +65,14 @@ export function CategoryPage() {
           </div>
         )}
       </div>
-      {current?.id === 'music' && <ArtistsRow views={shown} />}
+      {kind === 'music' && <ArtistsSection views={shown} />}
       {/* Keyed by the libraries shown: one library pages from the server, several are merged here. */}
-      {shown.length === 1 ? (
-        <SingleLibrary key={shown[0]!.Id} view={shown[0]!} query={query} onChange={setQuery} loading={isLoading} />
+      {kind === 'music' ? (
+        <AlbumsSection>
+          <Library shown={shown} query={query} onChange={setQuery} loading={isLoading} kind={kind} />
+        </AlbumsSection>
       ) : (
-        <MergedLibraries key={shown.map((view) => view.Id).join()} views={shown} query={query} onChange={setQuery} loading={isLoading} />
+        <Library shown={shown} query={query} onChange={setQuery} loading={isLoading} kind={kind} />
       )}
     </div>
   )
@@ -78,9 +82,18 @@ interface ListProps {
   query: LibraryQuery
   onChange: (patch: Partial<LibraryQuery>) => void
   loading: boolean
+  kind: LibraryKind
 }
 
-function SingleLibrary({ view, query, onChange, loading }: ListProps & { view: BaseItemDto }) {
+function Library({ shown, ...props }: ListProps & { shown: BaseItemDto[] }) {
+  return shown.length === 1 ? (
+    <SingleLibrary key={shown[0]!.Id} view={shown[0]!} {...props} />
+  ) : (
+    <MergedLibraries key={shown.map((view) => view.Id).join()} views={shown} {...props} />
+  )
+}
+
+function SingleLibrary({ view, query, onChange, loading, kind }: ListProps & { view: BaseItemDto }) {
   const collectionType = view.CollectionType ?? undefined
   const library = useLibrary(view.Id!, collectionType, true, query)
   const genres = useLibraryGenres(view.Id!, collectionType, true)
@@ -89,6 +102,7 @@ function SingleLibrary({ view, query, onChange, loading }: ListProps & { view: B
     <Results
       query={query}
       onChange={onChange}
+      kind={kind}
       genres={genres.data ?? []}
       items={items}
       total={library.data?.pages[0]?.total}
@@ -102,7 +116,7 @@ function SingleLibrary({ view, query, onChange, loading }: ListProps & { view: B
   )
 }
 
-function MergedLibraries({ views, query, onChange, loading }: ListProps & { views: BaseItemDto[] }) {
+function MergedLibraries({ views, query, onChange, loading, kind }: ListProps & { views: BaseItemDto[] }) {
   const library = useMergedLibraries(views, query)
   const genres = useMergedGenres(views)
   const [count, setCount] = useState(STEP)
@@ -111,6 +125,7 @@ function MergedLibraries({ views, query, onChange, loading }: ListProps & { view
     <Results
       query={query}
       onChange={onChange}
+      kind={kind}
       genres={genres.data ?? []}
       items={all.slice(0, count)}
       total={library.data?.length}
@@ -124,6 +139,7 @@ function MergedLibraries({ views, query, onChange, loading }: ListProps & { view
 }
 
 interface ResultsProps {
+  kind: LibraryKind
   query: LibraryQuery
   onChange: (patch: Partial<LibraryQuery>) => void
   genres: BaseItemDto[]
@@ -138,14 +154,14 @@ interface ResultsProps {
   onLoadMore: () => void
 }
 
-function Results({ query, onChange, genres, items, total, loading, stale, done, hasMore, loadingMore, onLoadMore }: ResultsProps) {
+function Results({ kind, query, onChange, genres, items, total, loading, stale, done, hasMore, loadingMore, onLoadMore }: ResultsProps) {
   const t = useMessages(libraryMessages)
   const mode = useAppMode()
   const narrowed = query.genreIds.length > 0 || query.filters.length > 0 || query.search !== ''
   return (
     <>
-      <LibraryToolbar query={query} onChange={onChange} genres={genres} />
-      {total != null && <p className="-mt-3 text-sm text-muted-foreground">{t.count(total)}</p>}
+      <LibraryToolbar query={query} onChange={onChange} genres={genres} kind={kind} />
+      {total != null && <p className="-mt-3 text-sm text-muted-foreground">{kind === 'music' ? t.albumCount(total) : t.count(total)}</p>}
       <div className={stale ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
         {/* Listen shows music cards; Watch its posters with previews. */}
         {mode === 'listen' ? (
@@ -178,14 +194,92 @@ function LibraryTab({ selected, onClick, children }: { selected: boolean; onClic
   )
 }
 
-/** Music: the artists as a row above the albums, each leading to their page. */
-function ArtistsRow({ views }: { views: BaseItemDto[] }) {
+/** Whether a section of the music page is open; remembered on this device. */
+function useSectionOpen(key: string, initial: boolean) {
+  const storageKey = `lumio.music.section.${key}`
+  const [open, setOpen] = useState(() => {
+    try {
+      const stored = localStorage.getItem(storageKey)
+      return stored === null ? initial : stored === '1'
+    } catch {
+      return initial
+    }
+  })
+  const toggle = () =>
+    setOpen((current) => {
+      try {
+        localStorage.setItem(storageKey, current ? '0' : '1')
+      } catch {
+        // Not remembered.
+      }
+      return !current
+    })
+  return [open, toggle] as const
+}
+
+/** A section heading that folds its content away (or brings it back), with an optional action on the right. */
+function SectionHeader({ title, open, onToggle, action }: { title: string; open: boolean; onToggle: () => void; action?: ReactNode }) {
+  const t = useMessages(libraryMessages)
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label={open ? t.collapse(title) : t.expand(title)}
+        onClick={onToggle}
+        className="group -ml-1 flex items-center gap-1.5 rounded-md px-1 text-2xl font-bold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {title}
+        <IconChevronDown className={cn('size-5 text-muted-foreground transition-transform group-hover:text-foreground', !open && '-rotate-90')} />
+      </button>
+      {open && action}
+    </div>
+  )
+}
+
+/**
+ * Music: the artists above the albums. A row by default, which "Show all" opens into a grid of all of them; the
+ * heading folds the whole section away.
+ */
+function ArtistsSection({ views }: { views: BaseItemDto[] }) {
   const t = useMessages(libraryMessages)
   const artists = useLibraryArtists(views)
-  // The page has its own side padding; the row brings its own, like on the home page.
+  const [open, toggleOpen] = useSectionOpen('artists', true)
+  const [all, toggleAll] = useSectionOpen('artists-all', false)
+  if (!artists.isLoading && !artists.data?.length) return null
   return (
-    <div className="-mx-4 sm:-mx-8">
-      <MusicRow title={t.artists} items={artists.data} loading={artists.isLoading} />
-    </div>
+    <section className="space-y-4">
+      <SectionHeader
+        title={t.artists}
+        open={open}
+        onToggle={toggleOpen}
+        action={
+          <button type="button" onClick={toggleAll} className="text-sm font-semibold text-muted-foreground hover:text-foreground hover:underline">
+            {all ? t.showLess : t.showAll}
+          </button>
+        }
+      />
+      {open &&
+        (all ? (
+          <MusicGrid items={artists.data ?? []} loading={artists.isLoading} />
+        ) : (
+          // The page has its own side padding; the row brings its own, like on the home page.
+          <div className="-mx-4 -mt-3 sm:-mx-8">
+            <MusicRow title="" items={artists.data} loading={artists.isLoading} />
+          </div>
+        ))}
+    </section>
+  )
+}
+
+/** Music: the albums with their sort and filters, under a heading that folds them away. */
+function AlbumsSection({ children }: { children: ReactNode }) {
+  const t = useMessages(libraryMessages)
+  const [open, toggle] = useSectionOpen('albums', true)
+  return (
+    <section className="space-y-6">
+      <SectionHeader title={t.albums} open={open} onToggle={toggle} />
+      {open && children}
+    </section>
   )
 }

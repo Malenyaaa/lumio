@@ -3,6 +3,24 @@
 A from-scratch Jellyfin web client with a shadcn/ui-inspired, cinematic interface. It talks to a stock Jellyfin
 server (tested against 10.11) and needs no server plugin of its own.
 
+## Screenshots
+
+Taken against the public [Jellyfin demo server](https://demo.jellyfin.org/stable) (freely licensed films and music).
+
+### Watch
+
+| | |
+| --- | --- |
+| ![Watch home](docs/screenshots/watch-home.webp) | ![A library](docs/screenshots/watch-library.webp) |
+| ![A film](docs/screenshots/watch-movie.webp) | ![A series](docs/screenshots/watch-show.webp) |
+
+### Listen
+
+| | |
+| --- | --- |
+| ![Listen home](docs/screenshots/listen-home.webp) | ![An album](docs/screenshots/listen-album.webp) |
+| ![An artist](docs/screenshots/listen-artist.webp) | ![Now playing, big](docs/screenshots/listen-now-playing.webp) |
+
 ## Features
 
 - **Personal home**: rows built from the watch history (continue, "because you watched", favourite genres, a genre to

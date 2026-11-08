@@ -20,7 +20,7 @@ import { useAuthedSession } from '@/features/auth/session'
 import { useAlbumTracks, useArtistAlbums, useSetFavorite } from '@/features/items/queries'
 import { useDominantColor } from '@/lib/dominant-color'
 import { formatClock, formatRuntime, ticksToSeconds } from '@/lib/format'
-import { defineMessages, useMessages } from '@/lib/i18n'
+import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
 import { portraitImageUrl } from '@/lib/images'
 import { artistsOf, titlePath } from '@/lib/item-links'
 import { cn } from '@/lib/utils'
@@ -108,7 +108,9 @@ export function AlbumView({ item }: { item: BaseItemDto }) {
   const totalTicks = list.reduce((sum, track) => sum + (track.RunTimeTicks ?? 0), 0)
   const isBook = list.some((track) => ticksToSeconds(track.RunTimeTicks ?? 0) > 20 * 60) || /h[öo]rbuch|audiobook/i.test(item.Genres?.join(' ') ?? '')
   const discs = [...new Set(list.map((track) => track.ParentIndexNumber ?? 1))]
-  const released = item.PremiereDate ? new Date(item.PremiereDate).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : undefined
+  // In the app's language, not the browser's.
+  const locale = getLocaleTag(useLocale())
+  const released = item.PremiereDate ? new Date(item.PremiereDate).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' }) : undefined
 
   const [saved, setSaved] = useState<boolean | null>(null)
   const isSaved = saved ?? !!item.UserData?.IsFavorite

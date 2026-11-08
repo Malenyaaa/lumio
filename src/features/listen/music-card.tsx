@@ -151,13 +151,16 @@ export function CardRow({
 }) {
   return (
     <section className="space-y-1">
-      <div className="flex items-baseline justify-between gap-4 px-4 sm:px-8">
-        <div className="min-w-0">
-          <h2 className="text-2xl font-bold tracking-tight">{title}</h2>
-          {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+      {/* Without a title (a section that has its own heading), just the row. */}
+      {(title || action) && (
+        <div className="flex items-baseline justify-between gap-4 px-4 sm:px-8">
+          <div className="min-w-0">
+            <h2 className="text-2xl font-bold tracking-tight">{title}</h2>
+            {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+          </div>
+          {action}
         </div>
-        {action}
-      </div>
+      )}
       <ScrollRow className="px-1 sm:px-5" restoreKey={loading ? undefined : title}>
         {loading
           ? Array.from({ length: 6 }, (_, i) => (

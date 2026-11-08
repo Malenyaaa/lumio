@@ -108,7 +108,7 @@ const libraryMediaTypes = (collectionType: string | undefined) => (collectionTyp
 /** Whether a playlist belongs to Watch (videos) rather than Listen (music, or still empty). */
 export const isVideoPlaylist = (item: BaseItemDto) => item.Type === 'Playlist' && item.MediaType === 'Video'
 
-export type LibrarySort = 'name' | 'added' | 'released' | 'rating' | 'critics' | 'runtime' | 'random'
+export type LibrarySort = 'name' | 'artist' | 'added' | 'released' | 'plays' | 'rating' | 'critics' | 'runtime' | 'random'
 export type LibraryFilter = 'unplayed' | 'played' | 'favorite'
 
 /** How a library is sorted and narrowed down; kept in the URL by the library page. */
@@ -122,6 +122,8 @@ export interface LibraryQuery {
 
 const SORT_FIELDS: Record<LibrarySort, ItemSortBy[]> = {
   name: [ItemSortBy.SortName],
+  artist: [ItemSortBy.AlbumArtist, ItemSortBy.SortName],
+  plays: [ItemSortBy.PlayCount, ItemSortBy.SortName],
   added: [ItemSortBy.DateCreated, ItemSortBy.SortName],
   released: [ItemSortBy.PremiereDate, ItemSortBy.ProductionYear, ItemSortBy.SortName],
   rating: [ItemSortBy.CommunityRating, ItemSortBy.SortName],
@@ -186,6 +188,8 @@ const byDate = (value: string | null | undefined) => (value ? Date.parse(value) 
 /** Sort keys for merging libraries in the browser; the same orders the server applies to a single library. */
 const SORT_KEYS: Record<Exclude<LibrarySort, 'random'>, (item: BaseItemDto) => number | string | undefined> = {
   name: (item) => (item.SortName ?? item.Name ?? '').toLocaleLowerCase(),
+  artist: (item) => (item.AlbumArtist ?? '').toLocaleLowerCase(),
+  plays: (item) => byNumber(item.UserData?.PlayCount),
   added: (item) => byDate(item.DateCreated),
   released: (item) => byDate(item.PremiereDate) ?? (item.ProductionYear ? Date.UTC(item.ProductionYear, 0) : undefined),
   rating: (item) => byNumber(item.CommunityRating),

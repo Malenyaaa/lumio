@@ -260,6 +260,12 @@ html:has([data-app-shell]) {
   scrollbar-gutter: stable;
 }
 
+/* Listen scrolls inside its content panel; the page itself never scrolls, so it keeps no strip for a scrollbar. */
+html:has([data-app-shell][data-mode='listen']) {
+  scrollbar-gutter: auto;
+  overflow: hidden;
+}
+
 /* The player fills the window exactly; nothing in it (sliding panels, popups) may give the page a scrollbar. */
 html:has([data-player]) {
   overflow: hidden;

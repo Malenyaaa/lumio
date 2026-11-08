@@ -144,8 +144,10 @@ export function SidePanel() {
         className={cn(
           'absolute bottom-2 left-0 top-0 flex overflow-hidden rounded-xl bg-surface [--background:var(--surface)] transition-opacity duration-300',
           !open && 'pointer-events-none opacity-0 group-hover/panel:opacity-20',
+          // Big, it spans the window with the same gap on both sides.
+          expanded && 'left-2',
         )}
-        style={{ width: expanded ? 'calc(100% - 0.5rem)' : layout.right - 8 }}
+        style={{ width: expanded ? 'calc(100% - 1rem)' : layout.right - 8 }}
       >
         <PanelColumn view={view} title={title} track={track} expanded={expanded} />
         {/* In the big panel, the queue or the quality sit in a column at the right edge. */}

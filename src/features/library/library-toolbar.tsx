@@ -20,28 +20,44 @@ import { useMessages } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { toolbarMessages } from './messages'
 
-// Labels come from `toolbarMessages`, keyed by the value.
-const SORTS: Array<{ value: LibrarySort; descending: boolean }> = [
-  { value: 'name', descending: false },
-  { value: 'added', descending: true },
-  { value: 'released', descending: true },
-  { value: 'rating', descending: true },
-  { value: 'critics', descending: true },
-  { value: 'runtime', descending: false },
-  { value: 'random', descending: false },
-]
+/** Films and series sort and filter differently from music (no ratings or runtimes, but artists and plays). */
+export type LibraryKind = 'video' | 'music'
 
-const FILTERS: LibraryFilter[] = ['unplayed', 'played', 'favorite']
+// Labels come from `toolbarMessages`, keyed by the value (music's own where they read differently).
+const SORTS: Record<LibraryKind, Array<{ value: LibrarySort; descending: boolean }>> = {
+  video: [
+    { value: 'name', descending: false },
+    { value: 'added', descending: true },
+    { value: 'released', descending: true },
+    { value: 'rating', descending: true },
+    { value: 'critics', descending: true },
+    { value: 'runtime', descending: false },
+    { value: 'random', descending: false },
+  ],
+  music: [
+    { value: 'name', descending: false },
+    { value: 'artist', descending: false },
+    { value: 'added', descending: true },
+    { value: 'released', descending: true },
+    { value: 'plays', descending: true },
+    { value: 'random', descending: false },
+  ],
+}
+
+const FILTERS: Record<LibraryKind, LibraryFilter[]> = {
+  video: ['unplayed', 'played', 'favorite'],
+  music: ['favorite', 'unplayed', 'played'],
+}
 
 const SEARCH_DEBOUNCE_MS = 300
 
 const list = (value: string | null) => (value ? value.split(',').filter(Boolean) : [])
 
 /** Sort, filters and search of the library page, kept in the URL so they survive reloads and the back button. */
-export function useLibraryQuery(): [LibraryQuery, (patch: Partial<LibraryQuery>) => void] {
+export function useLibraryQuery(kind: LibraryKind = 'video'): [LibraryQuery, (patch: Partial<LibraryQuery>) => void] {
   const [params, setParams] = useSearchParams()
   const sortParam = params.get('sort')
-  const sort = SORTS.find((option) => option.value === sortParam) ?? SORTS[0]!
+  const sort = SORTS[kind].find((option) => option.value === sortParam) ?? SORTS[kind][0]!
   const order = params.get('order')
   const genre = params.get('genre')
   const filter = params.get('filter')
@@ -52,15 +68,15 @@ export function useLibraryQuery(): [LibraryQuery, (patch: Partial<LibraryQuery>)
       sort: sort.value,
       descending: order ? order === 'desc' : sort.descending,
       genreIds: list(genre),
-      filters: list(filter).filter((value): value is LibraryFilter => FILTERS.includes(value as LibraryFilter)),
+      filters: list(filter).filter((value): value is LibraryFilter => FILTERS[kind].includes(value as LibraryFilter)),
       search,
     }),
-    [sort, order, genre, filter, search],
+    [sort, order, genre, filter, search, kind],
   )
 
   const update = (patch: Partial<LibraryQuery>) => {
     const next = { ...query, ...patch }
-    const defaults = SORTS.find((option) => option.value === next.sort)!
+    const defaults = SORTS[kind].find((option) => option.value === next.sort) ?? SORTS[kind][0]!
     const entries: Record<string, string> = {}
     if (next.sort !== 'name') entries.sort = next.sort
     if (next.descending !== defaults.descending) entries.order = next.descending ? 'desc' : 'asc'
@@ -80,11 +96,18 @@ interface LibraryToolbarProps {
   query: LibraryQuery
   onChange: (patch: Partial<LibraryQuery>) => void
   genres: BaseItemDto[]
+  kind?: LibraryKind
 }
 
-export function LibraryToolbar({ query, onChange, genres }: LibraryToolbarProps) {
-  const t = useMessages(toolbarMessages)
-  const currentSort = SORTS.find((option) => option.value === query.sort)!
+export function LibraryToolbar({ query, onChange, genres, kind = 'video' }: LibraryToolbarProps) {
+  const messages = useMessages(toolbarMessages)
+  // Music reads its own words where they differ ("Not heard yet" rather than "Unwatched").
+  const t =
+    kind === 'music'
+      ? { ...messages, unplayed: messages.musicUnplayed, played: messages.musicPlayed, favorite: messages.musicFavorite, search: messages.musicSearch }
+      : messages
+  const sorts = SORTS[kind]
+  const currentSort = sorts.find((option) => option.value === query.sort) ?? sorts[0]!
 
   // The field updates at once, the URL (and with it the query) after a pause in typing.
   const [search, setSearch] = useState(query.search)
@@ -116,12 +139,12 @@ export function LibraryToolbar({ query, onChange, genres }: LibraryToolbarProps)
               <DropdownMenuRadioGroup
                 value={query.sort}
                 onValueChange={(value) => {
-                  const option = SORTS.find((entry) => entry.value === value)
+                  const option = sorts.find((entry) => entry.value === value)
                   // Each order starts in its natural direction: newest, best rated, A–Z.
                   if (option) onChange({ sort: option.value, descending: option.descending })
                 }}
               >
-                {SORTS.map((option) => (
+                {sorts.map((option) => (
                   <DropdownMenuRadioItem key={option.value} value={option.value}>
                     {t[option.value]}
                   </DropdownMenuRadioItem>
@@ -152,7 +175,7 @@ export function LibraryToolbar({ query, onChange, genres }: LibraryToolbarProps)
           <DropdownMenuContent align="start" className="w-52">
             <DropdownMenuGroup>
               <DropdownMenuLabel>{t.show}</DropdownMenuLabel>
-              {FILTERS.map((option) => (
+              {FILTERS[kind].map((option) => (
                 <DropdownMenuCheckboxItem
                   key={option}
                   checked={query.filters.includes(option)}
