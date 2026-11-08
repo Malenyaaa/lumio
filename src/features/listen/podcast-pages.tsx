@@ -65,6 +65,8 @@ import { SavedEpisodesCover } from './playlist-cards'
 import { useListenLibrary } from './playlists'
 import { endTrackDrag, startTrackDrag } from './track-drag'
 import { TrackContextMenu } from './track-menu'
+import { ContextMenu } from '@base-ui/react/context-menu'
+import { PodcastMenuItems } from './library-menu'
 
 const messages = defineMessages({
   de: {
@@ -181,10 +183,13 @@ const messages = defineMessages({
 
 /** A show as a card: its square artwork, name and who makes it. */
 export function PodcastCard({ podcast, className }: { podcast: Podcast; className?: string }) {
-  return (
+  const card = (
     <Link
       to={`/listen/podcast/${podcast.id}`}
-      className={cn('w-44 shrink-0 rounded-lg p-3 outline-none transition-colors duration-300 hover:bg-foreground/[0.07] focus-visible:ring-2 focus-visible:ring-ring', className)}
+      className={cn(
+        'w-44 shrink-0 rounded-lg p-3 outline-none transition-colors duration-300 hover:bg-foreground/[0.07] focus-visible:ring-2 focus-visible:ring-ring data-popup-open:bg-foreground/[0.07]',
+        className,
+      )}
     >
       <div className="aspect-square overflow-hidden rounded-md bg-muted shadow-lg shadow-black/40">
         {podcast.image ? (
@@ -198,6 +203,15 @@ export function PodcastCard({ podcast, className }: { podcast: Podcast; classNam
       <p className="mt-3 truncate text-sm font-semibold">{podcast.name}</p>
       <p className="mt-0.5 truncate text-sm text-muted-foreground">{podcast.author}</p>
     </Link>
+  )
+  // Right-click: follow or unfollow, pin, folder, link.
+  return (
+    <ContextMenu.Root>
+      <ContextMenu.Trigger render={card} />
+      <DropdownMenuContent className="w-60">
+        <PodcastMenuItems podcastId={podcast.id} />
+      </DropdownMenuContent>
+    </ContextMenu.Root>
   )
 }
 

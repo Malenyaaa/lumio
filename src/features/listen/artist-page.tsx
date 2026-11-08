@@ -33,6 +33,7 @@ import { MusicCard, MusicRow } from './music-card'
 import { currentTrack, music, START, useMusic } from './player/music-player'
 import { ShuffleToggle } from './shuffle-toggle'
 import { playCircle } from './play-circle'
+import { useArtistPhoto } from './artist-photo'
 
 const messages = defineMessages({
   de: {
@@ -127,8 +128,10 @@ export function ArtistPage({ item }: { item: BaseItemDto }) {
   const radio = useArtistRadio()
 
   const banner = backdropImageUrl(api, item, { fillWidth: 1600 })
-  const photo = portraitImageUrl(api, item, { fillHeight: 480 })
-  const tint = useDominantColor(portraitImageUrl(api, item, { fillHeight: 64 })).data
+  const ownPhoto = portraitImageUrl(api, item, { fillHeight: 480 })
+  // Jellyfin's photo, or one from Deezer when it has none.
+  const photo = useArtistPhoto(item, 480)
+  const tint = useDominantColor(ownPhoto ? portraitImageUrl(api, item, { fillHeight: 64 }) : photo).data
 
   // Popular: Last.fm's ranking where we have those songs, otherwise the plays on this server.
   const library = tracks.data ?? []
@@ -176,7 +179,7 @@ export function ArtistPage({ item }: { item: BaseItemDto }) {
         <div className="relative flex items-end gap-6 px-4 pb-6 sm:px-8">
           {!banner && (
             <ImageLightbox
-              src={photo ? portraitImageUrl(api, item, { fillHeight: 1600 }) : undefined}
+              src={ownPhoto ? portraitImageUrl(api, item, { fillHeight: 1600 }) : photo}
               label={item.Name ?? ''}
               round
               className="size-40 shrink-0 overflow-hidden rounded-full bg-muted shadow-2xl shadow-black/50 sm:size-52"

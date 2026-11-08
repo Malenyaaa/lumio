@@ -1,6 +1,7 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
 import {
   IconCircleCheckFilled,
+  IconCirclePlus,
   IconFolder,
   IconFolderPlus,
   IconLink,
@@ -12,6 +13,7 @@ import {
   IconRadio,
   IconTrash,
   IconUserMinus,
+  IconUserPlus,
 } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
@@ -23,12 +25,14 @@ import { useSocialFollow } from '@/features/social/social'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import type { OfficialPlaylist } from './official'
 import { music } from './player/music-player'
-import { useListenLibrary, usePlaylistActions, usePlaylists, usePlaylistTracks } from './playlists'
+import { useFollowedArtists, useListenLibrary, usePlaylistActions, usePlaylists, usePlaylistTracks, useSavedAlbums } from './playlists'
 import { useArtistRadio } from './radio'
 
 const messages = defineMessages({
   de: {
     unfollow: 'Nicht mehr folgen',
+    follow: 'Folgen',
+    addToLibrary: 'Zur Bibliothek hinzufügen',
     radio: 'Zum Künstler*innen-Radio',
     pin: 'Anheften',
     unpin: 'Lösen',
@@ -52,6 +56,8 @@ const messages = defineMessages({
   },
   en: {
     unfollow: 'Unfollow',
+    follow: 'Follow',
+    addToLibrary: 'Add to library',
     radio: 'Go to artist radio',
     pin: 'Pin',
     unpin: 'Unpin',
@@ -86,12 +92,18 @@ async function copyLink(path: string, done: string) {
   }
 }
 
-/** Pin, folder and link: what every entry of the library offers. */
-function CommonItems({ entry, path }: { entry: string; path: string }) {
+/** Pin, folder and link: what every entry of the library offers (pin and folder only once it is in the library). */
+function CommonItems({ entry, path, inLibrary = true }: { entry: string; path: string; inLibrary?: boolean }) {
   const t = useMessages(messages)
   const library = useListenLibrary()
   const pinned = library.isPinned(entry)
   const current = library.folderOf(entry)
+  if (!inLibrary)
+    return (
+      <DropdownMenuItem onClick={() => void copyLink(path, t.linkCopied)}>
+        <IconLink /> {t.copyLink}
+      </DropdownMenuItem>
+    )
   return (
     <>
       <DropdownMenuItem onClick={() => library.togglePin(entry)}>
@@ -167,16 +179,17 @@ export function ArtistMenuItems({ artist }: { artist: BaseItemDto }) {
   const t = useMessages(messages)
   const favorite = useSetFavorite(artist.Id!)
   const radio = useArtistRadio()
+  const followed = useFollowedArtists().data?.some((other) => other.Id === artist.Id) ?? !!artist.UserData?.IsFavorite
   return (
     <>
-      <DropdownMenuItem onClick={() => favorite.mutate(false)}>
-        <IconUserMinus /> {t.unfollow}
+      <DropdownMenuItem onClick={() => favorite.mutate(!followed)}>
+        {followed ? <IconUserMinus /> : <IconUserPlus />} {followed ? t.unfollow : t.follow}
       </DropdownMenuItem>
       <DropdownMenuItem onClick={() => void radio(artist)}>
         <IconRadio /> {t.radio}
       </DropdownMenuItem>
       <DropdownMenuSeparator />
-      <CommonItems entry={`artist:${artist.Id}`} path={`/listen/artist/${artist.Id}`} />
+      <CommonItems entry={`artist:${artist.Id}`} path={`/listen/artist/${artist.Id}`} inLibrary={followed} />
     </>
   )
 }
@@ -187,10 +200,11 @@ export function AlbumMenuItems({ album }: { album: BaseItemDto }) {
   const queryClient = useQueryClient()
   const favorite = useSetFavorite(album.Id!)
   const tracks = () => queryClient.fetchQuery(albumTracksOptions(api, session.userId, album.Id!))
+  const saved = useSavedAlbums().data?.some((other) => other.Id === album.Id) ?? !!album.UserData?.IsFavorite
   return (
     <>
-      <DropdownMenuItem onClick={() => favorite.mutate(false)}>
-        <IconCircleCheckFilled className="text-listen" /> {t.removeFromLibrary}
+      <DropdownMenuItem onClick={() => favorite.mutate(!saved)}>
+        {saved ? <IconCircleCheckFilled className="text-listen" /> : <IconCirclePlus />} {saved ? t.removeFromLibrary : t.addToLibrary}
       </DropdownMenuItem>
       <DropdownMenuItem
         onClick={() =>
@@ -201,12 +215,12 @@ export function AlbumMenuItems({ album }: { album: BaseItemDto }) {
       </DropdownMenuItem>
       <AddToPlaylist tracks={tracks} label={t.addToPlaylist} />
       <DropdownMenuSeparator />
-      <CommonItems entry={`album:${album.Id}`} path={`/listen/album/${album.Id}`} />
+      <CommonItems entry={`album:${album.Id}`} path={`/listen/album/${album.Id}`} inLibrary={saved} />
     </>
   )
 }
 
-export function PlaylistMenuItems({ playlist, onCreatePlaylist, onCreateFolder }: { playlist: BaseItemDto; onCreatePlaylist: () => void; onCreateFolder: () => void }) {
+export function PlaylistMenuItems({ playlist, onCreatePlaylist, onCreateFolder }: { playlist: BaseItemDto; onCreatePlaylist?: () => void; onCreateFolder?: () => void }) {
   const t = useMessages(messages)
   const list = usePlaylistTracks(playlist.Id ?? undefined)
   const tracks = async () => list.data ?? []
@@ -217,13 +231,18 @@ export function PlaylistMenuItems({ playlist, onCreatePlaylist, onCreateFolder }
       >
         <IconPlaylistAdd /> {t.addToQueue}
       </DropdownMenuItem>
-      <DropdownMenuSeparator />
-      <DropdownMenuItem onClick={onCreatePlaylist}>
-        <IconPlus /> {t.createPlaylist}
-      </DropdownMenuItem>
-      <DropdownMenuItem onClick={onCreateFolder}>
-        <IconFolderPlus /> {t.createFolder}
-      </DropdownMenuItem>
+      {/* Creating belongs to the library sidebar's own menu. */}
+      {onCreatePlaylist && onCreateFolder && (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onCreatePlaylist}>
+            <IconPlus /> {t.createPlaylist}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onCreateFolder}>
+            <IconFolderPlus /> {t.createFolder}
+          </DropdownMenuItem>
+        </>
+      )}
       <AddToPlaylist tracks={tracks} label={t.addToOtherPlaylist} exclude={playlist.Id ?? undefined} />
       <DropdownMenuSeparator />
       <CommonItems entry={`playlist:${playlist.Id}`} path={`/listen/playlist/${playlist.Id}`} />
@@ -234,10 +253,11 @@ export function PlaylistMenuItems({ playlist, onCreatePlaylist, onCreateFolder }
 export function OfficialMenuItems({ playlist }: { playlist: OfficialPlaylist }) {
   const t = useMessages(messages)
   const library = useListenLibrary()
+  const saved = library.isSaved(`official:${playlist.slug}`)
   return (
     <>
       <DropdownMenuItem onClick={() => library.toggle(`official:${playlist.slug}`)}>
-        <IconCircleCheckFilled className="text-listen" /> {t.removeFromLibrary}
+        {saved ? <IconCircleCheckFilled className="text-listen" /> : <IconCirclePlus />} {saved ? t.removeFromLibrary : t.addToLibrary}
       </DropdownMenuItem>
       <DropdownMenuItem
         onClick={() => music.addToQueue(playlist.tracks)}
@@ -246,7 +266,7 @@ export function OfficialMenuItems({ playlist }: { playlist: OfficialPlaylist }) 
       </DropdownMenuItem>
       <AddToPlaylist tracks={async () => playlist.tracks} label={t.addToPlaylist} />
       <DropdownMenuSeparator />
-      <CommonItems entry={`official:${playlist.slug}`} path={`/listen/official/${playlist.slug}`} />
+      <CommonItems entry={`official:${playlist.slug}`} path={`/listen/official/${playlist.slug}`} inLibrary={saved} />
     </>
   )
 }
@@ -254,13 +274,14 @@ export function OfficialMenuItems({ playlist }: { playlist: OfficialPlaylist }) 
 export function PodcastMenuItems({ podcastId }: { podcastId: string }) {
   const t = useMessages(messages)
   const library = useListenLibrary()
+  const followed = library.isSaved(`podcast:${podcastId}`)
   return (
     <>
       <DropdownMenuItem onClick={() => library.toggle(`podcast:${podcastId}`)}>
-        <IconUserMinus /> {t.unfollow}
+        {followed ? <IconUserMinus /> : <IconUserPlus />} {followed ? t.unfollow : t.follow}
       </DropdownMenuItem>
       <DropdownMenuSeparator />
-      <CommonItems entry={`podcast:${podcastId}`} path={`/listen/podcast/${podcastId}`} />
+      <CommonItems entry={`podcast:${podcastId}`} path={`/listen/podcast/${podcastId}`} inLibrary={followed} />
     </>
   )
 }

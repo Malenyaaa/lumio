@@ -23,6 +23,9 @@ import { useListeningStats } from './profiles'
 import { RadioCard } from './radio-card'
 import { useRecentSources } from './recent'
 import { useNewestAlbums, useRecentAlbums } from './queries'
+import { ContextMenu } from '@base-ui/react/context-menu'
+import { DropdownMenuContent } from '@/components/ui/dropdown-menu'
+import { AlbumMenuItems, ArtistMenuItems, FixedMenuItems, OfficialMenuItems, PlaylistMenuItems, PodcastMenuItems } from './library-menu'
 
 const messages = defineMessages({
   de: {
@@ -179,6 +182,7 @@ function ItemTile({ id, source }: { id: string; source: string }) {
       title={item.Name ?? ''}
       source={source}
       round={item.Type === 'MusicArtist'}
+      menu={item.Type === 'MusicArtist' ? <ArtistMenuItems artist={item} /> : item.Type === 'MusicAlbum' ? <AlbumMenuItems album={item} /> : undefined}
       onPlay={() => void play(item)}
       cover={
         cover ? (
@@ -202,6 +206,7 @@ function PlaylistTile({ id, source }: { id: string; source: string }) {
       href={`/listen/playlist/${id}`}
       title={playlist.Name ?? ''}
       source={source}
+      menu={<PlaylistMenuItems playlist={playlist} />}
       onPlay={() => music.play(tracks.data ?? [], START, { source })}
       cover={<PlaylistCover playlist={playlist} tracks={tracks.data ?? []} />}
     />
@@ -216,6 +221,7 @@ function OfficialTile({ slug, source }: { slug: string; source: string }) {
       href={`/listen/official/${slug}`}
       title={playlist.title}
       source={source}
+      menu={<OfficialMenuItems playlist={playlist} />}
       onPlay={() => music.play(playlist.tracks, START, { source })}
       cover={<OfficialCover playlist={playlist} />}
     />
@@ -225,7 +231,16 @@ function OfficialTile({ slug, source }: { slug: string; source: string }) {
 function LikedTile({ source }: { source: string }) {
   const t = useMessages(messages)
   const liked = useLikedSongs()
-  return <TileShell href="/listen/liked" title={t.liked} source={source} onPlay={() => music.play(liked.data ?? [], START, { source })} cover={<LikedCover />} />
+  return (
+    <TileShell
+      href="/listen/liked"
+      title={t.liked}
+      source={source}
+      onPlay={() => music.play(liked.data ?? [], START, { source })}
+      cover={<LikedCover />}
+      menu={<FixedMenuItems entry="liked" path="/listen/liked" />}
+    />
+  )
 }
 
 function PodcastTile({ id, source }: { id: string; source: string }) {
@@ -237,6 +252,7 @@ function PodcastTile({ id, source }: { id: string; source: string }) {
       href={`/listen/podcast/${id}`}
       title={podcast.podcast.name}
       source={source}
+      menu={<PodcastMenuItems podcastId={id} />}
       onPlay={() => latest && music.play([latest.item], START, { source })}
       cover={
         podcast.podcast.image ? (
@@ -255,13 +271,30 @@ function PodcastTile({ id, source }: { id: string; source: string }) {
  * The tile itself, as in Spotify's greeting grid: cover, name, and a play button that shows on hover (and stays while
  * this collection plays); the name turns green while it plays.
  */
-function TileShell({ href, title, cover, source, round, onPlay }: { href: string; title: string; cover: ReactNode; source: string; round?: boolean; onPlay: () => void }) {
+function TileShell({
+  href,
+  title,
+  cover,
+  source,
+  round,
+  onPlay,
+  menu,
+}: {
+  href: string
+  title: string
+  cover: ReactNode
+  source: string
+  round?: boolean
+  onPlay: () => void
+  /** Its right-click menu. */
+  menu?: ReactNode
+}) {
   const t = useMessages(messages)
   const state = useMusic()
   const here = state.source === source && state.index >= 0
   const playing = here && state.playing
-  return (
-    <div className="group relative flex h-14 items-center gap-3 overflow-hidden rounded-md bg-foreground/[0.08] pr-2 transition-colors hover:bg-foreground/[0.16]">
+  const tile = (
+    <div className="group relative flex h-14 items-center gap-3 overflow-hidden rounded-md bg-foreground/[0.08] pr-2 transition-colors hover:bg-foreground/[0.16] data-popup-open:bg-foreground/[0.16]">
       <Link to={href} className="flex h-full min-w-0 flex-1 items-center gap-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
         <span className={cn('aspect-square h-full shrink-0 overflow-hidden bg-muted', round && 'scale-[0.8] rounded-full')}>{cover}</span>
         <span className={cn('truncate text-sm font-semibold', here && 'text-listen')}>{title}</span>
@@ -279,6 +312,13 @@ function TileShell({ href, title, cover, source, round, onPlay }: { href: string
         {playing ? <IconPlayerPauseFilled className="size-4" /> : <IconPlayerPlayFilled className="size-4 translate-x-px" />}
       </button>
     </div>
+  )
+  if (!menu) return tile
+  return (
+    <ContextMenu.Root>
+      <ContextMenu.Trigger render={tile} />
+      <DropdownMenuContent className="w-60">{menu}</DropdownMenuContent>
+    </ContextMenu.Root>
   )
 }
 

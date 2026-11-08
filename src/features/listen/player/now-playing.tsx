@@ -22,6 +22,7 @@ import { toggleListenPanel } from './panel'
 import { ArtistLine } from './player-bar'
 import { useTrackQuality } from './quality'
 import { usePlayerControls, usePlayerTime } from './player-controls'
+import { useArtistPhoto } from '../artist-photo'
 
 const messages = defineMessages({
   de: {
@@ -305,7 +306,8 @@ function AboutArtist({ artist }: { artist: BaseItemDto }) {
   const [open, setOpen] = useState(false)
   const lastfm = useLastfmArtist(artist.Name ?? undefined)
   const number = new Intl.NumberFormat(getLocaleTag(useLocale()))
-  const image = backdropImageUrl(api, artist, { fillWidth: 640 }) ?? portraitImageUrl(api, artist, { fillHeight: 400 })
+  const photo = useArtistPhoto(artist, 400)
+  const image = backdropImageUrl(api, artist, { fillWidth: 640 }) ?? photo
   const bio = lastfm.data?.bio || plainText(artist.Overview)
   return (
     <>

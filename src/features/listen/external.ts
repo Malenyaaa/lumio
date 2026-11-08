@@ -62,12 +62,18 @@ export function useLastfmArtist(name: string | undefined) {
         }
       }
       const { artist } = await lastfm<Response>({ method: 'artist.getinfo', artist: name!, lang: getLocale() })
+      let bio = cleanBio(artist.bio?.content || artist.bio?.summary)
+      // Many artists have a biography only in English on Last.fm; that beats none.
+      if (!bio && getLocale() !== 'en') {
+        const english = await lastfm<Response>({ method: 'artist.getinfo', artist: name!, lang: 'en' }).catch(() => null)
+        bio = cleanBio(english?.artist.bio?.content || english?.artist.bio?.summary)
+      }
       return {
         name: artist.name,
         url: artist.url,
         listeners: Number(artist.stats?.listeners ?? 0),
         playcount: Number(artist.stats?.playcount ?? 0),
-        bio: cleanBio(artist.bio?.content || artist.bio?.summary),
+        bio,
         tags: (artist.tags?.tag ?? []).map((tag) => tag.name),
         similar: (artist.similar?.artist ?? []).map((entry) => entry.name),
       }

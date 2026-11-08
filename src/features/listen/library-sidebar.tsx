@@ -48,6 +48,7 @@ import {
 } from './library-menu'
 import { useFollowedArtists, useLikedSongs, useListenLibrary, usePlaylistActions, usePlaylists, usePlaylistTracks, useSavedAlbums, type LibraryFolder } from './playlists'
 import { useTrackDrop } from './track-drag'
+import { useArtistPhoto } from './artist-photo'
 
 const messages = defineMessages({
   de: {
@@ -807,7 +808,8 @@ function PlaylistEntry({
 
 function ItemEntry({ item, compact, subtitle, round, ...extra }: { item: BaseItemDto; compact: boolean; subtitle: string; round?: boolean; menu?: ReactNode } & EntryExtra) {
   const { api } = useAuthedSession()
-  const image = portraitImageUrl(api, item, { fillHeight: 96 })
+  const artistPhoto = useArtistPhoto(item.Type === 'MusicArtist' ? item : undefined, 96)
+  const image = item.Type === 'MusicArtist' ? artistPhoto : portraitImageUrl(api, item, { fillHeight: 96 })
   return (
     <Entry
       {...extra}

@@ -25,8 +25,8 @@ const WEB_DIR = resolve(process.env.WEB_DIR ?? join(import.meta.dirname, '../../
 const TOKEN_TTL_MS = 5 * 60_000
 /** Largest request body accepted (bytes). */
 const BODY_LIMIT = 16 * 1024
-/** Hosts whose pictures the image relay fetches (podcast covers from Apple); nothing else, so it is no open proxy. */
-const IMAGE_HOSTS = /(^|\.)mzstatic\.com$/
+/** Hosts whose pictures the image relay fetches (podcast covers from Apple, artist photos from Deezer); nothing else, so it is no open proxy. */
+const IMAGE_HOSTS = /(^|\.)(mzstatic\.com|dzcdn\.net)$/
 /** Largest picture relayed (bytes). */
 const IMAGE_LIMIT = 8 * 1024 * 1024
 const IMAGE_DIR = join(DATA_DIR, 'images')
@@ -88,6 +88,13 @@ const RELAY_SERVICES: Record<string, RelayService> = {
     spacing: 1100,
     headers: { 'User-Agent': 'Lumio/1.0 (self-hosted Jellyfin client)' },
     keep: (status) => status < 400 || status === 404,
+  },
+  // Deezer: a photo for artists Jellyfin has none for (its search needs no key). Photos rarely change.
+  deezer: {
+    base: 'https://api.deezer.com/',
+    paths: /^search\/artist$/,
+    ttl: 30 * 24 * HOUR,
+    spacing: 120,
   },
   // lrclib: lyrics. A song's lyrics don't change: kept half a year; "none found" is asked again after a week.
   lyrics: {

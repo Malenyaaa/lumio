@@ -7,6 +7,7 @@ import { useBranding } from '@/features/admin/branding'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import { portraitImageUrl } from '@/lib/images'
 import { cn } from '@/lib/utils'
+import { OfficialMenuItems, PlaylistMenuItems } from './library-menu'
 import { CardShell } from './music-card'
 import type { OfficialPlaylist } from './official'
 import { coverFontsReady, drawCover, type CoverStyle } from './official-covers'
@@ -160,6 +161,7 @@ export function PlaylistCard({ playlist }: { playlist: BaseItemDto }) {
   return (
     <CardShell
       href={`/listen/playlist/${playlist.Id}`}
+      menu={<PlaylistMenuItems playlist={playlist} />}
       title={playlist.Name ?? ''}
       subtitle={t.songs(tracks.data?.length ?? playlist.ChildCount ?? 0)}
       here={here}
@@ -176,6 +178,7 @@ export function OfficialCard({ playlist }: { playlist: OfficialPlaylist }) {
   return (
     <CardShell
       href={`/listen/official/${playlist.slug}`}
+      menu={<OfficialMenuItems playlist={playlist} />}
       title={playlist.title}
       subtitle={playlist.description}
       here={here}

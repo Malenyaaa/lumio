@@ -16,6 +16,10 @@ import { artistsOf, itemHref } from '@/lib/item-links'
 import { cn } from '@/lib/utils'
 import { currentTrack, music, START, useMusic } from './player/music-player'
 import { playCircle } from './play-circle'
+import { useArtistPhoto } from './artist-photo'
+import { ContextMenu } from '@base-ui/react/context-menu'
+import { DropdownMenuContent } from '@/components/ui/dropdown-menu'
+import { AlbumMenuItems, ArtistMenuItems } from './library-menu'
 
 const messages = defineMessages({
   de: { artist: 'Künstler', play: (name: string) => `${name} abspielen`, pause: (name: string) => `${name} pausieren` },
@@ -67,16 +71,18 @@ interface CardShellProps {
   playing: boolean
   onPlay: () => void
   className?: string
+  /** Its right-click menu. */
+  menu?: ReactNode
 }
 
 /**
  * A card in Listen, styled after music apps: the cover (round for artists) on a tile that lights up on hover, with a
  * play button rising into its corner. No big preview card as in Watch; music is played, not read about.
  */
-export function CardShell({ href, cover, title, subtitle, round, here, playing, onPlay, className }: CardShellProps) {
+export function CardShell({ href, cover, title, subtitle, round, here, playing, onPlay, className, menu }: CardShellProps) {
   const t = useMessages(messages)
-  return (
-    <div className={cn('group/music relative w-44 shrink-0 rounded-lg p-3 transition-colors duration-300 hover:bg-foreground/[0.07]', className)}>
+  const card = (
+    <div className={cn('group/music relative w-44 shrink-0 rounded-lg p-3 transition-colors duration-300 hover:bg-foreground/[0.07] data-popup-open:bg-foreground/[0.07]', className)}>
       <Link to={href} className="block outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring">
         <div className={cn('relative aspect-square overflow-hidden bg-muted shadow-lg shadow-black/40', round ? 'rounded-full' : 'rounded-md')}>{cover}</div>
         <p className="mt-3 truncate text-sm font-semibold">{title}</p>
@@ -101,6 +107,14 @@ export function CardShell({ href, cover, title, subtitle, round, here, playing, 
       </div>
     </div>
   )
+  if (!menu) return card
+  // Right-click: what can be done with it (as in the library).
+  return (
+    <ContextMenu.Root>
+      <ContextMenu.Trigger render={card} />
+      <DropdownMenuContent className="w-60">{menu}</DropdownMenuContent>
+    </ContextMenu.Root>
+  )
 }
 
 /** An album, artist or track as a card. */
@@ -110,10 +124,12 @@ export function MusicCard({ item, className }: { item: BaseItemDto; className?: 
   const play = usePlayCollection()
   const { here, playing } = useIsPlayingFrom(item)
   const isArtist = item.Type === 'MusicArtist'
-  const image = portraitImageUrl(api, item, { fillHeight: 360 })
+  const artistPhoto = useArtistPhoto(item.Type === 'MusicArtist' ? item : undefined)
+  const image = item.Type === 'MusicArtist' ? artistPhoto : portraitImageUrl(api, item, { fillHeight: 360 })
   return (
     <CardShell
       href={itemHref(item)}
+      menu={isArtist ? <ArtistMenuItems artist={item} /> : item.Type === 'MusicAlbum' ? <AlbumMenuItems album={item} /> : undefined}
       title={item.Name ?? ''}
       subtitle={isArtist ? t.artist : artistsOf(item).map((artist) => artist.name).join(', ') || item.ProductionYear}
       round={isArtist}
