@@ -9,7 +9,7 @@
  * tray or only minimize it (music plays on); it can start with the system, hidden in the tray, and in Watch or Listen.
  * The page reaches these through preload.cjs.
  */
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, net, protocol, shell, Tray } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, net, protocol, session, shell, Tray } from 'electron'
 import { chmodSync, createWriteStream, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { Readable } from 'node:stream'
@@ -91,6 +91,20 @@ function startUrl() {
   return `${ORIGIN}${startIn === 'listen' ? '/listen' : startIn === 'watch' ? '/?app=watch' : '/'}`
 }
 
+/** Lumio's own pages (Node gives app: addresses no origin, so scheme and host are compared). */
+function isOwn(url) {
+  const parsed = URL.parse(url)
+  return parsed?.protocol === 'app:' && parsed.host === 'lumio'
+}
+
+/** Only web and mail links go to the system: other schemes (file:, ms-msdt:, search-ms:…) can start programs. */
+function openOutside(url) {
+  if (['https:', 'http:', 'mailto:'].includes(URL.parse(url)?.protocol ?? '')) void shell.openExternal(url)
+}
+
+/** What the page may ask Chromium for; everything else (camera, microphone, USB, serial…) is refused. */
+const PERMISSIONS = new Set(['fullscreen', 'clipboard-sanitized-write', 'geolocation', 'notifications'])
+
 function overlayColors(dark) {
   return { color: '#00000000', symbolColor: dark ? '#fafafa' : '#0a0a0a', height: TITLE_BAR_HEIGHT }
 }
@@ -113,13 +127,13 @@ function createWindow({ show }) {
   if (show) window.once('ready-to-show', () => window?.show())
   // Links to other sites open in the browser, not in Lumio's window.
   window.webContents.setWindowOpenHandler(({ url }) => {
-    if (!url.startsWith(ORIGIN)) void shell.openExternal(url)
+    if (!isOwn(url)) openOutside(url)
     return { action: 'deny' }
   })
   window.webContents.on('will-navigate', (event, url) => {
-    if (url.startsWith(ORIGIN)) return
+    if (isOwn(url)) return
     event.preventDefault()
-    void shell.openExternal(url)
+    openOutside(url)
   })
   // Closing keeps Lumio in the tray, or only minimizes the window (as set; not while really quitting).
   window.on('close', (event) => {
@@ -297,6 +311,10 @@ ipcMain.handle('desktop:apply-update', () => {
 app.on('second-instance', showWindow)
 
 app.whenReady().then(() => {
+  session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) =>
+    callback(isOwn(details.requestingUrl) && PERMISSIONS.has(permission)),
+  )
+  session.defaultSession.setPermissionCheckHandler((contents, permission, origin) => isOwn(origin) && PERMISSIONS.has(permission))
   // The app's files; every other address is its page (the app routes itself), as the Lumio server does.
   protocol.handle('app', (request) => {
     const { pathname } = new URL(request.url)
