@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { useAuthedSession } from '@/features/auth/session'
 import { config } from '@/lib/config'
 import { messagesFor, useMessages } from '@/lib/i18n'
+import { DevicesSection } from './devices-section'
 import { Row, Section, SettingsPage } from './fields'
 import { profileMessages } from './messages'
 import { userOptions, useUserConfiguration } from './use-user-configuration'
@@ -112,6 +113,8 @@ export function ProfilePage() {
       </Section>
 
       {config.passwordChangeDisabled ? <ManagedAccountSection /> : <PasswordSection />}
+
+      <DevicesSection />
     </SettingsPage>
   )
 }
