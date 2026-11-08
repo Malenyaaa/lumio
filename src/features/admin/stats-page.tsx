@@ -7,6 +7,7 @@ import { Section, SettingsPage } from '@/features/settings/fields'
 import { lumioGet } from '@/features/social/social'
 import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
+import { ProfileAvatar } from '@/features/listen/profile-page'
 import { useIsAdmin } from './use-admin-config'
 
 const messages = defineMessages({
@@ -29,11 +30,8 @@ const messages = defineMessages({
     perDay: 'Pro Tag',
     jellyfin: 'Jellyfin',
     users: 'Nutzer',
-    user: 'Nutzer',
-    ofThem: 'davon Podcasts',
-    lastPlayed: 'Zuletzt gespielt',
-    client: 'Client',
-    lastSeen: 'Zuletzt',
+    podcastPart: (time: string) => `davon ${time} Podcasts`,
+    playsCount: (count: string) => `${count} Wiedergaben`,
     byType: 'Nach Typ',
     byMethod: 'Wiedergabe-Methode',
     byClient: 'Nach Client',
@@ -93,11 +91,8 @@ const messages = defineMessages({
     perDay: 'Per day',
     jellyfin: 'Jellyfin',
     users: 'Users',
-    user: 'User',
-    ofThem: 'podcasts',
-    lastPlayed: 'Last played',
-    client: 'Client',
-    lastSeen: 'Last seen',
+    podcastPart: (time: string) => `${time} of it podcasts`,
+    playsCount: (count: string) => `${count} plays`,
     byType: 'By type',
     byMethod: 'Playback method',
     byClient: 'By client',
@@ -509,38 +504,46 @@ export function StatsPage() {
           </Section>
 
           <Section title={t.users}>
-            <div className="overflow-x-auto p-4">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-muted-foreground">
-                    <th className="pb-2 pr-3 font-medium">{t.user}</th>
-                    <th className="pb-2 pr-3 text-right font-medium">{t.plays}</th>
-                    <th className="pb-2 pr-3 text-right font-medium">{t.totalTime}</th>
-                    <th className="pb-2 pr-3 text-right font-medium">{t.ofThem}</th>
-                    <th className="pb-2 pr-3 font-medium">{t.lastPlayed}</th>
-                    <th className="pb-2 pr-3 font-medium">{t.client}</th>
-                    <th className="pb-2 text-right font-medium">{t.lastSeen}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {userRows.map((row) => (
-                    <tr key={row.id} className="border-t align-top">
-                      <td className="py-2 pr-3">
-                        <Link to={`/listen/user/${row.id}`} className="hover:underline">
+            {/* Ranked by the chosen measure, each with a bar against the top user and what they played last. */}
+            <ol className="divide-y">
+              {userRows.map((row, rank) => {
+                const top = userRows[0]!
+                const share = measure === 'time' ? row.seconds / (top.seconds || 1) : row.count / (top.count || 1)
+                const last = [row.lastItem, row.client, row.latest ? new Date(row.latest).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' }) : '']
+                  .filter(Boolean)
+                  .join(' · ')
+                return (
+                  <li key={row.id} className="flex items-center gap-3 px-4 py-3">
+                    <span className="w-5 shrink-0 text-right text-sm tabular-nums text-muted-foreground">{rank + 1}</span>
+                    <ProfileAvatar userId={row.id} name={row.name} className="size-9 text-xs" />
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <Link to={`/listen/user/${row.id}`} className="truncate font-medium hover:underline">
                           {row.name}
                         </Link>
-                      </td>
-                      <td className="py-2 pr-3 text-right tabular-nums">{number.format(row.count)}</td>
-                      <td className="whitespace-nowrap py-2 pr-3 text-right tabular-nums">{duration(row.seconds)}</td>
-                      <td className="whitespace-nowrap py-2 pr-3 text-right tabular-nums text-muted-foreground">{row.podcastSeconds ? duration(row.podcastSeconds) : '–'}</td>
-                      <td className="py-2 pr-3">{row.lastItem}</td>
-                      <td className="py-2 pr-3">{row.client}</td>
-                      <td className="whitespace-nowrap py-2 text-right tabular-nums">{row.latest ? new Date(row.latest).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' }) : ''}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        <span className="shrink-0 text-sm font-semibold tabular-nums">{measure === 'time' ? duration(row.seconds) : number.format(row.count)}</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-primary/70" style={{ width: `${Math.max(2, share * 100)}%` }} />
+                      </div>
+                      <div className="flex items-baseline justify-between gap-3 text-xs text-muted-foreground">
+                        <span className="truncate" title={last}>
+                          {last}
+                        </span>
+                        <span className="shrink-0 tabular-nums">
+                          {[
+                            measure === 'time' ? t.playsCount(number.format(row.count)) : duration(row.seconds),
+                            row.podcastSeconds ? t.podcastPart(duration(row.podcastSeconds)) : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </span>
+                      </div>
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
           </Section>
 
           <div className="grid gap-4 lg:grid-cols-2">

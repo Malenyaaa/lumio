@@ -6,9 +6,13 @@ import { useSyncExternalStore } from 'react'
  * site loads. Browsers decide on their own: Chrome and Edge grant it silently to installed or often used sites,
  * Firefox asks the user (some versions only after the user did something on the page), Safari grants it to apps on
  * the home screen. So it is asked on load, and asked again on the first click or key press if the first answer was no;
- * a no after that is final for this visit, and a notice explains what it means for downloads.
+ * a no after that is final for this visit, and a notice explains what it means for downloads. While the browser shows
+ * its own question (Firefox), a notice says what it is about and why to allow it.
  */
-export type PersistentState = 'checking' | 'granted' | 'denied' | 'unsupported'
+export type PersistentState = 'checking' | 'asking' | 'granted' | 'denied' | 'unsupported'
+
+/** A request still open after this long means the browser is asking the user. */
+const ASKING_AFTER_MS = 400
 
 const DISMISSED_KEY = 'lumio.storageNotice.dismissed'
 
@@ -19,7 +23,9 @@ const listeners = new Set<() => void>()
 
 function set(next: PersistentState) {
   state = next
-  if (next !== 'denied') noticeOpen = false
+  // The browser's question is explained every time; a no only until the notice is dismissed.
+  if (next === 'asking') noticeOpen = true
+  else if (next !== 'denied') noticeOpen = false
   else if (!dismissed()) noticeOpen = true
   for (const listener of listeners) listener()
 }
@@ -45,7 +51,15 @@ async function permission(): Promise<PermissionState | null> {
 
 async function ask(): Promise<boolean> {
   try {
-    return (await navigator.storage.persisted()) || (await navigator.storage.persist())
+    if (await navigator.storage.persisted()) return true
+    const request = navigator.storage.persist()
+    // Not answered at once: the browser shows its question (and waits until the user answers it).
+    const timer = window.setTimeout(() => set('asking'), ASKING_AFTER_MS)
+    try {
+      return await request
+    } finally {
+      window.clearTimeout(timer)
+    }
   } catch {
     return false
   }
@@ -98,7 +112,8 @@ export function remindPersistentStorage() {
 
 export function dismissStorageNotice() {
   try {
-    localStorage.setItem(DISMISSED_KEY, '1')
+    // Hiding the explanation of the browser's question doesn't hide a later no.
+    if (state === 'denied') localStorage.setItem(DISMISSED_KEY, '1')
   } catch {
     // Hidden for this visit only.
   }
