@@ -7,7 +7,8 @@ import { useSession } from '@/features/auth/session'
 import { desktop } from '@/lib/desktop'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import { inNativeApp } from '@/lib/native-app'
-import { APP_DOWNLOAD_URL, devicePlatform, type AppPlatform } from '@/lib/platform'
+import { setAppDownloadOpen } from '@/lib/apps'
+import { devicePlatform, type AppPlatform } from '@/lib/platform'
 
 const NAMES: Record<AppPlatform, string> = { android: 'Android', windows: 'Windows', linux: 'Linux' }
 
@@ -103,7 +104,13 @@ export function AppPromo() {
           <p className="font-semibold">{t.title(platform)}</p>
           <p className="text-sm text-muted-foreground">{t.body(platform)}</p>
           <div className="flex flex-wrap gap-2 pt-1">
-            <Button size="sm" render={<a href={APP_DOWNLOAD_URL} target="_blank" rel="noreferrer noopener" />} onClick={() => close(Number.MAX_SAFE_INTEGER)}>
+            <Button
+              size="sm"
+              onClick={() => {
+                close(Number.MAX_SAFE_INTEGER)
+                setAppDownloadOpen(true)
+              }}
+            >
               {t.download}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => close(Number.MAX_SAFE_INTEGER)}>

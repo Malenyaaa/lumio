@@ -59,6 +59,7 @@ export function DesktopSection() {
         ]}
         onChange={(closeAction) => update({ closeAction })}
       />
+      <SwitchField id="desktop-auto-update" label={t.autoUpdateLabel} hint={t.desktopAutoUpdateHint} checked={settings.autoUpdate} onChange={(autoUpdate) => update({ autoUpdate })} />
       <SwitchField id="desktop-frameless" label={t.framelessLabel} hint={t.framelessHint} checked={settings.frameless} onChange={(frameless) => update({ frameless })} />
       {framelessAtStart !== null && settings.frameless !== framelessAtStart && (
         <Row label={t.restartHint}>

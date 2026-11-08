@@ -5,6 +5,8 @@ import { NotFound } from '@/components/not-found'
 import { AppShell, RequireSession } from '@/components/app-shell'
 import { StorageNotice } from '@/components/storage-notice'
 import { AppPromo } from '@/components/app-promo'
+import { AppDownloadHost } from '@/components/app-download-dialog'
+import { UpdateReady } from '@/components/update-ready'
 import { Toaster } from '@/components/ui/sonner'
 import { useToastsWanted } from '@/features/settings/local-settings'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -68,6 +70,9 @@ function RootLayout() {
       <SocialHostWhenSignedIn />
       {/* In a browser: once, the hint to Lumio's app for this system. */}
       <AppPromo />
+      <AppDownloadHost />
+      {/* Lumio's apps: a downloaded update, ready to install. */}
+      <UpdateReady />
       {/* Coming back (from the player, a detail page, the browser's back button) returns to the same scroll position. */}
       <ScrollRestoration />
     </RemoteProvider>

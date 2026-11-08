@@ -7,6 +7,7 @@ import { isIP, type Socket } from 'node:net'
 import { Readable } from 'node:stream'
 import { extname, join, normalize, resolve, sep } from 'node:path'
 import { isJellyfinRequest, proxyToJellyfin, proxyUpgrade } from './proxy.ts'
+import { latestApps } from './apps.ts'
 import { creditsOfRecording, lookupCredits, sameName, searchRecordings, type Failure, type JobState, type TrackCredits, type TrackMeta } from './credits.ts'
 import { DEFAULT_PRIVACY, Store, type Activity, type Person, type Privacy } from './store.ts'
 import { LANGS, detectLanguage, localizeTitle, type Lang, type LanguageDeps, type LocalImage, type LocalImageKind, type Localized, type LocalizedMeta, type Texts, type VideoItem } from './languages.ts'
@@ -977,6 +978,18 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
     // Which outside services this server has keys for: the app asks them through it then (it needs no keys of its own).
     const services = Object.fromEntries((['lastfm', 'concerts', 'tmdb'] as const).map((name) => [name, !!RELAY_SERVICES[name]?.key?.value]))
     return send(response, 200, { sso: SSO_PROVIDERS, proxy: PROXY_JELLYFIN, services, passwordLogin: !DISABLE_PASSWORD_LOGIN })
+  }
+  // Lumio's apps from the newest GitHub Release: the list (download dialog, update checks), and each file by its kind
+  // (the browser is sent on to it, so a link here always gives the newest).
+  if (path === '/apps' && request.method === 'GET') {
+    const release = await latestApps()
+    return release ? send(response, 200, release) : send(response, 502, { error: 'Releases unavailable' })
+  }
+  if (path.startsWith('/apps/download/') && request.method === 'GET') {
+    const asset = (await latestApps())?.assets.find((entry) => entry.kind === path.slice('/apps/download/'.length))
+    if (!asset) return send(response, 404, { error: 'No such app' })
+    response.writeHead(302, { Location: asset.url, 'Cache-Control': 'no-store' })
+    return response.end()
   }
   // Pictures load from <img> tags, which carry no token; the host list keeps this to podcast covers.
   if (path === '/image' && request.method === 'GET') return serveImage(response, url.searchParams.get('url'))

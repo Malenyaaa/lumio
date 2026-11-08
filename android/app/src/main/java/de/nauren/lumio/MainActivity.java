@@ -41,6 +41,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(PipPlugin.class);
         registerPlugin(SystemControlsPlugin.class);
+        registerPlugin(UpdaterPlugin.class);
         super.onCreate(savedInstanceState);
         ContextCompat.registerReceiver(this, pipReceiver, new IntentFilter(PIP_ACTION), ContextCompat.RECEIVER_NOT_EXPORTED);
     }

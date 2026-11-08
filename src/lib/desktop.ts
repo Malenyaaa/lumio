@@ -15,6 +15,14 @@ export interface DesktopSettings {
   closeAction: 'tray' | 'minimize' | 'quit'
   /** The window buttons in Lumio's header instead of the system's frame (takes a restart). */
   frameless: boolean
+  /** Newer versions are downloaded in the background and installed when Lumio quits. */
+  autoUpdate: boolean
+}
+
+/** A downloaded update: installed on quitting (desktop), or a package to install by hand (deb). */
+export interface DesktopUpdate {
+  version: string
+  kind: 'desktop' | 'deb'
 }
 
 interface LumioDesktop {
@@ -25,6 +33,10 @@ interface LumioDesktop {
   setTheme(theme: 'dark' | 'light'): void
   setNowPlaying(info: { title: string; playing: boolean; loaded: boolean }): void
   onMediaCommand(handler: (command: 'toggle' | 'next') => void): () => void
+  getUpdate(): Promise<DesktopUpdate | null>
+  onUpdateReady(handler: (update: DesktopUpdate) => void): () => void
+  /** Installs the downloaded update now (restarting Lumio), or opens the package. */
+  applyUpdate(): Promise<void>
 }
 
 export const desktop = (): LumioDesktop | undefined => (typeof window === 'undefined' ? undefined : (window as { lumioDesktop?: LumioDesktop }).lumioDesktop)

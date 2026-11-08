@@ -81,6 +81,8 @@ export interface LocalSettings {
   autoPip: boolean
   /** Lumio's Android app: swiping up and down in the video player sets the brightness (left) and the volume (right). */
   playerGestures: boolean
+  /** Lumio's Android app: newer versions are downloaded in the background and offered for installing. */
+  autoUpdate: boolean
   /** Animate page changes. */
   pageAnimations: boolean
   /** Show the short notices in a corner ("Saved", "Added to queue"); off hides them all. */
@@ -196,6 +198,7 @@ export const DEFAULT_SETTINGS: LocalSettings = {
   pauseSpotlightSeconds: 10,
   autoPip: true,
   playerGestures: true,
+  autoUpdate: true,
   pageAnimations: true,
   toasts: true,
   homeLayout: 'personal',

@@ -9,8 +9,11 @@
  * tray or only minimize it (music plays on); it can start with the system, hidden in the tray, and in Watch or Listen.
  * The page reaches these through preload.cjs.
  */
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, protocol, shell, Tray } from 'electron'
-import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, net, protocol, shell, Tray } from 'electron'
+import { chmodSync, createWriteStream, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { dirname, join, normalize, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -32,10 +35,10 @@ if (!app.requestSingleInstanceLock()) app.quit()
 // ---- the desktop settings (kept beside Electron's own data) ----
 
 /**
- * @typedef {{ autostart: boolean, startHidden: boolean, startIn: 'last' | 'watch' | 'listen', closeAction: 'tray' | 'minimize' | 'quit', frameless: boolean }} DesktopSettings
+ * @typedef {{ autostart: boolean, startHidden: boolean, startIn: 'last' | 'watch' | 'listen', closeAction: 'tray' | 'minimize' | 'quit', frameless: boolean, autoUpdate: boolean }} DesktopSettings
  */
 /** @type {DesktopSettings} */
-const DEFAULTS = { autostart: false, startHidden: false, startIn: 'last', closeAction: 'tray', frameless: true }
+const DEFAULTS = { autostart: false, startHidden: false, startIn: 'last', closeAction: 'tray', frameless: true, autoUpdate: true }
 const settingsFile = () => join(app.getPath('userData'), 'desktop-settings.json')
 
 /** @returns {DesktopSettings} */
@@ -163,6 +166,19 @@ function trayMenu() {
     },
     { label: de ? 'Nächster Titel' : 'Next', enabled: nowPlaying.loaded, click: () => window?.webContents.send('desktop:media', 'next') },
     { type: 'separator' },
+    ...(update
+      ? [
+          {
+            label: de ? `Auf ${update.version} aktualisieren` : `Update to ${update.version}`,
+            click: () => {
+              if (!installUpdate({ restart: true })) return
+              quitting = true
+              app.exit(0)
+            },
+          },
+          { type: 'separator' },
+        ]
+      : []),
     {
       label: de ? 'Beenden' : 'Quit',
       click: () => {
@@ -202,27 +218,81 @@ function newer(a, b) {
   return false
 }
 
-/** A newer release on GitHub is offered once per start (its page opens in the browser, with the installers). */
+/** @typedef {{ version: string, kind: 'desktop' | 'deb', file: string }} Update */
+/** @type {Update | null} A downloaded update waiting to be installed. */
+let update = null
+
+/**
+ * Which file of a release updates this installation: the Windows installer, the AppImage it runs from, or the deb
+ * (which needs the package manager, so it is only downloaded and opened).
+ */
+function updateAsset(assets) {
+  if (process.platform === 'win32') return assets.find((asset) => /-setup\.exe$/i.test(asset.name))
+  if (process.env.APPIMAGE) return assets.find((asset) => /\.AppImage$/i.test(asset.name))
+  return assets.find((asset) => /\.deb$/i.test(asset.name))
+}
+
+/**
+ * At start (with "Update automatically" on): a newer release is downloaded in the background. Windows installs it
+ * when Lumio quits; an AppImage replaces itself right away and runs the new one from the next start; a deb waits to be
+ * opened. The page shows a card about it ("quit Lumio to update"), the tray an entry.
+ */
 async function checkForUpdate() {
+  if (!readSettings().autoUpdate) return
   try {
     const response = await net.fetch(RELEASES, { headers: { Accept: 'application/vnd.github+json' } })
     if (!response.ok) return
     const release = await response.json()
-    if (!release.tag_name || !newer(release.tag_name, app.getVersion()) || !window) return
-    const de = german()
-    const { response: choice } = await dialog.showMessageBox(window, {
-      type: 'info',
-      buttons: de ? ['Herunterladen', 'Später'] : ['Download', 'Later'],
-      defaultId: 0,
-      cancelId: 1,
-      message: de ? `Lumio ${release.tag_name} ist da` : `Lumio ${release.tag_name} is available`,
-      detail: de ? `Installiert ist ${app.getVersion()}.` : `You have ${app.getVersion()}.`,
-    })
-    if (choice === 0) void shell.openExternal(release.html_url)
+    if (!release.tag_name || !newer(release.tag_name, app.getVersion())) return
+    const asset = updateAsset(release.assets ?? [])
+    if (!asset) return
+    const folder = join(app.getPath('userData'), 'updates')
+    mkdirSync(folder, { recursive: true })
+    const file = join(folder, asset.name)
+    const download = await net.fetch(asset.browser_download_url)
+    if (!download.ok || !download.body) return
+    await pipeline(Readable.fromWeb(download.body), createWriteStream(`${file}.part`))
+    renameSync(`${file}.part`, file)
+    const version = release.tag_name.replace(/^v/, '')
+    if (process.env.APPIMAGE && file.endsWith('.AppImage')) {
+      // The running AppImage can be replaced (it keeps running from the old file); the next start is the new one.
+      chmodSync(file, 0o755)
+      renameSync(file, process.env.APPIMAGE)
+      update = { version, kind: 'desktop', file: process.env.APPIMAGE }
+    } else update = { version, kind: file.endsWith('.deb') ? 'deb' : 'desktop', file }
+    window?.webContents.send('desktop:update-ready', { version, kind: update.kind })
+    updateTray()
   } catch {
     // Offline or GitHub unreachable: next start.
   }
 }
+
+/** Installs the downloaded update: now (restarting), or when Lumio quits. */
+function installUpdate({ restart }) {
+  if (!update) return false
+  if (update.kind === 'deb') {
+    void shell.openPath(update.file)
+    return false
+  }
+  if (process.platform === 'win32') {
+    // The installer replaces Lumio silently and, asked to, starts it again.
+    spawn(update.file, ['/S', ...(restart ? ['--force-run'] : [])], { detached: true, stdio: 'ignore' }).unref()
+    update = null
+    return true
+  }
+  // AppImage: already in place; a restart starts it.
+  if (restart) app.relaunch({ execPath: update.file })
+  update = null
+  return restart
+}
+
+ipcMain.handle('desktop:update', () => (update ? { version: update.version, kind: update.kind } : null))
+ipcMain.handle('desktop:apply-update', () => {
+  if (installUpdate({ restart: true })) {
+    quitting = true
+    app.exit(0)
+  }
+})
 
 app.on('second-instance', showWindow)
 
@@ -242,6 +312,12 @@ app.whenReady().then(() => {
   app.on('activate', showWindow)
 })
 
-app.on('before-quit', () => (quitting = true))
+app.on('before-quit', () => {
+  quitting = true
+})
+// Quitting with a downloaded update installs it (Windows; the AppImage is already in place).
+app.on('will-quit', () => {
+  if (update?.kind === 'desktop' && process.platform === 'win32') installUpdate({ restart: false })
+})
 // The window only hides while the tray keeps Lumio; set to quit, closing it quits.
 app.on('window-all-closed', () => app.quit())
