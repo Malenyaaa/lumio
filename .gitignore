@@ -32,3 +32,7 @@ server/data
 # Desktop app: its copy of the built pages, and the installers
 electron/dist
 release
+
+# Signing keys never go into the repository
+*.jks
+*.keystore
