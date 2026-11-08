@@ -4,7 +4,7 @@ import { Link } from '@/components/link'
 import { FadeImage } from '@/components/media/fade-image'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuthedSession } from '@/features/auth/session'
-import { useItem, useLibraryArtists } from '@/features/items/queries'
+import { useItem, useNewestArtists } from '@/features/items/queries'
 import { useCategories } from '@/features/library/categories'
 import { markAppReady } from '@/lib/boot'
 import { defineMessages, useMessages } from '@/lib/i18n'
@@ -17,7 +17,7 @@ import { useOfficialPlaylists } from './official'
 import { playCircle } from './play-circle'
 import { music, START, useMusic } from './player/music-player'
 import { LikedCover, OfficialCard, OfficialCover, PlaylistCard, PlaylistCover } from './playlist-cards'
-import { useLikedSongs, usePlaylists, usePlaylistTracks } from './playlists'
+import { useFollowedArtists, useLikedSongs, usePlaylists, usePlaylistTracks } from './playlists'
 import { usePodcast } from './podcasts'
 import { useListeningStats } from './profiles'
 import { RadioCard } from './radio-card'
@@ -38,7 +38,9 @@ const messages = defineMessages({
     forYou: 'Deine Mixe',
     yourPlaylists: 'Deine Playlists',
     newAlbums: 'Neue Alben',
-    artists: 'Deine Künstler',
+    topArtists: 'Deine meistgehörten Künstler',
+    followedArtists: 'Künstler, denen du folgst',
+    newArtists: 'Neu in der Bibliothek',
     audiobooks: 'Hörbücher',
   },
   en: {
@@ -54,7 +56,9 @@ const messages = defineMessages({
     forYou: 'Your mixes',
     yourPlaylists: 'Your playlists',
     newAlbums: 'New albums',
-    artists: 'Your artists',
+    topArtists: 'Your most played artists',
+    followedArtists: 'Artists you follow',
+    newArtists: 'New in the library',
     audiobooks: 'Audiobooks',
   },
 })
@@ -85,15 +89,22 @@ export function ListenHome() {
   const bookViews = categories.find((category) => category.id === 'audiobooks')?.views ?? []
   const recent = useRecentAlbums()
   const newest = useNewestAlbums(musicViews)
-  const artists = useLibraryArtists(musicViews)
   const audiobooks = useNewestAlbums(bookViews)
   const official = useOfficialPlaylists()
   const playlists = usePlaylists()
   const greeting = useGreeting(t)
-  // Radios around the artists listened to most lately (or followed).
   const stats = useListeningStats()
-  const followedArtists = artists.data ?? []
-  const radioArtists = (stats.data?.topArtists.length ? stats.data.topArtists : followedArtists).slice(0, 8)
+  const followed = useFollowedArtists()
+  const topArtists = stats.data?.topArtists ?? []
+  const followedArtists = followed.data ?? []
+  // The artists row is about the user: who they listen to most (last 30 days), else whom they follow; only someone
+  // who has neither yet gets the artists newest to the library.
+  const artistsRow = topArtists.length >= 3 ? 'top' : followedArtists.length ? 'followed' : 'new'
+  const newestArtists = useNewestArtists(musicViews, !stats.isLoading && !followed.isLoading && artistsRow === 'new')
+  const rowArtists = artistsRow === 'top' ? topArtists : artistsRow === 'followed' ? followedArtists : newestArtists.data
+  const rowTitle = artistsRow === 'top' ? t.topArtists : artistsRow === 'followed' ? t.followedArtists : t.newArtists
+  // Radios around the artists listened to most lately (or followed).
+  const radioArtists = (topArtists.length ? topArtists : followedArtists).slice(0, 8)
   // The grid: what was played from most recently (any kind), topped up with recently played albums.
   const sources = useRecentSources()
   const quick = [...new Set([...sources, ...(recent.data ?? []).map((album) => `album:${album.Id}`)])].slice(0, QUICK_TILES)
@@ -138,7 +149,7 @@ export function ListenHome() {
         </CardRow>
       )}
       <MusicRow title={t.newAlbums} items={newest.data} loading={newest.isLoading && musicViews.length > 0} />
-      <MusicRow title={t.artists} items={artists.data} loading={artists.isLoading && musicViews.length > 0} />
+      <MusicRow title={rowTitle} items={rowArtists} loading={stats.isLoading || followed.isLoading || (artistsRow === 'new' && newestArtists.isLoading && musicViews.length > 0)} />
       <FollowedPodcastsRow />
       <MusicRow title={t.audiobooks} items={audiobooks.data} loading={audiobooks.isLoading && bookViews.length > 0} />
     </div>

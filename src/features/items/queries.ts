@@ -418,6 +418,35 @@ export function useArtistAlbums(artistId: string | undefined) {
 }
 
 /** The album artists of some music libraries, for the artists row of the music category. */
+/** The artists most recently added to these libraries, newest first. */
+export function useNewestArtists(views: BaseItemDto[], enabled = true) {
+  const { api, session } = useAuthedSession()
+  return useQuery({
+    queryKey: ['newest-artists', session.userId, views.map((view) => view.Id)],
+    enabled: enabled && views.length > 0,
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const lists = await Promise.all(
+        views.map(
+          async (view) =>
+            (
+              await getArtistApi(api).getAlbumArtists({
+                userId: session.userId,
+                parentId: view.Id!,
+                sortBy: [ItemSortBy.DateCreated],
+                sortOrder: [SortOrder.Descending],
+                fields: [ItemFields.PrimaryImageAspectRatio, ItemFields.DateCreated],
+                limit: 20,
+              })
+            ).data.Items ?? [],
+        ),
+      )
+      const byId = new Map(lists.flat().map((artist) => [artist.Id, artist]))
+      return [...byId.values()].sort((a, b) => Date.parse(b.DateCreated ?? '') - Date.parse(a.DateCreated ?? '')).slice(0, 20)
+    },
+  })
+}
+
 export function useLibraryArtists(views: BaseItemDto[], enabled = true) {
   const { api, session } = useAuthedSession()
   return useQuery({
