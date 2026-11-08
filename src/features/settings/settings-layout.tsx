@@ -52,9 +52,13 @@ export function SettingsLayout() {
   if (atIndex) return <Navigate to="profile" replace />
   return (
     <div className="mx-auto flex max-w-5xl flex-row gap-12 px-8 pb-12 pt-20">
-      <nav aria-label={t.navigation} className="sticky top-20 w-56 shrink-0 space-y-4 self-start">
+      {/* At most the window's height (minus the top offset and the bottom padding): a taller nav would be pushed up by
+          the end of the page while scrolling and snap back on the next page. The list scrolls on its own instead. */}
+      <nav aria-label={t.navigation} className="sticky top-20 flex max-h-[calc(100dvh-8rem)] w-56 shrink-0 flex-col gap-4 self-start">
         <SearchBox query={query} onChange={setQuery} />
-        {query.trim() ? <SearchResults query={query} onPick={() => setQuery('')} /> : <SideNav />}
+        <div className="-mx-1 min-h-0 overflow-y-auto overscroll-contain px-1 pb-1 [scrollbar-width:thin]">
+          {query.trim() ? <SearchResults query={query} onPick={() => setQuery('')} /> : <SideNav />}
+        </div>
       </nav>
       {/* The navigation stays; only the sub-page fades in (no page-wide View Transition, which would redraw the nav). */}
       <div key={pathname} className="min-w-0 flex-1 animate-page-in">
