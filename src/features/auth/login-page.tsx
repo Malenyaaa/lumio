@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { useLanguagePreference, useLocale, useMessages, type Locale } from '@/lib/i18n'
 import { DEFAULT_SERVER_URL } from '@/lib/jellyfin'
+import { useServerAddress } from '@/lib/server-address'
 import { cn } from '@/lib/utils'
 import { loginMessages } from './messages'
 import { useSession } from './session'
@@ -62,7 +63,9 @@ function useAdoptJellyfinSignIn(serverUrl: string) {
 
 export function LoginPage() {
   const { session } = useSession()
-  const [serverUrl, setServerUrl] = useState(DEFAULT_SERVER_URL)
+  // As typed; "jelly.example.org" becomes https:// (or http:// when only that answers) before anything connects.
+  const [serverInput, setServerInput] = useState(DEFAULT_SERVER_URL)
+  const { address: serverUrl } = useServerAddress(serverInput)
   const [mode, setMode] = useState<'quick-connect' | 'password'>('quick-connect')
   const t = useMessages(loginMessages)
   const { appName, logo } = useBranding()
@@ -119,7 +122,17 @@ export function LoginPage() {
           {!config.serverLocked && (
             <div className="grid gap-2">
               <Label htmlFor="server">{t.server}</Label>
-              <Input id="server" type="url" required value={serverUrl} onChange={(e) => setServerUrl(e.target.value)} />
+              <Input
+                id="server"
+                inputMode="url"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                placeholder="jellyfin.example.org"
+                required
+                value={serverInput}
+                onChange={(e) => setServerInput(e.target.value)}
+              />
             </div>
           )}
 

@@ -122,7 +122,8 @@ function createWindow({ show }) {
     // No frame (the default): the window buttons are drawn into Lumio's header (index.css keeps room for them).
     ...(frameless ? { titleBarStyle: 'hidden', titleBarOverlay: overlayColors(nativeTheme.shouldUseDarkColors) } : { autoHideMenuBar: true }),
     show: false,
-    webPreferences: { sandbox: true, contextIsolation: true, preload: join(HERE, 'preload.cjs') },
+    // Servers at home are often plain http (the sign-in tries https first, then http): app://lumio may reach them.
+    webPreferences: { sandbox: true, contextIsolation: true, allowRunningInsecureContent: true, preload: join(HERE, 'preload.cjs') },
   })
   if (show) window.once('ready-to-show', () => window?.show())
   // Links to other sites open in the browser, not in Lumio's window.

@@ -10,8 +10,10 @@ const config: CapacitorConfig = {
   appName: 'Lumio',
   webDir: 'dist',
   android: {
-    // Media keeps playing when the screen goes off or another app comes to the front.
     backgroundColor: '#0a0a0a',
+    // Servers at home are often plain http (the sign-in tries https first, then http): the pages, served as
+    // https://localhost, may reach them.
+    allowMixedContent: true,
   },
 }
 
