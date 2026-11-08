@@ -173,7 +173,7 @@ export function WatchDownloadsPage() {
       {movies.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">{t.movies}</h2>
-          <ul className="grid gap-1">
+          <ul className="grid grid-cols-1 gap-1">
             {movies.map((entry) => (
               <MovieRow key={entry.id} entry={entry} t={t} size={size} />
             ))}

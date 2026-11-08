@@ -165,7 +165,7 @@ export function HistoryPage() {
       {history.isLoading && (
         <section className="space-y-2" aria-hidden>
           <Skeleton className="h-5 w-24" />
-          <ul className="grid gap-1">
+          <ul className="grid grid-cols-1 gap-1">
             {Array.from({ length: 6 }, (_, i) => (
               <li key={i} className="flex items-center gap-4 p-2">
                 <Skeleton className="aspect-video w-32 shrink-0 rounded-md sm:w-40" />
@@ -191,7 +191,7 @@ export function HistoryPage() {
       {groups.map((group) => (
         <section key={group.key} className="space-y-2">
           <h2 className="text-sm font-medium text-muted-foreground">{group.label}</h2>
-          <ul className="grid gap-1">
+          <ul className="grid grid-cols-1 gap-1">
             {group.entries.map(({ key, href, image, title, subtitle, playedAt }) => {
               return (
                 <li key={key}>

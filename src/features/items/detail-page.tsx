@@ -287,7 +287,8 @@ function SeasonsSection({ series, seriesId, initialSeasonId, highlightId }: Seas
           />
         </div>
 
-        <ul className="grid gap-3">
+        {/* One column as wide as the page: long titles truncate instead of widening it (and the whole page). */}
+        <ul className="grid grid-cols-1 gap-3">
           {episodes.isLoading && Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)}
           {episodes.data?.map((episode) => {
             const isHighlighted = episode.Id === highlightId
