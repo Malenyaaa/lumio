@@ -30,6 +30,7 @@ import { ArtistConcerts } from './concert-pages'
 import { sameName, useLastfmArtist, useLastfmTopTracks } from './external'
 import { CardRow, MusicCard, MusicRow } from './music-card'
 import { useReleaseLine } from './artist-discography'
+import { LikedFromArtist } from './artist-liked'
 import { Link } from '@/components/link'
 import { currentTrack, music, START, useMusic } from './player/music-player'
 import { ShuffleToggle } from './shuffle-toggle'
@@ -247,30 +248,33 @@ export function ArtistPage({ item }: { item: BaseItemDto }) {
       </div>
 
       <div className="space-y-12">
-        {/* Popular */}
-        {(tracks.isLoading || popular.length > 0) && (
-          <section className="px-4 sm:px-8">
-            <h2 className="mb-3 text-2xl font-bold tracking-tight">{t.popular}</h2>
-            <div className="max-w-4xl">
-              {tracks.isLoading && Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="mb-1 h-14 rounded-md" />)}
-              {shownPopular.map(({ track, plays }, index) => (
-                <TrackTableRow
-                  key={track.Id}
-                  track={track}
-                  number={index + 1}
-                  cover
-                  extra={plays ? number.format(plays) : undefined}
-                  onPlay={() => music.play(popular.map((entry) => entry.track), index, { source })}
-                />
-              ))}
-              {popular.length > 5 && (
-                <button type="button" onClick={() => setExpanded(!expanded)} className="mt-3 px-4 text-sm font-bold text-muted-foreground hover:text-foreground">
-                  {expanded ? t.showLess : t.showMore}
-                </button>
-              )}
-            </div>
-          </section>
-        )}
+        {/* Popular, and beside it (as on Spotify) what the user liked by this artist. */}
+        <div className="flex flex-col gap-8 px-4 sm:px-8 xl:flex-row">
+          {(tracks.isLoading || popular.length > 0) && (
+            <section className="min-w-0 max-w-4xl flex-1">
+              <h2 className="mb-3 text-2xl font-bold tracking-tight">{t.popular}</h2>
+              <div>
+                {tracks.isLoading && Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="mb-1 h-14 rounded-md" />)}
+                {shownPopular.map(({ track, plays }, index) => (
+                  <TrackTableRow
+                    key={track.Id}
+                    track={track}
+                    number={index + 1}
+                    cover
+                    extra={plays ? number.format(plays) : undefined}
+                    onPlay={() => music.play(popular.map((entry) => entry.track), index, { source })}
+                  />
+                ))}
+                {popular.length > 5 && (
+                  <button type="button" onClick={() => setExpanded(!expanded)} className="mt-3 px-4 text-sm font-bold text-muted-foreground hover:text-foreground">
+                    {expanded ? t.showLess : t.showMore}
+                  </button>
+                )}
+              </div>
+            </section>
+          )}
+          <LikedFromArtist artist={item} />
+        </div>
 
         <Discography artistId={item.Id!} albums={albums.data?.albums} tracks={library} loading={albums.isLoading} />
 

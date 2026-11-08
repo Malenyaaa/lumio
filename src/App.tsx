@@ -12,6 +12,7 @@ import { HomePage } from '@/features/home/home-page'
 import { LikedSongsPage, OfficialPlaylistPage, PlaylistPage } from '@/features/listen/collection-pages'
 import { ConcertPage, ConcertsPage } from '@/features/listen/concert-pages'
 import { ArtistDiscographyPage } from '@/features/listen/artist-discography'
+import { ArtistLikedPage } from '@/features/listen/artist-liked'
 import { ListenHome } from '@/features/listen/listen-home'
 import { PlatformPage } from '@/features/listen/platform-page'
 import { EpisodePage, PodcastPage, PodcastsPage, SavedEpisodesPage } from '@/features/listen/podcast-pages'
@@ -112,6 +113,7 @@ const router = createBrowserRouter(
         <Route path="album/:id" element={<DetailPage />} />
         <Route path="artist/:id" element={<DetailPage />} />
         <Route path="artist/:id/discography" element={<ArtistDiscographyPage />} />
+        <Route path="artist/:id/liked" element={<ArtistLikedPage />} />
         <Route path="browse/:category" element={<CategoryPage />} />
         <Route path="playlist/:id" element={<PlaylistPage />} />
         <Route path="official/:slug" element={<OfficialPlaylistPage />} />

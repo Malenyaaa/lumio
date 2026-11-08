@@ -128,7 +128,7 @@ interface CollectionProps {
 }
 
 /** The layout shared by playlists, official playlists and liked songs: header, actions, track table with albums. */
-function Collection({ kind, title, cover, byline, description, tracks: loaded, loading, source, tint, actions, empty, onRemove, onMove, onEdit, extras, extraLabel }: CollectionProps) {
+export function Collection({ kind, title, cover, byline, description, tracks: loaded, loading, source, tint, actions, empty, onRemove, onMove, onEdit, extras, extraLabel }: CollectionProps) {
   const t = useMessages(messages)
   // Dragging reorders right away; the server's order replaces it once it has saved the move.
   const [reordered, setReordered] = useState<{ from: BaseItemDto[]; order: BaseItemDto[] } | null>(null)
