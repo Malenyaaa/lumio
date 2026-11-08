@@ -2,6 +2,7 @@ import {
   IconAdjustments,
   IconDeviceDesktop,
   IconDeviceMobile,
+  IconDownload,
   IconExternalLink,
   IconHistory,
   IconLogout,
@@ -24,7 +25,9 @@ import { useAuthedSession } from '@/features/auth/session'
 import { useLocalSettings } from '@/features/settings/local-settings'
 import { APP_MODES, inMode, modeHome, useAppMode } from '@/lib/app-mode'
 import { useMessages } from '@/lib/i18n'
-import { inJellyfinApp, openAppSettings, openServerSelection } from '@/lib/native-app'
+import { inJellyfinApp, inNativeApp, openAppSettings, openServerSelection } from '@/lib/native-app'
+import { desktop } from '@/lib/desktop'
+import { APP_DOWNLOAD_URL } from '@/lib/platform'
 import { useThemePreference, type ThemePreference } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 
@@ -102,6 +105,8 @@ export function ProfileDrawer() {
             )}
             <Section>
               <Row icon={IconDeviceMobile} label={t.quickConnect} onClick={() => setConnectOpen(true)} />
+              {/* In a browser: the apps for Android, Windows and Linux (not offered inside one of them). */}
+              {!inNativeApp() && !desktop() && <Row icon={IconDownload} label={t.getApp} href={APP_DOWNLOAD_URL} external />}
               {/* Inside Jellyfin's Android app: its own screens, which its own web client reaches the same way. */}
               {inJellyfinApp() && (
                 <>

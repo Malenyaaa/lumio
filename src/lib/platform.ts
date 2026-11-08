@@ -20,3 +20,6 @@ export function lumioServer(): string {
 export function apiBase(): string {
   return (import.meta.env.VITE_SOCIAL_URL?.trim() || `${lumioServer()}/api`).replace(/\/+$/, '')
 }
+
+/** Where Lumio's apps (Android, Windows, Linux) are downloaded: the newest GitHub Release. */
+export const APP_DOWNLOAD_URL = 'https://github.com/PalmarHealer/lumio/releases/latest'

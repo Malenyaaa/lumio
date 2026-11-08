@@ -58,7 +58,9 @@ import { HeaderSearch } from '@/features/search/header-search'
 import { useLocalSettings } from '@/features/settings/local-settings'
 import { useMessages } from '@/lib/i18n'
 import { markAppReady } from '@/lib/boot'
-import { inJellyfinApp, openAppSettings, openServerSelection } from '@/lib/native-app'
+import { inJellyfinApp, inNativeApp, openAppSettings, openServerSelection } from '@/lib/native-app'
+import { desktop } from '@/lib/desktop'
+import { APP_DOWNLOAD_URL } from '@/lib/platform'
 import { inMode, isLaunchAtRoot, lastMode, modeHome, rememberMode, rememberPath, useAppMode } from '@/lib/app-mode'
 import { useTheme, useThemePreference, type ThemePreference } from '@/lib/theme'
 import { cn } from '@/lib/utils'
@@ -409,6 +411,13 @@ export function HeaderActions({ search = true }: { search?: boolean }) {
             <DropdownMenuItem onClick={() => setConnectOpen(true)}>
               <IconDeviceMobile /> {t.quickConnect}
             </DropdownMenuItem>
+            {/* In a browser: the apps for Android, Windows and Linux (not offered inside one of them). */}
+            {!inNativeApp() && !desktop() && (
+              <DropdownMenuItem render={<a href={APP_DOWNLOAD_URL} target="_blank" rel="noreferrer noopener" />}>
+                <IconDownload /> {t.getApp}
+                <IconExternalLink className="ml-auto size-3.5 text-muted-foreground" />
+              </DropdownMenuItem>
+            )}
             {/* Inside Jellyfin's Android app: its own screens, which its own web client reaches the same way. */}
             {inJellyfinApp() && (
               <>

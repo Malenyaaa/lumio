@@ -26,6 +26,7 @@ export const shellMessages = defineMessages({
     viewProfile: 'Profil ansehen',
     tabs: 'Hauptnavigation',
     apps: 'Apps',
+    getApp: 'App herunterladen',
   },
   en: {
     back: 'Back',
@@ -52,6 +53,7 @@ export const shellMessages = defineMessages({
     viewProfile: 'View profile',
     tabs: 'Main navigation',
     apps: 'Apps',
+    getApp: 'Download the app',
   },
 })
 
