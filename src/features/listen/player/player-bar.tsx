@@ -41,32 +41,11 @@ import { toggleListenPanel, useListenPanel, type ListenPanel } from './panel'
 import { playCircle } from '../play-circle'
 import { endTrackDrag, startTrackDrag, useTrackDrop } from '../track-drag'
 import { TrackContextMenu } from '../track-menu'
-import { useRemote } from '@/features/remote/remote-provider'
-import type { RemoteTarget } from '@/features/remote/remote-provider'
-import { PlayerControlsContext, useLocalControls, usePlayerControls, useRemoteControls } from './player-controls'
+import { usePlayerControls, usePlayerTime } from './player-controls'
 
 /** Listen's player bar along the bottom: the track, the transport with its progress, and queue, lyrics and volume. */
 export function PlayerBar() {
-  const remote = useRemote()
-  // Controlling another device: the same bar, steering that device instead (its track, position, volume …).
-  if (remote.target) return <RemoteBar target={remote.target} onDisconnect={() => remote.setTarget(null)} />
-  return <LocalBar />
-}
-
-function LocalBar() {
-  return (
-    <PlayerControlsContext value={useLocalControls()}>
-      <Bar />
-    </PlayerControlsContext>
-  )
-}
-
-function RemoteBar({ target, onDisconnect }: { target: RemoteTarget; onDisconnect: () => void }) {
-  return (
-    <PlayerControlsContext value={useRemoteControls(target, onDisconnect)}>
-      <Bar />
-    </PlayerControlsContext>
-  )
+  return <Bar />
 }
 
 function Bar() {
@@ -232,7 +211,8 @@ function Transport() {
 /** Time, a slim seek bar (dragging previews the position, letting go seeks) and the length. */
 function Progress() {
   const t = useMessages(playerBarMessages)
-  const { position, duration, seek } = usePlayerControls()
+  const { seek } = usePlayerControls()
+  const { position, duration } = usePlayerTime()
   const track = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<number | null>(null)
   const fractionAt = (event: PointerEvent) => {
@@ -289,7 +269,7 @@ function Extras() {
   const t = useMessages(playerBarMessages)
   const state = usePlayerControls()
   const panel = useListenPanel()
-  const lyrics = useLyrics(state.remote ? undefined : state.track)
+  const lyrics = useLyrics(state.track)
   const noLyrics = !lyrics.isLoading && !lyrics.data?.lines.length
   const VolumeIcon = state.muted || state.volume === 0 ? IconVolume3 : state.volume < 0.5 ? IconVolume2 : IconVolume
   const toggles: Array<{ target: Exclude<ListenPanel, 'nowPlaying'>; label: string; icon: ReactNode; disabled?: boolean }> = [
@@ -298,8 +278,8 @@ function Extras() {
   ]
   return (
     <div className="hidden items-center justify-end gap-1 md:flex">
-      {/* Lyrics, queue and quality are this device's; while steering another one, "disconnect" takes their place. */}
-      {state.remote ? (
+      {/* Steering another device: the way back, beside its lyrics and queue. */}
+      {state.remote && (
         <button
           type="button"
           onClick={state.remote.disconnect}
@@ -307,8 +287,8 @@ function Extras() {
         >
           <IconX className="size-3.5" /> {t.disconnect}
         </button>
-      ) : (
-        toggles.map((toggle) =>
+      )}
+      {toggles.map((toggle) =>
         toggle.target === 'queue' ? (
           <QueueDrop key={toggle.target} className="rounded-full">
             <ToggleButton label={toggle.label} active={panel.expanded ? panel.beside === 'queue' : panel.open && panel.view === toggle.target} onClick={() => toggleListenPanel(toggle.target)}>
@@ -326,7 +306,6 @@ function Extras() {
             {toggle.icon}
           </ToggleButton>
         ),
-        )
       )}
       <IconButton label={state.muted ? t.unmute : t.mute} onClick={state.toggleMute}>
         <VolumeIcon className="size-4" />

@@ -345,6 +345,12 @@ function report(kind: 'start' | 'progress' | 'stopped', item = currentTrack()) {
     // So a device steering this one shows shuffle and repeat as they are.
     RepeatMode: ({ off: 'RepeatNone', all: 'RepeatAll', one: 'RepeatOne' } as const)[state.repeat],
     PlaybackOrder: state.shuffle ? ('Shuffle' as const) : ('Default' as const),
+    // The queue (podcasts left out), so a device steering this one can show it and play from any song in it.
+    NowPlayingQueue: state.queue
+      .map((queued, position) => ({ Id: queued.Id ?? '', PlaylistItemId: state.entries[position]?.uid }))
+      .filter((queued, position) => queued.Id && !externalOf(state.queue[position]!))
+      .slice(0, 300),
+    PlaylistItemId: state.entries[state.index]?.uid,
   }
   // When a play can't be reported (offline, e.g. a cached song), it is kept and handed in later, so it still counts.
   const { userId } = connection

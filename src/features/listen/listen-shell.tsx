@@ -9,6 +9,7 @@ import { HeaderSearch } from '@/features/search/header-search'
 import { LEFT_LIMITS, PEEK_WIDTH, RIGHT_LIMITS, setListenLayout, setListenPanelExpanded, useListenLayout, useListenPanel, useListenPanelPeek } from './player/panel'
 import { SongInfoHost } from './player/now-playing'
 import { PlayerBar } from './player/player-bar'
+import { ListenControlsProvider } from './player/player-controls'
 import { SidePanel } from './player/side-panel'
 import { concertsAvailable } from './concerts'
 import { LibrarySidebar } from './library-sidebar'
@@ -210,9 +211,12 @@ function SignedInListen() {
         </div>
       </main>
 
-      <SidePanel />
-      <PlayerBar />
-      <SongInfoHost />
+      {/* This device's player, or the one Lumio controls: the side panel and the bar follow either. */}
+      <ListenControlsProvider>
+        <SidePanel />
+        <PlayerBar />
+        <SongInfoHost />
+      </ListenControlsProvider>
 
       <SettingsEffects />
     </div>

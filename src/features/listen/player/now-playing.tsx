@@ -17,10 +17,11 @@ import { ArtistAboutDialog } from '../artist-about'
 import { useConcerts } from '../concerts'
 import { useLastfmArtist } from '../external'
 import { useLyrics } from './lyrics'
-import { currentTrack, music, useMusic, useMusicTime } from './music-player'
+import { music, useMusic } from './music-player'
 import { toggleListenPanel } from './panel'
 import { ArtistLine } from './player-bar'
 import { useTrackQuality } from './quality'
+import { usePlayerControls, usePlayerTime } from './player-controls'
 
 const messages = defineMessages({
   de: {
@@ -254,7 +255,7 @@ function LyricsPreview({ track }: { track: BaseItemDto }) {
   const { api } = useAuthedSession()
   const t = useMessages(messages)
   const lyrics = useLyrics(track)
-  const { position } = useMusicTime()
+  const { position } = usePlayerTime()
   const tint = useDominantColor(portraitImageUrl(api, track, { fillHeight: 64 })).data
   const list = useRef<HTMLSpanElement>(null)
   const lines = (lyrics.data?.lines ?? []).filter((line) => line.text)
@@ -442,8 +443,10 @@ function NextInQueue() {
   const t = useMessages(messages)
   const navigate = useNavigate()
   const state = useMusic()
-  const next = state.queue[state.index + 1]
-  if (!currentTrack(state)) return null
+  const { remote, track } = usePlayerControls()
+  // Steering another device: its next song.
+  const next = remote ? remote.queue[remote.index + 1] : state.queue[state.index + 1]
+  if (!track) return null
   if (!next)
     return (
       <section className="space-y-3 rounded-lg bg-muted/50 p-4 text-center">
@@ -463,7 +466,7 @@ function NextInQueue() {
         </button>
       }
     >
-      <button type="button" onClick={() => music.jump(state.index + 1)} className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-md p-2 text-left transition-colors hover:bg-foreground/[0.07]">
+      <button type="button" onClick={() => (remote ? remote.jump(remote.index + 1) : music.jump(state.index + 1))} className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-md p-2 text-left transition-colors hover:bg-foreground/[0.07]">
         <span className="size-11 shrink-0 overflow-hidden rounded bg-muted">{cover && <FadeImage src={cover} alt="" className="size-full object-cover" />}</span>
         <span className="min-w-0">
           <span className="block truncate text-sm font-medium">{next.Name}</span>

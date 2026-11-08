@@ -21,10 +21,11 @@ import { artistsOf, titlePath } from '@/lib/item-links'
 import { cn } from '@/lib/utils'
 import { useLyrics } from './lyrics'
 import { playerBarMessages } from './messages'
-import { currentTrack, music, useMusic, useMusicTime, type QueueKind } from './music-player'
+import { currentTrack, music, useMusic, type QueueKind } from './music-player'
 import { closeListenPanel, openListenPanel, RIGHT_LIMITS, setListenLayout, setListenPanelExpanded, setListenPanelPeek, toggleListenPanel, type ListenPanel, useListenLayout, useListenPanel } from './panel'
 import { useTrackQuality } from './quality'
 import { ResizeHandle } from '../resize-handle'
+import { usePlayerControls, usePlayerTime } from './player-controls'
 import { endTrackDrag, QUEUE_MOVE_TYPE, startTrackDrag } from '../track-drag'
 import { TrackContextMenu, TrackMenu } from '../track-menu'
 import { NowPlaying } from './now-playing'
@@ -43,6 +44,7 @@ const messages = defineMessages({
     nextInQueue: 'Nächster Titel in der Warteschlange',
     clearQueue: 'Warteschlange löschen',
     removeFromQueue: 'Aus Warteschlange entfernen',
+    nextOn: (device: string) => `Als Nächstes auf ${device}`,
     playThis: (name: string) => `${name} abspielen`,
     nextFrom: 'Nächster Titel von:',
     autoplayFrom: 'Ähnliche Titel, basierend auf',
@@ -81,6 +83,7 @@ const messages = defineMessages({
     nextInQueue: 'Next in queue',
     clearQueue: 'Clear queue',
     removeFromQueue: 'Remove from queue',
+    nextOn: (device: string) => `Next on ${device}`,
     playThis: (name: string) => `Play ${name}`,
     nextFrom: 'Next from:',
     autoplayFrom: 'Similar songs, based on',
@@ -118,8 +121,7 @@ const messages = defineMessages({
  */
 export function SidePanel() {
   const panel = useListenPanel()
-  const state = useMusic()
-  const track = currentTrack(state)
+  const { track } = usePlayerControls()
   const t = useMessages(messages)
   const bar = useMessages(playerBarMessages)
   const layout = useListenLayout()
@@ -558,6 +560,59 @@ const AUTOPLAY_SHOWN = 10
  * starts, the rows slide up into their new places.
  */
 function Queue() {
+  const controls = usePlayerControls()
+  // Steering another device: its queue, as far as it tells.
+  if (controls.remote) return <RemoteQueue remote={controls.remote} />
+  return <LocalQueue />
+}
+
+/** The controlled device's queue: the current song and what comes after it; a click plays from there. */
+function RemoteQueue({ remote }: { remote: NonNullable<ReturnType<typeof usePlayerControls>['remote']> }) {
+  const t = useMessages(messages)
+  const { api } = useAuthedSession()
+  const current = remote.queue[remote.index]
+  const upcoming = remote.queue.slice(remote.index + 1)
+  const row = (item: BaseItemDto, at: number, isCurrent?: boolean) => {
+    const cover = portraitImageUrl(api, item, { fillHeight: 96 })
+    return (
+      <button
+        key={`${item.Id}-${at}`}
+        type="button"
+        onClick={() => !isCurrent && remote.jump(at)}
+        className="group flex w-full items-center gap-3 rounded-md p-1.5 text-left hover:bg-muted"
+      >
+        <span className="relative size-10 shrink-0 overflow-hidden rounded bg-muted">
+          {cover && <FadeImage src={cover} alt="" className="size-full object-cover" />}
+          {!isCurrent && (
+            <span className="absolute inset-0 grid place-items-center bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100">
+              <IconPlayerPlayFilled className="size-4" />
+            </span>
+          )}
+        </span>
+        <span className="min-w-0">
+          <span className={cn('block truncate text-sm', isCurrent && 'text-listen')}>{item.Name}</span>
+          <span className="block truncate text-xs text-muted-foreground">{artistsOf(item).map((artist) => artist.name).join(', ')}</span>
+        </span>
+      </button>
+    )
+  }
+  return (
+    <div className="space-y-5">
+      {current && (
+        <section className="space-y-1">
+          <h3 className="text-sm font-semibold">{t.currentTrack}</h3>
+          {row(current, remote.index, true)}
+        </section>
+      )}
+      <section className="space-y-1">
+        <h3 className="truncate text-sm font-semibold">{t.nextOn(remote.name)}</h3>
+        {upcoming.length ? upcoming.map((item, offset) => row(item, remote.index + 1 + offset)) : <p className="py-2 text-sm text-muted-foreground">{t.emptyQueue}</p>}
+      </section>
+    </div>
+  )
+}
+
+function LocalQueue() {
   const t = useMessages(messages)
   const state = useMusic()
   const track = currentTrack(state)
@@ -746,7 +801,8 @@ function QueueRow({ uid, item, index, kind, current }: { uid: string; item: Base
 function LyricsView({ track, big }: { track: BaseItemDto; big: boolean }) {
   const t = useMessages(messages)
   const lyrics = useLyrics(track)
-  const { position } = useMusicTime()
+  const { position } = usePlayerTime()
+  const { seek } = usePlayerControls()
   const list = useRef<HTMLDivElement>(null)
   const lines = lyrics.data?.lines ?? []
   const synced = !!lyrics.data?.synced
@@ -777,7 +833,7 @@ function LyricsView({ track, big }: { track: BaseItemDto; big: boolean }) {
         <p
           key={index}
           data-line={index}
-          onClick={() => synced && line.time !== undefined && music.seek(line.time)}
+          onClick={() => synced && line.time !== undefined && seek(line.time)}
           className={cn(
             'font-bold leading-snug transition-colors duration-300',
             big ? 'text-3xl sm:text-4xl xl:text-5xl' : 'text-xl',

@@ -526,7 +526,6 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       music.pause()
       sessions
         .play({ sessionId: target.sessionId, playCommand: 'PlayNow', itemIds: now.items.map((item) => item.Id!), startIndex: 0, startPositionTicks: now.positionTicks })
-        .then(() => toast.success(messagesFor(handoffMessages).playingOn(target.name)))
         .catch(failed)
     }
     setRemoteSink({
