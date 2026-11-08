@@ -3,6 +3,7 @@ import { FriendActivityButton } from '@/features/social/social-ui'
 import { DownloadManagerButton, OfflineBadge } from '@/features/listen/download-manager'
 import { getImageApi } from '@jellyfin/sdk/lib/utils/api/image-api'
 import {
+  IconAdjustments,
   IconArrowLeft,
   IconDeviceDesktop,
   IconDeviceMobile,
@@ -11,6 +12,7 @@ import {
   IconLayoutDashboard,
   IconLogout,
   IconMoon,
+  IconServer,
   IconSettings,
   IconSun,
   IconTags,
@@ -53,6 +55,7 @@ import { useSettingsPages } from '@/features/settings/settings-pages'
 import { useUserConfiguration } from '@/features/settings/use-user-configuration'
 import { useMessages } from '@/lib/i18n'
 import { markAppReady } from '@/lib/boot'
+import { inJellyfinApp, openAppSettings, openServerSelection } from '@/lib/native-app'
 import { inMode, isLaunchAtRoot, lastMode, modeHome, rememberMode, rememberPath, useAppMode } from '@/lib/app-mode'
 import { nameColor } from '@/lib/name-color'
 import { useTheme, useThemePreference, type ThemePreference } from '@/lib/theme'
@@ -376,6 +379,17 @@ export function HeaderActions({ search = true }: { search?: boolean }) {
             <DropdownMenuItem onClick={() => setConnectOpen(true)}>
               <IconDeviceMobile /> {t.quickConnect}
             </DropdownMenuItem>
+            {/* Inside Jellyfin's Android app: its own screens, which its own web client reaches the same way. */}
+            {inJellyfinApp() && (
+              <>
+                <DropdownMenuItem onClick={openAppSettings}>
+                  <IconAdjustments /> {t.appSettings}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={openServerSelection}>
+                  <IconServer /> {t.switchServer}
+                </DropdownMenuItem>
+              </>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => void logout()}>
               <IconLogout /> {t.logout}

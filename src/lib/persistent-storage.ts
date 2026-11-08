@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { inJellyfinApp } from '@/lib/native-app'
 
 /**
  * Persistent storage: whether the browser keeps this site's data (downloads, caches, the offline library) for good.
@@ -99,7 +100,8 @@ async function check() {
 export function initPersistentStorage() {
   if (started || typeof window === 'undefined') return
   started = true
-  if (!supported()) return set('unsupported')
+  // Jellyfin's app keeps the WebView's data in its own storage, and a WebView can't grant this: there is nothing to ask.
+  if (!supported() || inJellyfinApp()) return set('unsupported')
   void check()
   // Granted or taken away in the site's settings while Lumio is open: checked again.
   void navigator.permissions
@@ -110,7 +112,7 @@ export function initPersistentStorage() {
 
 /** Asks again (the notice's button: a click, so browsers that want one get it). */
 export async function requestPersistentStorage() {
-  if (!supported()) return false
+  if (!supported() || inJellyfinApp()) return false
   const granted = await ask()
   set(granted ? 'granted' : 'denied')
   return granted

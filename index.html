@@ -18,6 +18,9 @@
         }
       } catch (error) {}
     </script>
+    <!-- For Jellyfin's Android app, which waits for this name before it shows the page (see the file). A classic,
+         deferred script: the app's replacement reads document.currentScript and appends to document.body. -->
+    <script defer src="/main.lumio.bundle.js"></script>
   </head>
   <body>
     <!-- Boot screen: covers the page until the first view is ready (removed by src/lib/boot.ts). Self-contained, so it

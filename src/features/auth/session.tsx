@@ -46,6 +46,24 @@ function saveSession(session: StoredSession | null) {
 }
 
 /**
+ * The sign-in also in jellyfin-web's format. Jellyfin's Android app reads it when the page reports its capabilities
+ * (and goes back to its server screen without it); jellyfin-web on this address (the administration) is signed in too.
+ */
+function shareWithJellyfinClients(session: StoredSession) {
+  try {
+    const stored = JSON.parse(localStorage.getItem('jellyfin_credentials') ?? 'null') as { Servers?: Array<{ AccessToken?: string; UserId?: string }> } | null
+    const current = stored?.Servers?.[0]
+    if (current?.AccessToken === session.accessToken && current.UserId === session.userId) return
+    localStorage.setItem('jellyfin_credentials', JSON.stringify({ Servers: [{
+      ManualAddress: session.serverUrl, LocalAddress: session.serverUrl, AccessToken: session.accessToken, UserId: session.userId,
+      DateLastAccessed: Date.now(), LastConnectionMode: 2, ManualAddressOnly: true,
+    }] }))
+  } catch {
+    // Storage unavailable.
+  }
+}
+
+/**
  * A 401 only means "signed out" if it rejected the token of the current session. Ignored: requests still carrying an
  * older token, other servers, and Quick Connect, which answers 401 when an admin has switched the feature off.
  */
@@ -60,6 +78,10 @@ function isRejectedSessionToken(error: AxiosError, session: StoredSession) {
 export function SessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
   const [session, setSession] = useState<StoredSession | null>(loadSession)
+
+  useEffect(() => {
+    if (session) shareWithJellyfinClients(session)
+  }, [session])
 
   // An expired or revoked token ends the session instead of leaving every request failing.
   useEffect(() => {
