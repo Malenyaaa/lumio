@@ -5,6 +5,7 @@ import { useSearch } from '@/features/items/queries'
 import { PodcastSearchRow } from '@/features/listen/podcast-pages'
 import { useAppMode } from '@/lib/app-mode'
 import { useMessages } from '@/lib/i18n'
+import { HeaderSearch } from './header-search'
 import { groupTitles, searchMessages } from './messages'
 
 const GROUPS: Array<{ type: keyof (typeof groupTitles)['de']; shape?: 'poster' | 'landscape' }> = [
@@ -19,7 +20,10 @@ const GROUPS: Array<{ type: keyof (typeof groupTitles)['de']; shape?: 'poster' |
   { type: 'Playlist' },
 ]
 
-/** Results for the term in the address; the field is the one in the header (it writes the term there as you type). */
+/**
+ * Results for the term in the address; the field is the one in the header (it writes the term there as you type). Phones
+ * have no search in their header: the field sits on top of the page (the Search tab).
+ */
 export function SearchPage() {
   const [params] = useSearchParams()
   const t = useMessages(searchMessages)
@@ -39,6 +43,9 @@ export function SearchPage() {
 
   return (
     <div className="space-y-8 pb-12 pt-20">
+      <div className="flex px-4 md:hidden">
+        <HeaderSearch persistent />
+      </div>
       {term && <h1 className="px-4 text-2xl font-bold tracking-tight sm:px-8">{t.results}</h1>}
       {!term && <p className="px-4 text-sm text-muted-foreground sm:px-8">{t.hint}</p>}
       {term && results.isLoading && <MediaRow title={t.searching} loading squareLoading={mode === 'listen'} />}

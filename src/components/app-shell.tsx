@@ -1,21 +1,26 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
 import { FriendActivityButton } from '@/features/social/social-ui'
 import { DownloadManagerButton, OfflineBadge } from '@/features/listen/download-manager'
-import { getImageApi } from '@jellyfin/sdk/lib/utils/api/image-api'
 import {
   IconAdjustments,
   IconArrowLeft,
   IconDeviceDesktop,
+  IconBookmark,
+  IconBookmarkFilled,
   IconDeviceMobile,
+  IconDownload,
   IconExternalLink,
   IconHistory,
-  IconLayoutDashboard,
+  IconHome,
+  IconHomeFilled,
+  IconLayoutGrid,
+  IconLayoutGridFilled,
   IconLogout,
   IconMoon,
+  IconSearch,
   IconServer,
   IconSettings,
   IconSun,
-  IconTags,
   IconUser,
 } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
@@ -24,7 +29,6 @@ import { AppBrand } from '@/components/app-switcher'
 import { Link } from '@/components/link'
 import { shellMessages } from '@/components/messages'
 import { PageTransition } from '@/components/page-transition'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -51,16 +55,18 @@ import { MiniPlayer } from '@/features/listen/player/player-bar'
 import { setListenPanelExpanded, useListenPanel } from '@/features/listen/player/panel'
 import { HeaderSearch } from '@/features/search/header-search'
 import { useLocalSettings } from '@/features/settings/local-settings'
-import { useSettingsPages } from '@/features/settings/settings-pages'
-import { useUserConfiguration } from '@/features/settings/use-user-configuration'
 import { useMessages } from '@/lib/i18n'
 import { markAppReady } from '@/lib/boot'
 import { inJellyfinApp, openAppSettings, openServerSelection } from '@/lib/native-app'
 import { inMode, isLaunchAtRoot, lastMode, modeHome, rememberMode, rememberPath, useAppMode } from '@/lib/app-mode'
-import { nameColor } from '@/lib/name-color'
 import { useTheme, useThemePreference, type ThemePreference } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 import { videoCacheAvailable } from '@/features/player/video-cache'
+import { useAdminLinks, UserAvatar } from '@/components/account'
+import { PhoneMiniPlayer } from '@/components/mobile/phone-mini-player'
+import { ProfileDrawer } from '@/components/mobile/profile-drawer'
+import { TabBar, type Tab } from '@/components/mobile/tab-bar'
+import { ListenControlsProvider } from '@/features/listen/player/player-controls'
 
 /**
  * One step back in the app's own history, like the browser's back button. Only shown where there is somewhere in the
@@ -68,14 +74,11 @@ import { videoCacheAvailable } from '@/features/player/video-cache'
  */
 export function BackButton() {
   const navigate = useNavigate()
-  const { pathname } = useLocation()
   const mode = useAppMode()
   const t = useMessages(shellMessages)
-  // React Router numbers its history entries; 0 is the first page of this visit.
-  const index = (window.history.state as { idx?: number } | null)?.idx ?? 0
   // Listen's big side panel (lyrics, the cover) covers the page: "back" first shrinks it to the side again.
   const expanded = useListenPanel().expanded && mode === 'listen'
-  const visible = expanded || (pathname !== modeHome(mode) && index > 0)
+  const visible = useCanGoBack()
   // The slot is always there (empty when there is nowhere to go), so the logo and navigation never shift.
   return (
     <div className="-ml-2 size-9 shrink-0">
@@ -86,6 +89,27 @@ export function BackButton() {
       )}
     </div>
   )
+}
+
+/** Whether the back button has somewhere in the app to go (or Listen's big side panel to shrink). */
+export function useCanGoBack() {
+  const { pathname } = useLocation()
+  const mode = useAppMode()
+  // React Router numbers its history entries; 0 is the first page of this visit.
+  const index = (window.history.state as { idx?: number } | null)?.idx ?? 0
+  const expanded = useListenPanel().expanded && mode === 'listen'
+  return expanded || (pathname !== modeHome(mode) && index > 0)
+}
+
+/**
+ * The phone header's left end: on a tab's own page the profile picture (opens the menu), deeper in the back arrow, as
+ * in Spotify.
+ */
+export function PhoneLead({ tabs }: { tabs: Tab[] }) {
+  const { pathname } = useLocation()
+  const canGoBack = useCanGoBack()
+  const onTab = tabs.some((tab) => tab.to === pathname)
+  return onTab || !canGoBack ? <ProfileDrawer /> : <BackButton />
 }
 
 /** Guards routes that need a login but bring their own layout (e.g. the player). */
@@ -161,64 +185,27 @@ function Nav() {
   )
 }
 
-/** Jellyfin's own admin pages; Lumio has no admin UI, so these open the stock web client in a new tab. */
-const ADMIN_PAGES = [
-  { path: '/dashboard', labelKey: 'dashboard', icon: IconLayoutDashboard },
-  { path: '/metadata', labelKey: 'metadata', icon: IconTags },
-] as const
-
 /** Menu entries for administrators only. */
-function AdminMenuItems({ pages }: { pages: ReturnType<typeof useSettingsPages> }) {
-  const { session } = useAuthedSession()
-  const user = useUserConfiguration()
+function AdminMenuItems() {
   const t = useMessages(shellMessages)
-  if (!user.data?.Policy?.IsAdministrator) return null
-  const sameOrigin = session.serverUrl.replace(/\/+$/, '') === window.location.origin
-
+  const links = useAdminLinks()
+  if (!links.length) return null
   return (
     <>
       <DropdownMenuSeparator />
       <DropdownMenuGroup>
         <DropdownMenuLabel className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t.administration}</DropdownMenuLabel>
       </DropdownMenuGroup>
-      {/* Lumio's own server-wide settings, then Jellyfin's dashboard pages. */}
-      {pages.map(({ to, label, icon: Icon }) => (
-        <DropdownMenuItem key={to} render={<Link to={to} />}>
+      {links.map(({ key, label, icon: Icon, to, href, external }) => (
+        <DropdownMenuItem key={key} render={to ? <Link to={to} /> : <a href={href} {...(external ? { target: '_blank', rel: 'noreferrer noopener' } : {})} />}>
           <Icon /> {label}
+          {external && <IconExternalLink className="ml-auto size-3.5 text-muted-foreground" />}
         </DropdownMenuItem>
       ))}
-      {/* Behind Lumio (same address) they open in place, and leaving them comes back here; elsewhere in a new tab. */}
-      {ADMIN_PAGES.map(({ path, labelKey, icon: Icon }) =>
-        sameOrigin ? (
-          <DropdownMenuItem key={path} render={<a href={`/web/#${path}`} />}>
-            <Icon /> {t[labelKey]}
-          </DropdownMenuItem>
-        ) : (
-          <DropdownMenuItem key={path} render={<a href={`${session.serverUrl}/web/#${path}`} target="_blank" rel="noreferrer noopener" />}>
-            <Icon /> {t[labelKey]}
-            <IconExternalLink className="ml-auto size-3.5 text-muted-foreground" />
-          </DropdownMenuItem>
-        ),
-      )}
     </>
   )
 }
 
-
-/** The user's profile picture, or their initials on a color generated from their name. */
-function UserAvatar() {
-  const { api, session } = useAuthedSession()
-  const user = useUserConfiguration()
-  const image = user.data?.PrimaryImageTag ? getImageApi(api).getUserImageUrl(user.data, { width: 96 }) : undefined
-  return (
-    <Avatar className="size-8">
-      {image && <AvatarImage src={image} alt="" />}
-      <AvatarFallback className="font-medium text-white" style={{ background: nameColor(session.userName) }}>
-        {session.userName.slice(0, 2).toUpperCase()}
-      </AvatarFallback>
-    </Avatar>
-  )
-}
 
 /** Applies device settings that affect the whole app rather than one page. */
 export function SettingsEffects() {
@@ -252,9 +239,30 @@ function WatchEntry() {
   return <SignedInShell />
 }
 
+/** Watch's tabs on phones: start, search, the library (categories), the watchlist and what is downloaded. */
+function useWatchTabs(): Tab[] {
+  const t = useMessages(shellMessages)
+  const { hidden } = usePluginRegistry()
+  return [
+    { to: '/', label: t.home, icon: IconHome, activeIcon: IconHomeFilled, end: true },
+    { to: '/search', label: t.search, icon: IconSearch },
+    {
+      to: '/library',
+      label: t.library,
+      icon: IconLayoutGrid,
+      activeIcon: IconLayoutGridFilled,
+      match: (pathname) => pathname.startsWith('/browse/') || pathname.startsWith('/library/'),
+    },
+    ...(hidden.includes('nav:watchlist') ? [] : [{ to: '/watchlist', label: t.watchlist, icon: IconBookmark, activeIcon: IconBookmarkFilled }]),
+    ...(hidden.includes('nav:downloads') || !videoCacheAvailable ? [] : [{ to: '/downloads', label: t.downloads, icon: IconDownload }]),
+  ]
+}
+
 function SignedInShell() {
   const { session } = useSession()
   const [scrolled, setScrolled] = useState(false)
+  const tabs = useWatchTabs()
+  const navigate = useNavigate()
 
   // Pages other than home lift the boot screen once the header (navigation) is complete; their content has skeletons.
   // Home waits for its hero instead (see home-page).
@@ -281,7 +289,7 @@ function SignedInShell() {
     <div data-app-shell data-mode="watch" className="min-h-svh">
       <header
         className={cn(
-          '[view-transition-name:app-header] fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between gap-4 border-b px-4 transition-colors duration-300 sm:px-8',
+          '[view-transition-name:app-header] fixed inset-x-0 top-0 z-40 box-content flex h-14 items-center justify-between gap-4 border-b px-4 pt-(--safe-top) transition-colors duration-300 sm:px-8',
           scrolled ? 'border-border bg-background/80 backdrop-blur' : 'border-transparent',
         )}
       >
@@ -293,23 +301,36 @@ function SignedInShell() {
             scrolled && 'opacity-0',
           )}
         />
-        <div className="flex min-w-0 items-center gap-4">
-          <BackButton />
+        <div className="flex min-w-0 items-center gap-3 md:gap-4">
+          <div className="contents md:hidden">
+            <PhoneLead tabs={tabs} />
+          </div>
+          <div className="hidden md:block">
+            <BackButton />
+          </div>
           <AppBrand mode="watch" />
-          <Nav />
+          {/* Phones navigate with the tabs at the bottom. */}
+          <div className="hidden min-w-0 md:contents">
+            <Nav />
+          </div>
           <PluginSlot name="header:start" className="flex items-center gap-1" />
         </div>
         <HeaderActions />
       </header>
-      <main>
+      {/* Pages start below the system's status bar; on phones they end above the tabs and the player. */}
+      <main className="pt-(--safe-top) pb-(--bottom-inset)">
         <PageTransition>
           <Outlet />
         </PageTransition>
       </main>
 
       <SettingsEffects />
-      {/* Music started in Listen keeps playing here, in a small card. */}
+      {/* Music started in Listen keeps playing here: a small card in the corner, on phones a bar above the tabs. */}
       <MiniPlayer />
+      <ListenControlsProvider>
+        <PhoneMiniPlayer onOpen={() => void navigate(modeHome('listen'))} />
+      </ListenControlsProvider>
+      <TabBar tabs={tabs} pathname={pathname} />
     </div>
   )
 }
@@ -317,7 +338,6 @@ function SignedInShell() {
 /** The header's right side, shared by both apps: plugin slot, search, watch together, play on, and the profile menu. */
 export function HeaderActions({ search = true }: { search?: boolean }) {
   const { session, logout } = useAuthedSession()
-  const settingsPages = useSettingsPages()
   const plugins = usePluginRegistry()
   const hideSearch = useHidden('header:search')
   const hideSyncPlay = useHidden('header:syncplay')
@@ -330,7 +350,12 @@ export function HeaderActions({ search = true }: { search?: boolean }) {
     <>
       <div className="flex shrink-0 items-center gap-1">
         <PluginSlot name="header:end" className="flex items-center gap-1" />
-        {search && !hideSearch && <HeaderSearch />}
+        {/* Phones search in their own tab. */}
+        {search && !hideSearch && (
+          <div className="hidden md:contents">
+            <HeaderSearch />
+          </div>
+        )}
         {/* Offline, and what downloads: only while there is something to tell. */}
         <OfflineBadge />
         <DownloadManagerButton />
@@ -338,7 +363,8 @@ export function HeaderActions({ search = true }: { search?: boolean }) {
         {!hideSyncPlay && <SyncPlayMenu />}
         {!hideCast && <DeviceMenu />}
         <DropdownMenu>
-          <DropdownMenuTrigger className="ml-2 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={t.profile}>
+          {/* Phones have the profile menu as a drawer behind the picture at the top left (PhoneLead). */}
+          <DropdownMenuTrigger className="ml-2 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:hidden" aria-label={t.profile}>
             <UserAvatar />
           </DropdownMenuTrigger>
           {/* Own width: by default the menu is as wide as the avatar that opens it, which wraps every entry. */}
@@ -362,7 +388,7 @@ export function HeaderActions({ search = true }: { search?: boolean }) {
               <IconSettings /> {t.settings}
             </DropdownMenuItem>
             <ThemeMenu />
-            <AdminMenuItems pages={settingsPages.filter((page) => page.admin)} />
+            <AdminMenuItems />
             {plugins.menuItems.length > 0 && <DropdownMenuSeparator />}
             {plugins.menuItems.map((item) =>
               item.href ? (

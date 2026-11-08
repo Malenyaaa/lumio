@@ -20,6 +20,12 @@ export const shellMessages = defineMessages({
     themeSystem: 'Wie das Gerät',
     themeDark: 'Dunkel',
     themeLight: 'Hell',
+    search: 'Suchen',
+    library: 'Bibliothek',
+    menu: 'Menü',
+    viewProfile: 'Profil ansehen',
+    tabs: 'Hauptnavigation',
+    apps: 'Apps',
   },
   en: {
     back: 'Back',
@@ -40,6 +46,12 @@ export const shellMessages = defineMessages({
     themeSystem: 'Match device',
     themeDark: 'Dark',
     themeLight: 'Light',
+    search: 'Search',
+    library: 'Library',
+    menu: 'Menu',
+    viewProfile: 'View profile',
+    tabs: 'Main navigation',
+    apps: 'Apps',
   },
 })
 

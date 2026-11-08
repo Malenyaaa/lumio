@@ -17,6 +17,7 @@ import { ArtistDiscographyPage } from '@/features/listen/artist-discography'
 import { ArtistLikedPage } from '@/features/listen/artist-liked'
 import { GuestArtistPage } from '@/features/listen/guest-artist-page'
 import { ListenHome } from '@/features/listen/listen-home'
+import { ListenLibraryPage } from '@/features/listen/library-page'
 import { PlatformPage } from '@/features/listen/platform-page'
 import { EpisodePage, PodcastPage, PodcastsPage, SavedEpisodesPage } from '@/features/listen/podcast-pages'
 import { FollowListPage, ProfilePage as ListenProfilePage } from '@/features/listen/profile-page'
@@ -29,6 +30,7 @@ import { CategoryPage } from '@/features/library/category-page'
 import { HistoryPage } from '@/features/library/history-page'
 import { WatchDownloadsPage } from '@/features/library/downloads-page'
 import { LibraryPage } from '@/features/library/library-page'
+import { LibraryIndexPage } from '@/features/library/library-index-page'
 import { PersonPage } from '@/features/library/person-page'
 import { WatchlistPage } from '@/features/library/watchlist-page'
 import { DisplayPage } from '@/features/admin/display-page'
@@ -116,6 +118,7 @@ const router = createBrowserRouter(
         <Route path="artist/:id" element={<DetailPage />} />
         <Route path="item/:id" element={<DetailPage />} />
         <Route path="browse/:category" element={<CategoryPage />} />
+        <Route path="library" element={<LibraryIndexPage />} />
         <Route path="library/:id" element={<LibraryPage />} />
         <Route path="watchlist" element={<WatchlistPage />} />
         <Route path="downloads" element={<WatchDownloadsPage />} />
@@ -135,6 +138,7 @@ const router = createBrowserRouter(
         <Route path="artist/:id/liked" element={<ArtistLikedPage />} />
         <Route path="guest/:name" element={<GuestArtistPage />} />
         <Route path="browse/:category" element={<CategoryPage />} />
+        <Route path="library" element={<ListenLibraryPage />} />
         <Route path="playlist/:id" element={<PlaylistPage />} />
         <Route path="official/:slug" element={<OfficialPlaylistPage />} />
         <Route path="liked" element={<LikedSongsPage />} />

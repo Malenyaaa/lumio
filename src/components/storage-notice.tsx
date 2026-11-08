@@ -53,7 +53,7 @@ export function StorageNotice() {
   return (
     <div
       role="alert"
-      className="fixed inset-x-4 bottom-28 z-[60] mx-auto max-w-lg rounded-xl bg-popover p-4 text-popover-foreground shadow-2xl ring-1 ring-foreground/10 animate-page-in"
+      className="fixed inset-x-4 bottom-[max(7rem,calc(var(--bottom-inset)+1rem))] z-[60] mx-auto max-w-lg rounded-xl bg-popover p-4 text-popover-foreground shadow-2xl ring-1 ring-foreground/10 animate-page-in"
     >
       <div className="flex gap-3">
         <IconDatabaseExclamation className="mt-0.5 size-5 shrink-0 text-amber-500" />

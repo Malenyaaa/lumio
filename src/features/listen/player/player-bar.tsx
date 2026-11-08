@@ -59,7 +59,8 @@ function Bar() {
     <div
       role="region"
       aria-label={t.player}
-      className="fixed inset-x-0 bottom-0 z-40 grid h-20 grid-cols-[1fr_auto] items-center gap-4 bg-background px-4 md:grid-cols-[minmax(0,1fr)_minmax(0,40rem)_minmax(0,1fr)]"
+      // Phones have PhoneMiniPlayer above the tabs instead.
+      className="fixed inset-x-0 bottom-0 z-40 hidden h-20 items-center gap-4 bg-background px-4 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,40rem)_minmax(0,1fr)]"
     >
       {track ? <TrackInfo track={track} /> : <EmptyTrackInfo />}
       {/* Nothing loaded: the controls stay in place but can't be used. */}
@@ -424,7 +425,8 @@ export function MiniPlayer() {
     <div
       role="region"
       aria-label={t.player}
-      className="fixed bottom-4 right-4 z-40 flex w-80 items-center gap-3 rounded-xl border bg-popover/95 p-2 pr-3 shadow-2xl backdrop-blur animate-in slide-in-from-bottom-4 fade-in-0 duration-300"
+      // Phones have PhoneMiniPlayer above the tabs instead.
+      className="fixed bottom-4 right-4 z-40 flex w-80 items-center gap-3 rounded-xl border bg-popover/95 p-2 pr-3 shadow-2xl backdrop-blur animate-in slide-in-from-bottom-4 fade-in-0 duration-300 max-md:hidden"
     >
       <button type="button" onClick={() => void navigate(modeHome('listen'))} aria-label={t.openListen} title={t.openListen} className="group relative size-11 shrink-0 overflow-hidden rounded-md bg-muted">
         {cover && <FadeImage src={cover} alt="" className="size-full object-cover" />}

@@ -9,7 +9,7 @@ import { APP_MODES, modeHome, type AppMode } from '@/lib/app-mode'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
-const messages = defineMessages({
+export const appSwitcherMessages = defineMessages({
   de: {
     switchApp: 'App wechseln',
     watch: 'Filme, Serien und Anime',
@@ -42,7 +42,7 @@ export function ModeTile({ mode, className }: { mode: AppMode; className?: strin
  * the app's start page; the label next to it opens the switcher. With only one app enabled it is just the brand.
  */
 export function AppBrand({ mode, className, collapsibleName }: { mode: AppMode; className?: string; collapsibleName?: boolean }) {
-  const t = useMessages(messages)
+  const t = useMessages(appSwitcherMessages)
   const navigate = useNavigate()
   const { appName, logo, modeLabel, modeLogo, hideName } = useBranding(mode)
   const { settings } = useLocalSettings()
@@ -137,7 +137,7 @@ function useCollapsingName(enabled: boolean, appName: string) {
   return { root, name, nameHidden: enabled && nameHidden }
 }
 
-function ModeEntry({ mode, current, description, onPick }: { mode: AppMode; current: boolean; description: string; onPick: () => void }) {
+export function ModeEntry({ mode, current, description, onPick }: { mode: AppMode; current: boolean; description: string; onPick: () => void }) {
   const { appName, modeLabel } = useBranding(mode)
   return (
     <button

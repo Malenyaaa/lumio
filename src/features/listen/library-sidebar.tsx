@@ -119,7 +119,7 @@ type Filter = 'all' | 'playlists' | 'podcasts' | 'artists' | 'albums' | 'downloa
  * Liked Songs, their playlists, saved official and public playlists, followed artists and saved albums. Folded, only
  * the covers remain.
  */
-export function LibrarySidebar({ compact }: { compact: boolean }) {
+export function LibrarySidebar({ compact, className, titleClassName }: { compact: boolean; className?: string; titleClassName?: string }) {
   const t = useMessages(messages)
   const navigate = useNavigate()
   const [filter, setFilter] = useState<Filter>('all')
@@ -310,9 +310,9 @@ export function LibrarySidebar({ compact }: { compact: boolean }) {
   ]
 
   return (
-    <div className={cn('flex min-h-0 flex-1 flex-col rounded-xl bg-surface [--background:var(--surface)]', compact ? 'w-full items-center py-2' : 'p-2')}>
+    <div className={cn('flex min-h-0 flex-1 flex-col rounded-xl bg-surface [--background:var(--surface)]', compact ? 'w-full items-center py-2' : 'p-2', className)}>
       <div className={cn('flex items-center', compact ? 'flex-col gap-2' : 'justify-between px-2 pb-2 pt-1')}>
-        {!compact && <p className="text-sm font-bold">{t.library}</p>}
+        {!compact && <p className={cn('text-sm font-bold', titleClassName)}>{t.library}</p>}
         {/* "+": a playlist or a folder, as in Spotify. */}
         <DropdownMenu>
           <DropdownMenuTrigger

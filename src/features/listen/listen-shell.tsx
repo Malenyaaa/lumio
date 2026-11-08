@@ -1,7 +1,9 @@
-import { IconBook, IconHome, IconHomeFilled, IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand, IconMicrophone, IconMusic, IconTicket, type Icon } from '@tabler/icons-react'
+import { IconBook, IconBooks, IconHome, IconHomeFilled, IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand, IconMicrophone, IconMusic, IconSearch, IconTicket, type Icon } from '@tabler/icons-react'
 import { useEffect, useRef, type CSSProperties } from 'react'
 import { Navigate, NavLink, Outlet, useLocation } from 'react-router'
-import { BackButton, HeaderActions, SettingsEffects } from '@/components/app-shell'
+import { BackButton, HeaderActions, PhoneLead, SettingsEffects } from '@/components/app-shell'
+import { PhoneMiniPlayer } from '@/components/mobile/phone-mini-player'
+import { TabBar, type Tab } from '@/components/mobile/tab-bar'
 import { AppBrand } from '@/components/app-switcher'
 import { PageTransition } from '@/components/page-transition'
 import { useSession } from '@/features/auth/session'
@@ -31,6 +33,7 @@ const messages = defineMessages({
     collapse: 'Bibliothek einklappen',
     expand: 'Bibliothek ausklappen',
     resizeLibrary: 'Breite der Bibliothek ändern',
+    search: 'Suchen',
   },
   en: {
     home: 'Home',
@@ -41,10 +44,14 @@ const messages = defineMessages({
     collapse: 'Collapse library',
     expand: 'Expand library',
     resizeLibrary: 'Resize library',
+    search: 'Search',
   },
 })
 
 const CATEGORY_ICONS: Partial<Record<CategoryId, Icon>> = { music: IconMusic, audiobooks: IconBook }
+
+/** The pages the Library tab covers on phones (the sidebar's place on wider screens). */
+const LIBRARY_PAGES = ['/listen/browse/', '/listen/podcasts', '/listen/concerts', '/listen/liked', '/listen/playlist/', '/listen/episodes']
 
 /**
  * Listen's frame, built for audio rather than for cinema: a library sidebar on the left (like Spotify or Apple Music),
@@ -77,6 +84,12 @@ function SignedInListen() {
   const rightWidth = panel.open ? layout.right : peek ? PEEK_WIDTH : RIGHT_LIMITS.collapsed
   // Width at the start of a drag; the handle reports how far it moved since.
   const dragFrom = useRef(0)
+
+  const tabs: Tab[] = [
+    { to: '/listen', label: t.home, icon: IconHome, activeIcon: IconHomeFilled, end: true },
+    { to: '/listen/search', label: t.search, icon: IconSearch },
+    { to: '/listen/library', label: t.library, icon: IconBooks, match: (path) => LIBRARY_PAGES.some((page) => path.startsWith(page)) },
+  ]
 
   useEffect(() => rememberMode('listen'), [])
   useEffect(() => rememberPath('listen', `${pathname}${search}`), [pathname, search])
@@ -152,25 +165,15 @@ function SignedInListen() {
         />
       </aside>
 
-      <header className="[view-transition-name:app-header] fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between gap-4 bg-background/90 px-4 backdrop-blur transition-[left] duration-300 ease-out sm:px-8 md:left-(--listen-left) [.cursor-col-resize_&]:transition-none">
+      <header className="[view-transition-name:app-header] fixed inset-x-0 top-0 z-30 box-content flex h-14 items-center justify-between gap-4 bg-background/90 px-4 pt-(--safe-top) backdrop-blur transition-[left] duration-300 ease-out sm:px-8 md:left-(--listen-left) [.cursor-col-resize_&]:transition-none">
         <div className="flex min-w-0 items-center gap-3">
-          <BackButton />
-          {/* Narrow screens have no sidebar: brand and the main links move up here. */}
-          <div className="flex min-w-0 items-center gap-1 md:hidden">
+          {/* Phones have no sidebar: the profile menu (or back) and the brand; the library is a tab. */}
+          <div className="contents md:hidden">
+            <PhoneLead tabs={tabs} />
             <AppBrand mode="listen" />
-            <nav className="ml-2 flex min-w-0 gap-1 overflow-x-auto [scrollbar-width:none]">
-              {library.map((link) => (
-                <NavLink
-                  key={link.to}
-                  to={link.to}
-                  className={({ isActive }) =>
-                    cn('shrink-0 rounded-md px-2.5 py-1.5 text-sm', isActive ? 'bg-muted font-medium' : 'text-foreground/70')
-                  }
-                >
-                  {link.label}
-                </NavLink>
-              ))}
-            </nav>
+          </div>
+          <div className="hidden md:block">
+            <BackButton />
           </div>
         </div>
         {/* Always open in the middle, as in music apps: searching is how most listening starts. */}
@@ -197,14 +200,16 @@ function SignedInListen() {
         "the background" is the panel's tone, so pages fading into it match. Pages leave room for a header they would
         sit under elsewhere; here the header is outside, so that room is scrolled away (-mt-14).
       */}
+      {/* On phones it fills the width and scrolls on under the tabs and the player (which fade over it). */}
       <main
         data-scroll-root
         className={cn(
-          'fixed bottom-22 left-2 right-2 top-14 overflow-y-auto overflow-x-hidden rounded-xl bg-surface [--background:var(--surface)] [scrollbar-width:thin]',
-          'transition-[left,right] duration-300 ease-out md:left-[calc(var(--listen-left)+0.5rem)] lg:right-[calc(var(--listen-right)+0.5rem)] [.cursor-col-resize_&]:transition-none',
+          'fixed inset-x-0 top-[calc(3.5rem+var(--safe-top))] bottom-0 overflow-y-auto overflow-x-hidden bg-surface [--background:var(--surface)] [scrollbar-width:thin]',
+          'md:bottom-22 md:left-[calc(var(--listen-left)+0.5rem)] md:right-2 md:top-14 md:rounded-xl lg:right-[calc(var(--listen-right)+0.5rem)]',
+          'transition-[left,right] duration-300 ease-out [.cursor-col-resize_&]:transition-none',
         )}
       >
-        <div className="-mt-14 pb-8">
+        <div className="-mt-14 pb-[calc(var(--bottom-inset)+2rem)] md:pb-8">
           <PageTransition>
             <Outlet />
           </PageTransition>
@@ -215,8 +220,10 @@ function SignedInListen() {
       <ListenControlsProvider>
         <SidePanel />
         <PlayerBar />
+        <PhoneMiniPlayer />
         <SongInfoHost />
       </ListenControlsProvider>
+      <TabBar tabs={tabs} pathname={pathname} />
 
       <SettingsEffects />
     </div>
