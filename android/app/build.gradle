@@ -31,6 +31,10 @@ android {
         }
     }
     buildTypes {
+        // Debug builds install beside the released app (own id), so testing never replaces it or its data.
+        debug {
+            applicationIdSuffix ".debug"
+        }
         release {
             if (System.getenv("LUMIO_KEYSTORE")) signingConfig signingConfigs.release
             minifyEnabled false

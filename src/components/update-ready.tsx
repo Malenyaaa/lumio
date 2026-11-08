@@ -2,6 +2,7 @@ import { IconRefresh, IconX } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
 import { NoticeCard } from '@/components/notice-stack'
 import { Button } from '@/components/ui/button'
+import { useSession } from '@/features/auth/session'
 import { useLocalSettings } from '@/features/settings/local-settings'
 import { applyUpdate, checkForUpdate, setReadyUpdate, useReadyUpdate } from '@/lib/app-update'
 import { inCapacitor } from '@/lib/capacitor'
@@ -36,7 +37,7 @@ const messages = defineMessages({
  */
 export function UpdateReady() {
   const t = useMessages(messages)
-  const { settings } = useLocalSettings()
+  const { session } = useSession()
   const ready = useReadyUpdate()
   const [hidden, setHidden] = useState(false)
 
@@ -49,34 +50,40 @@ export function UpdateReady() {
     return app.onUpdateReady(show)
   }, [])
 
-  // Android: look for a newer release, download it in the background.
-  useEffect(() => {
-    if (inCapacitor() && settings.autoUpdate) void checkForUpdate()
-  }, [settings.autoUpdate])
-
-  if (!ready || hidden) return null
+  // Android looks for updates while someone is signed in (the setting is theirs; signed out there is none to read).
+  const androidCheck = inCapacitor() && session ? <AndroidUpdateCheck /> : null
+  if (!ready || hidden) return androidCheck
   const apply = () => {
     applyUpdate()
     setHidden(true)
   }
   return (
-    <NoticeCard
-      role="status"
-      
-    >
-      <div className="flex gap-3">
-        <IconRefresh className="mt-0.5 size-5 shrink-0 text-primary" />
-        <div className="min-w-0 flex-1 space-y-2">
-          <p className="font-semibold">{t.title(ready.version)}</p>
-          <p className="text-sm text-muted-foreground">{ready.kind === 'android' ? t.androidBody : ready.kind === 'deb' ? t.debBody : t.desktopBody}</p>
-          <Button size="sm" onClick={apply}>
-            {ready.kind === 'desktop' ? t.now : t.install}
-          </Button>
+    <>
+      <NoticeCard role="status">
+        <div className="flex gap-3">
+          <IconRefresh className="mt-0.5 size-5 shrink-0 text-primary" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <p className="font-semibold">{t.title(ready.version)}</p>
+            <p className="text-sm text-muted-foreground">{ready.kind === 'android' ? t.androidBody : ready.kind === 'deb' ? t.debBody : t.desktopBody}</p>
+            <Button size="sm" onClick={apply}>
+              {ready.kind === 'desktop' ? t.now : t.install}
+            </Button>
+          </div>
+          <button type="button" aria-label={t.later} title={t.later} onClick={() => setHidden(true)} className="-mr-1 -mt-1 grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:text-foreground">
+            <IconX className="size-4" />
+          </button>
         </div>
-        <button type="button" aria-label={t.later} title={t.later} onClick={() => setHidden(true)} className="-mr-1 -mt-1 grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:text-foreground">
-          <IconX className="size-4" />
-        </button>
-      </div>
-    </NoticeCard>
+      </NoticeCard>
+      {androidCheck}
+    </>
   )
+}
+
+/** Android: looks for a newer release and downloads it in the background ("Update automatically", on by default). */
+function AndroidUpdateCheck() {
+  const { settings } = useLocalSettings()
+  useEffect(() => {
+    if (settings.autoUpdate) void checkForUpdate()
+  }, [settings.autoUpdate])
+  return null
 }
