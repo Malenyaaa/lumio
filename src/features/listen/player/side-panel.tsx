@@ -787,7 +787,7 @@ function QueueRow({ uid, item, index, kind, current }: { uid: string; item: Base
             <TrackArtists track={item} />
           </span>
         </span>
-        <span className="opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-data-popup-open:opacity-100">
+        <span className="opacity-0 pointer-coarse:opacity-100 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-data-popup-open:opacity-100">
           <TrackMenu track={item} visible onRemove={current ? undefined : () => music.remove(index)} removeLabel={t.removeFromQueue} />
         </span>
       </div>

@@ -421,14 +421,14 @@ function EpisodeRow({ episode, showPodcast }: { episode: Episode; showPodcast?: 
                 aria-label={done ? t.markUnplayed : t.markPlayed}
                 title={done ? t.markUnplayed : t.markPlayed}
                 onClick={() => setEpisodeDone(episode.guid, episode.item, !done, duration)}
-                className="grid size-8 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/track:opacity-100"
+                className="grid size-8 place-items-center rounded-full text-muted-foreground opacity-0 pointer-coarse:opacity-100 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/track:opacity-100"
               >
                 {done ? <IconCircleCheckFilled className="size-5 text-listen" /> : <IconCircleCheck className="size-5" />}
               </button>
               <DropdownMenu>
                 <DropdownMenuTrigger
                   aria-label={t.more(episode.title)}
-                  className="grid size-8 place-items-center rounded-full text-muted-foreground opacity-0 outline-none transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/track:opacity-100 data-popup-open:opacity-100"
+                  className="grid size-8 place-items-center rounded-full text-muted-foreground opacity-0 pointer-coarse:opacity-100 outline-none transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/track:opacity-100 data-popup-open:opacity-100"
                 >
                   <IconDots className="size-5" />
                 </DropdownMenuTrigger>

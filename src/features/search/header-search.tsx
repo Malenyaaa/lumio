@@ -408,7 +408,7 @@ function ResultRow({
                 aria-label={t.more(entry.title)}
                 title={t.more(entry.title)}
                 onClick={(event) => event.stopPropagation()}
-                className="grid size-8 place-items-center rounded-full text-muted-foreground opacity-0 outline-none transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/result:opacity-100 data-popup-open:opacity-100"
+                className="grid size-8 place-items-center rounded-full text-muted-foreground opacity-0 outline-none transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/result:opacity-100 data-popup-open:opacity-100 pointer-coarse:opacity-100"
               >
                 <IconDots className="size-5" />
               </DropdownMenuTrigger>
@@ -424,7 +424,7 @@ function ResultRow({
               aria-label={t.removeRecent(entry.title)}
               title={t.removeRecent(entry.title)}
               onClick={onRemove}
-              className="grid size-8 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/result:opacity-100"
+              className="grid size-8 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/result:opacity-100 pointer-coarse:opacity-100"
             >
               <IconX className="size-4" />
             </button>

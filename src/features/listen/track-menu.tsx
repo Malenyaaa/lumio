@@ -255,7 +255,8 @@ export function TrackMenu({
         onClick={(event) => event.stopPropagation()}
         className={cn(
           'grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground outline-none transition-opacity hover:text-foreground',
-          visible ? 'hover:bg-muted' : 'opacity-0 focus-visible:opacity-100 group-hover/track:opacity-100 data-popup-open:opacity-100',
+          // Fingers can't hover: always there.
+          visible ? 'hover:bg-muted' : 'opacity-0 focus-visible:opacity-100 group-hover/track:opacity-100 data-popup-open:opacity-100 pointer-coarse:opacity-100',
         )}
       >
         <IconDots className="size-5" />

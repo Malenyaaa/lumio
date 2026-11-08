@@ -25,7 +25,10 @@ function PopoverContent({
   >) {
   return (
     <PopoverPrimitive.Portal container={usePortalContainer()}>
+      {/* Phones show popovers as sheets from the bottom over a dimmed page (index.css); elsewhere this stays hidden. */}
+      <PopoverPrimitive.Backdrop data-slot="popover-backdrop" className="hidden" />
       <PopoverPrimitive.Positioner
+        data-slot="popover-positioner"
         align={align}
         alignOffset={alignOffset}
         side={side}

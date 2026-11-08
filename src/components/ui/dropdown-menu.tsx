@@ -29,7 +29,10 @@ function DropdownMenuContent({
   >) {
   return (
     <MenuPrimitive.Portal>
+      {/* Phones show menus as sheets from the bottom over a dimmed page (index.css); elsewhere this stays hidden. */}
+      <MenuPrimitive.Backdrop data-slot="dropdown-menu-backdrop" className="hidden" />
       <MenuPrimitive.Positioner
+        data-slot="dropdown-menu-positioner"
         className="isolate z-50 outline-none"
         align={align}
         alignOffset={alignOffset}

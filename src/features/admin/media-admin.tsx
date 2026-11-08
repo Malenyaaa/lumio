@@ -226,7 +226,7 @@ function ImageKind({ item, type, infos, onChanged }: { item: BaseItemDto; type: 
               title={t.remove}
               disabled={busy}
               onClick={() => remove.mutate(info.ImageIndex ?? 0)}
-              className="absolute right-1 top-1 grid size-7 place-items-center rounded-full bg-black/70 text-white opacity-0 transition-opacity hover:bg-destructive group-hover:opacity-100 focus-visible:opacity-100"
+              className="absolute right-1 top-1 grid size-7 place-items-center rounded-full bg-black/70 text-white opacity-0 pointer-coarse:opacity-100 transition-opacity hover:bg-destructive group-hover:opacity-100 focus-visible:opacity-100"
             >
               <IconTrash className="size-4" />
             </button>

@@ -26,6 +26,7 @@ import { artistsOf, titlePath } from '@/lib/item-links'
 import { cn, tintWash } from '@/lib/utils'
 import { MusicRow } from './music-card'
 import { currentTrack, music, START, useMusic } from './player/music-player'
+import { SwipeToQueue } from './swipe-to-queue'
 import { ShuffleToggle } from './shuffle-toggle'
 import { endTrackDrag, startTrackDrag } from './track-drag'
 import { LikeToggle, TrackContextMenu, TrackMenu } from './track-menu'
@@ -87,8 +88,11 @@ const messages = defineMessages({
   },
 })
 
-/** Number, title, length, and the "…" menu. */
-export const TRACK_GRID = 'grid-cols-[2rem_minmax(0,1fr)_6rem_2rem]'
+/** Number, title, length, and the "…" menu; phones only the title, a like mark and the menu (as in Spotify). */
+export const TRACK_GRID = 'grid-cols-[2rem_minmax(0,1fr)_6rem_2rem] max-md:grid-cols-[minmax(0,1fr)_auto_2rem]'
+
+/** The same with a column before the length (e.g. the play count). */
+export const TRACK_GRID_EXTRA = 'grid-cols-[2rem_minmax(0,1fr)_6rem_2rem] sm:grid-cols-[2rem_minmax(0,1fr)_9rem_6rem_2rem] max-md:grid-cols-[minmax(0,1fr)_auto_2rem]'
 
 /** Spotify's convention: one track is a single, up to six an EP, more an album. */
 function kindOf(trackCount: number, t: (typeof messages)['de'], isBook: boolean) {
@@ -220,7 +224,7 @@ export function AlbumView({ item }: { item: BaseItemDto }) {
 
       {/* Track table */}
       <div className="px-4 sm:px-8">
-        <div className={cn('grid items-center gap-4 border-b px-4 pb-2 text-sm text-muted-foreground', TRACK_GRID)}>
+        <div className={cn('grid items-center gap-4 border-b px-4 pb-2 text-sm text-muted-foreground max-md:hidden', TRACK_GRID)}>
           <span className="text-right">#</span>
           <span>{t.title}</span>
           <span className="flex justify-end" aria-label={t.duration}>
@@ -312,60 +316,63 @@ export function TrackTableRow({
   const unavailable = useUnavailable(track)
   const image = cover ? portraitImageUrl(api, track, { fillHeight: 80 }) : undefined
   return (
-    <TrackContextMenu track={track} onRemove={onRemove}>
-      <div
-        role="button"
-        tabIndex={0}
-        draggable
-        onDragStart={(event) => startTrackDrag(event, [track])}
-        onDragEnd={endTrackDrag}
-        onClick={onPlay}
-        onKeyDown={(event) => {
-          // Keys pressed in the row's own controls (the "…" menu) are theirs.
-          if (event.target !== event.currentTarget) return
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault()
-            onPlay()
-          }
-        }}
-        className={cn(
-          // Stays lit while its right-click menu is open.
-          'group/track grid cursor-default items-center gap-4 rounded-md px-4 py-2 outline-none hover:bg-foreground/10 focus-visible:bg-foreground/10 data-popup-open:bg-foreground/10',
-          unavailable && 'opacity-40',
-          extra !== undefined ? 'grid-cols-[2rem_minmax(0,1fr)_6rem_2rem] sm:grid-cols-[2rem_minmax(0,1fr)_9rem_6rem_2rem]' : TRACK_GRID,
-        )}
-      >
-        <span className="relative flex h-5 items-center justify-end text-sm tabular-nums text-muted-foreground">
-          {isCurrent && state.playing ? (
-            <span aria-hidden className="flex h-3.5 items-end gap-px">
-              {[0, 1, 2].map((bar) => (
-                <span key={bar} className="w-[3px] animate-[eq_0.9s_ease-in-out_infinite] rounded-sm bg-listen" style={{ animationDelay: `${bar * 0.2}s` }} />
-              ))}
-            </span>
-          ) : (
-            <>
-              <span className={cn('group-hover/track:invisible', isCurrent && 'text-listen')}>{number}</span>
-              <IconPlayerPlayFilled className="invisible absolute size-4 text-foreground group-hover/track:visible" />
-            </>
+    <SwipeToQueue onQueue={() => music.addToQueue([track])} className="rounded-md">
+      <TrackContextMenu track={track} onRemove={onRemove}>
+        <div
+          role="button"
+          tabIndex={0}
+          draggable
+          onDragStart={(event) => startTrackDrag(event, [track])}
+          onDragEnd={endTrackDrag}
+          onClick={onPlay}
+          onKeyDown={(event) => {
+            // Keys pressed in the row's own controls (the "…" menu) are theirs.
+            if (event.target !== event.currentTarget) return
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              onPlay()
+            }
+          }}
+          className={cn(
+            // Stays lit while its right-click menu is open.
+            'group/track grid cursor-default items-center gap-4 rounded-md px-4 py-2 outline-none hover:bg-foreground/10 focus-visible:bg-foreground/10 data-popup-open:bg-foreground/10',
+            unavailable && 'opacity-40',
+            extra !== undefined ? TRACK_GRID_EXTRA : TRACK_GRID,
+            'max-md:gap-3 max-md:px-2',
           )}
-        </span>
-        <span className="flex min-w-0 items-center gap-3">
-          {cover && <span className="size-10 shrink-0 overflow-hidden rounded bg-muted">{image && <FadeImage src={image} alt="" className="size-full object-cover" />}</span>}
-          <span className="min-w-0">
-            <span className={cn('block truncate', isCurrent ? 'text-listen' : 'text-foreground')}>{track.Name}</span>
-            <span className="block truncate text-sm text-muted-foreground">
-              {/* All of them, with the featured artists (as Spotify lists them on an album too). */}
-              <TrackArtists track={track} stopPropagation />
+        >
+          <span className="relative flex h-5 items-center justify-end text-sm tabular-nums text-muted-foreground max-md:hidden">
+            {isCurrent && state.playing ? (
+              <span aria-hidden className="flex h-3.5 items-end gap-px">
+                {[0, 1, 2].map((bar) => (
+                  <span key={bar} className="w-[3px] animate-[eq_0.9s_ease-in-out_infinite] rounded-sm bg-listen" style={{ animationDelay: `${bar * 0.2}s` }} />
+                ))}
+              </span>
+            ) : (
+              <>
+                <span className={cn('group-hover/track:invisible', isCurrent && 'text-listen')}>{number}</span>
+                <IconPlayerPlayFilled className="invisible absolute size-4 text-foreground group-hover/track:visible" />
+              </>
+            )}
+          </span>
+          <span className="flex min-w-0 items-center gap-3">
+            {cover && <span className="size-10 shrink-0 overflow-hidden rounded bg-muted">{image && <FadeImage src={image} alt="" className="size-full object-cover" />}</span>}
+            <span className="min-w-0">
+              <span className={cn('block truncate', isCurrent ? 'text-listen' : 'text-foreground')}>{track.Name}</span>
+              <span className="block truncate text-sm text-muted-foreground">
+                {/* All of them, with the featured artists (as Spotify lists them on an album too). */}
+                <TrackArtists track={track} stopPropagation />
+              </span>
             </span>
           </span>
-        </span>
-        {extra !== undefined && <span className="hidden min-w-0 justify-end text-right text-sm tabular-nums text-muted-foreground sm:flex">{extra}</span>}
-        <span className="flex items-center justify-end gap-3 text-sm tabular-nums text-muted-foreground">
-          <LikeToggle track={track} />
-          {formatClock(ticksToSeconds(track.RunTimeTicks ?? 0))}
-        </span>
-        <TrackMenu track={track} onRemove={onRemove} />
-      </div>
-    </TrackContextMenu>
+          {extra !== undefined && <span className="hidden min-w-0 justify-end text-right text-sm tabular-nums text-muted-foreground sm:flex max-md:hidden">{extra}</span>}
+          <span className="flex items-center justify-end gap-3 text-sm tabular-nums text-muted-foreground">
+            <LikeToggle track={track} />
+            <span className="max-md:hidden">{formatClock(ticksToSeconds(track.RunTimeTicks ?? 0))}</span>
+          </span>
+          <TrackMenu track={track} onRemove={onRemove} />
+        </div>
+      </TrackContextMenu>
+    </SwipeToQueue>
   )
 }

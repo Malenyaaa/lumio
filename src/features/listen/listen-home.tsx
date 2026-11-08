@@ -122,7 +122,7 @@ export function ListenHome() {
       <section className="space-y-4 px-4 sm:px-8">
         <h1 className="text-3xl font-bold tracking-tight">{greeting}</h1>
         {/* Like Spotify's top grid: the last few things played, one click away. */}
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
           {recent.isLoading
             ? Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-14 rounded-md" />)
             : quick.map((source) => <QuickTile key={source} source={source} />)}
@@ -294,10 +294,11 @@ function TileShell({
   const here = state.source === source && state.index >= 0
   const playing = here && state.playing
   const tile = (
-    <div className="group relative flex h-14 items-center gap-3 overflow-hidden rounded-md bg-foreground/[0.08] pr-2 transition-colors hover:bg-foreground/[0.16] data-popup-open:bg-foreground/[0.16]">
-      <Link to={href} className="flex h-full min-w-0 flex-1 items-center gap-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+    <div className="group relative flex h-14 items-center gap-3 overflow-hidden rounded-md bg-foreground/[0.08] pr-2 transition-colors hover:bg-foreground/[0.16] data-popup-open:bg-foreground/[0.16] max-md:h-12 max-md:gap-2">
+      <Link to={href} className="flex h-full min-w-0 flex-1 items-center gap-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-md:gap-2">
         <span className={cn('aspect-square h-full shrink-0 overflow-hidden bg-muted', round && 'scale-[0.8] rounded-full')}>{cover}</span>
-        <span className={cn('truncate text-sm font-semibold', here && 'text-listen')}>{title}</span>
+        {/* Two in a row on phones: the name may take two lines. */}
+        <span className={cn('truncate text-sm font-semibold max-md:line-clamp-2 max-md:whitespace-normal max-md:text-xs max-md:leading-tight', here && 'text-listen')}>{title}</span>
       </Link>
       <button
         type="button"

@@ -461,3 +461,60 @@ html.panel-transition::view-transition-new(listen-cover) {
 [data-remote-bar] {
   bottom: calc(var(--bottom-inset) + 0.75rem);
 }
+
+/*
+ * Phones (a finger, a narrow screen): menus and popovers become sheets from the bottom, full width over a dimmed page,
+ * with rows big enough to tap, as in Spotify. Their content and behavior stay the same (Base UI places them; this
+ * pins them to the bottom instead). Submenus open as a sheet over the menu.
+ */
+@media (width < 48rem) and (pointer: coarse) {
+  [data-slot='dropdown-menu-backdrop'],
+  [data-slot='popover-backdrop'] {
+    display: block !important;
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: rgb(0 0 0 / 0.55);
+    transition: opacity 0.2s;
+  }
+  [data-slot='dropdown-menu-backdrop'][data-starting-style],
+  [data-slot='dropdown-menu-backdrop'][data-ending-style],
+  [data-slot='popover-backdrop'][data-starting-style],
+  [data-slot='popover-backdrop'][data-ending-style] {
+    opacity: 0;
+  }
+  [data-slot='dropdown-menu-positioner'],
+  [data-slot='popover-positioner'] {
+    position: fixed !important;
+    inset: auto 0 0 0 !important;
+    transform: none !important;
+    width: auto !important;
+    height: auto !important;
+  }
+  [data-slot='dropdown-menu-content'],
+  [data-slot='dropdown-menu-sub-content'],
+  [data-slot='popover-content'] {
+    width: auto !important;
+    max-width: none !important;
+    max-height: min(75dvh, calc(100dvh - 4rem - var(--safe-top))) !important;
+    border-radius: 1rem 1rem 0 0 !important;
+    padding: 0.5rem 0.5rem calc(0.75rem + var(--safe-bottom)) !important;
+    --tw-enter-translate-y: 100% !important;
+    --tw-exit-translate-y: 100% !important;
+    --tw-enter-scale: 1 !important;
+    --tw-exit-scale: 1 !important;
+    --tw-enter-translate-x: 0 !important;
+    --tw-exit-translate-x: 0 !important;
+    --tw-duration: 0.25s;
+  }
+  [data-slot='dropdown-menu-content'] :is([data-slot='dropdown-menu-item'], [data-slot='dropdown-menu-sub-trigger'], [data-slot='dropdown-menu-checkbox-item'], [data-slot='dropdown-menu-radio-item']),
+  [data-slot='dropdown-menu-sub-content'] :is([data-slot='dropdown-menu-item'], [data-slot='dropdown-menu-sub-trigger'], [data-slot='dropdown-menu-checkbox-item'], [data-slot='dropdown-menu-radio-item']) {
+    min-height: 3rem;
+    gap: 0.875rem;
+    font-size: 15px;
+  }
+  [data-slot='dropdown-menu-content'] :is([data-slot='dropdown-menu-item'], [data-slot='dropdown-menu-sub-trigger'], [data-slot='dropdown-menu-checkbox-item'], [data-slot='dropdown-menu-radio-item']) svg:not([class*='ml-auto']) {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+}

@@ -27,7 +27,7 @@ import { useItem } from '@/features/items/queries'
 import { formatRuntime } from '@/lib/format'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import { cn, tintWash } from '@/lib/utils'
-import { TRACK_GRID, TrackTableRow } from './album-view'
+import { TRACK_GRID, TRACK_GRID_EXTRA, TrackTableRow } from './album-view'
 import { useOfficialPlaylist } from './official'
 import { playCircle } from './play-circle'
 import { music, START, useMusic } from './player/music-player'
@@ -214,8 +214,8 @@ export function Collection({ kind, title, cover, byline, description, tracks: lo
       <div className="px-4 sm:px-8">
         <div
           className={cn(
-            'grid items-center gap-4 border-b px-4 pb-2 text-sm text-muted-foreground',
-            extras ? 'grid-cols-[2rem_minmax(0,1fr)_6rem_2rem] sm:grid-cols-[2rem_minmax(0,1fr)_9rem_6rem_2rem]' : TRACK_GRID,
+            'grid items-center gap-4 border-b px-4 pb-2 text-sm text-muted-foreground max-md:hidden',
+            extras ? TRACK_GRID_EXTRA : TRACK_GRID,
           )}
         >
           <span className="text-right">#</span>
