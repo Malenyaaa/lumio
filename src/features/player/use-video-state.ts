@@ -77,6 +77,12 @@ export function useVideoState(ref: RefObject<HTMLVideoElement | null>): VideoSta
 
     let waiting = true
     const sync = () => {
+      // Done waiting once there is data to go on and no seek is under way: after a seek into what is already buffered
+      // (resuming where one left off), browsers fire neither "playing" nor "canplay" again.
+      if (waiting && !el.seeking && el.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+        waiting = false
+        stopPolling()
+      }
       const next = read(el, waiting)
       setState((current) => (changed(current, next) ? next : current))
     }

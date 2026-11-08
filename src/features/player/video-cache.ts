@@ -130,7 +130,7 @@ export function downloadVideo(api: Api, session: { userId: string; accessToken: 
         mediaSourceId: source?.Id ?? itemId,
         deviceId: jellyfin.deviceInfo.id,
         playSessionId: crypto.randomUUID(),
-        api_key: session.accessToken,
+        ApiKey: session.accessToken,
       })
       const response = await fetch(`${api.basePath}/Videos/${itemId}/stream.mp4?${params}`, { priority: 'low' } as RequestInit)
       if (!response.ok || !response.body) return
@@ -151,7 +151,7 @@ export function downloadVideo(api: Api, session: { userId: string; accessToken: 
       const subtitles: CachedSubtitle[] = []
       for (const stream of streams) {
         if (stream.Type !== 'Subtitle' || stream.Index == null || !stream.IsTextSubtitleStream) continue
-        const url = `${api.basePath}/Videos/${itemId}/${source?.Id ?? itemId}/Subtitles/${stream.Index}/0/Stream.vtt?api_key=${session.accessToken}`
+        const url = `${api.basePath}/Videos/${itemId}/${source?.Id ?? itemId}/Subtitles/${stream.Index}/0/Stream.vtt?ApiKey=${session.accessToken}`
         const vtt = await fetch(url).catch(() => null)
         if (!vtt?.ok) continue
         const blob = await vtt.blob()

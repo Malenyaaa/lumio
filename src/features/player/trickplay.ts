@@ -39,14 +39,18 @@ export function useTrickplay(item: BaseItemDto | undefined, mediaSourceId: strin
       Math.abs((candidate.Width ?? 0) - PREFERRED_WIDTH) < Math.abs((best.Width ?? 0) - PREFERRED_WIDTH) ? candidate : best,
     )
 
-    const { Width: width, Height: height, TileWidth: tileWidth, TileHeight: tileHeight, Interval: interval, ThumbnailCount: count } = info as Required<typeof info>
+    const { Width: width, Height: height, TileWidth: tileWidth, TileHeight: tileHeight, Interval: interval, ThumbnailCount: reported } = info as Required<typeof info>
     const perSheet = tileWidth * tileHeight
+    // How many frames there are. Jellyfin 10.11 reports the number of sheets here (3 for a 39-minute episode), older
+    // versions the number of frames: the runtime tells which, capped by what the reported sheets could hold.
+    const byRuntime = item.RunTimeTicks ? Math.ceil(item.RunTimeTicks / 10_000 / interval) : 0
+    const count = Math.max(reported, Math.min(byRuntime, reported * perSheet))
     const itemId = item.Id
     const source = mediaSourceId ?? itemId
     const base = api.basePath
     const token = encodeURIComponent(session.accessToken)
 
-    const sheetUrl = (sheet: number) => `${base}/Videos/${itemId}/Trickplay/${width}/${sheet}.jpg?MediaSourceId=${source}&api_key=${token}`
+    const sheetUrl = (sheet: number) => `${base}/Videos/${itemId}/Trickplay/${width}/${sheet}.jpg?MediaSourceId=${source}&ApiKey=${token}`
     const lookup = (seconds: number): TrickplayFrame => {
       const index = Math.min(Math.max(Math.floor((seconds * 1000) / interval), 0), Math.max(count - 1, 0))
       const sheet = Math.floor(index / perSheet)

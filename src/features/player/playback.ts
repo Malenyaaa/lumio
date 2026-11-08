@@ -112,7 +112,7 @@ export const QUALITY_OPTIONS: Array<{ resolution?: string; bitrate?: number }> =
 ]
 
 function withApiKey(path: string, token: string) {
-  return `${path}${path.includes('?') ? '&' : '?'}api_key=${encodeURIComponent(token)}`
+  return `${path}${path.includes('?') ? '&' : '?'}ApiKey=${encodeURIComponent(token)}`
 }
 
 function describeStreams(playback: Playback) {

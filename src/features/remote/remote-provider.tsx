@@ -483,7 +483,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!session) return
     staleGroupChecked.current = false
-    const url = `${session.serverUrl.replace(/^http/, 'ws')}/socket?api_key=${encodeURIComponent(session.accessToken)}&deviceId=${encodeURIComponent(jellyfin.deviceInfo.id)}`
+    const url = `${session.serverUrl.replace(/^http/, 'ws')}/socket?ApiKey=${encodeURIComponent(session.accessToken)}&deviceId=${encodeURIComponent(jellyfin.deviceInfo.id)}`
     const socket = new WebSocketService(url)
     const stopStatus = socket.onStatusChange((status) => status === SOCKET_OPEN && announceCapabilities())
     const stopMessages = socket.subscribe(['Play', 'Playstate', 'GeneralCommand', 'SyncPlayCommand', 'SyncPlayGroupUpdate'], (message) => {

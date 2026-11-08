@@ -303,7 +303,7 @@ function libraryAudioUrl(id: string, limit: number | null, sessionId: string) {
     MaxStreamingBitrate: String(limit ? limit * 1000 : 320_000_000),
     ...(limit ? { AudioBitRate: String(Math.min(limit, 320) * 1000) } : {}),
     PlaySessionId: sessionId,
-    api_key: accessToken,
+    ApiKey: accessToken,
   })
   return `${api.basePath}/Audio/${id}/universal?${params}`
 }
