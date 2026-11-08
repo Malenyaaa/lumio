@@ -1,5 +1,6 @@
 import { IconDatabaseExclamation, IconX } from '@tabler/icons-react'
 import { useState } from 'react'
+import { NoticeCard } from '@/components/notice-stack'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { defineMessages, useMessages } from '@/lib/i18n'
@@ -51,9 +52,9 @@ export function StorageNotice() {
   if (!noticeOpen) return null
   const asking = state === 'asking'
   return (
-    <div
+    <NoticeCard
       role="alert"
-      className="fixed inset-x-4 bottom-[max(7rem,calc(var(--bottom-inset)+1rem))] z-[60] mx-auto max-w-lg rounded-xl bg-popover p-4 text-popover-foreground shadow-2xl ring-1 ring-foreground/10 animate-page-in"
+      
     >
       <div className="flex gap-3">
         <IconDatabaseExclamation className="mt-0.5 size-5 shrink-0 text-amber-500" />
@@ -75,6 +76,6 @@ export function StorageNotice() {
           <IconX className="size-4" />
         </button>
       </div>
-    </div>
+    </NoticeCard>
   )
 }

@@ -55,6 +55,7 @@ import { PlaybackPage } from '@/features/settings/playback-page'
 import { DownloadsPage } from '@/features/settings/storage-page'
 import { PrivacyPage } from '@/features/settings/privacy-page'
 import { ProfilePage } from '@/features/settings/profile-page'
+import { NoticeStack } from '@/components/notice-stack'
 import { SettingsLayout } from '@/features/settings/settings-layout'
 import { SubtitlesPage } from '@/features/settings/subtitles-page'
 
@@ -76,6 +77,8 @@ function RootLayout() {
       <AppDownloadHost />
       {/* Lumio's apps: a downloaded update, ready to install. */}
       <UpdateReady />
+      {/* Where the notice cards above (and the storage notice) stack. */}
+      <NoticeStack />
       {/* Coming back (from the player, a detail page, the browser's back button) returns to the same scroll position. */}
       <ScrollRestoration />
     </RemoteProvider>

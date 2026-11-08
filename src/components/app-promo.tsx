@@ -1,6 +1,7 @@
 import { IconDeviceDesktop, IconDeviceMobile, IconX } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router'
+import { NoticeCard } from '@/components/notice-stack'
 import { Button } from '@/components/ui/button'
 import { useLumioConfig } from '@/features/admin/branding'
 import { useSession } from '@/features/auth/session'
@@ -93,10 +94,10 @@ export function AppPromo() {
   }
   const Icon = platform === 'android' ? IconDeviceMobile : IconDeviceDesktop
   return (
-    <div
+    <NoticeCard
       role="dialog"
       aria-label={t.title(platform)}
-      className="fixed inset-x-4 bottom-[max(1.5rem,calc(var(--bottom-inset)+1rem))] z-[60] mx-auto max-w-lg rounded-xl bg-popover p-4 text-popover-foreground shadow-2xl ring-1 ring-foreground/10 animate-page-in"
+      
     >
       <div className="flex gap-3">
         <Icon className="mt-0.5 size-5 shrink-0 text-primary" />
@@ -122,6 +123,6 @@ export function AppPromo() {
           <IconX className="size-4" />
         </button>
       </div>
-    </div>
+    </NoticeCard>
   )
 }

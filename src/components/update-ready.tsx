@@ -1,5 +1,6 @@
 import { IconRefresh, IconX } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
+import { NoticeCard } from '@/components/notice-stack'
 import { Button } from '@/components/ui/button'
 import { useLocalSettings } from '@/features/settings/local-settings'
 import { applyUpdate, checkForUpdate, setReadyUpdate, useReadyUpdate } from '@/lib/app-update'
@@ -59,9 +60,9 @@ export function UpdateReady() {
     setHidden(true)
   }
   return (
-    <div
+    <NoticeCard
       role="status"
-      className="fixed inset-x-4 bottom-[max(1.5rem,calc(var(--bottom-inset)+1rem))] z-[60] mx-auto max-w-md rounded-xl bg-popover p-4 text-popover-foreground shadow-2xl ring-1 ring-foreground/10 animate-page-in sm:right-6 sm:left-auto sm:mx-0 sm:w-96"
+      
     >
       <div className="flex gap-3">
         <IconRefresh className="mt-0.5 size-5 shrink-0 text-primary" />
@@ -76,6 +77,6 @@ export function UpdateReady() {
           <IconX className="size-4" />
         </button>
       </div>
-    </div>
+    </NoticeCard>
   )
 }
