@@ -156,7 +156,7 @@ export function SidePanel() {
         )}
         // Showing the queue or the quality, this box is "the beside panel": it stays where it is when the panel grows.
         data-vt={!expanded && BESIDE_VIEWS.has(view) ? 'listen-beside' : 'listen-panel'}
-        style={{ width: expanded ? (beside ? `calc(100% - ${layout.right + 8}px)` : 'calc(100% - 1rem)') : layout.right - 8 }}
+        style={{ width: expanded ? (beside ? `calc(100% - ${layout.right + 16}px)` : 'calc(100% - 1rem)') : layout.right - 8 }}
       >
         <PanelColumn view={view} titles={titles} track={track} expanded={expanded} />
       </div>
