@@ -2,7 +2,8 @@ import type { Api } from '@jellyfin/sdk'
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
 import { getLibraryApi } from '@jellyfin/sdk/lib/utils/api/library-api'
 import { useSyncExternalStore } from 'react'
-import { offlineItem, rememberItems } from '@/features/listen/offline-library'
+import { getMediaSegmentApi } from '@jellyfin/sdk/lib/utils/api/media-segment-api'
+import { forgetSegments, hasSegments, offlineItem, rememberItems, rememberSegments } from '@/features/listen/offline-library'
 import { backdropImageUrl, landscapeImageUrl, portraitImageUrl } from '@/lib/images'
 import { remindPersistentStorage } from '@/lib/persistent-storage'
 import { downloadVideo, forgetVideo, isVideoPinned, pinnedVideoIds, pinVideo, videoBytes, videoCacheAvailable } from './video-cache'
@@ -85,6 +86,7 @@ function reconcile() {
   const want = wanted()
   pending = [...want].filter((id) => !isVideoPinned(id))
   for (const id of pinnedVideoIds()) if (!want.has(id)) void forgetVideo(id)
+  void forgetSegments(want)
   // Removed while it comes in: stopped at once (the server stops converting it too).
   if (current && !want.has(current.id)) abortCurrent?.abort()
   changed()
@@ -136,6 +138,9 @@ async function run() {
             }
           },
         })
+        // Its intro, recap and credits (Intro Skipper), so skipping works offline too.
+        const found = await getMediaSegmentApi(api).getItemSegments({ itemId: id }).catch(() => null)
+        if (found) rememberSegments(id, found.data)
         // Removed meanwhile: deleted again. Stored by the player's prefetch at the same time: pinned now.
         if (!wanted().has(id)) void forgetVideo(id)
         else if (!isVideoPinned(id)) {
@@ -172,7 +177,18 @@ if (typeof window !== 'undefined') window.addEventListener('online', () => void 
 /** Set while signed in (see VideoDownloadsHost): where downloads come from, in which quality. Starts what is pending. */
 export function setVideoDownloadSource(next: Source | null) {
   source = next
-  if (next) reconcile()
+  if (!next) return
+  reconcile()
+  void fetchMissingSegments(next)
+}
+
+/** Downloads from before segments were kept get theirs now. */
+async function fetchMissingSegments({ api }: Source) {
+  for (const id of wanted()) {
+    if (!isVideoPinned(id) || (await hasSegments(id))) continue
+    const found = await getMediaSegmentApi(api).getItemSegments({ itemId: id }).catch(() => null)
+    if (found) rememberSegments(id, found.data)
+  }
 }
 
 /**

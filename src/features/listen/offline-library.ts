@@ -13,13 +13,20 @@ import { downloadedCollections } from './player/downloads'
  */
 const CACHE_NAME = 'lumio-downloads-v1'
 const META = new Request('https://lumio.downloads/meta/items')
+const SEGMENTS_META = new Request('https://lumio.downloads/meta/segments')
 
 let items = new Map<string, BaseItemDto>()
+/** Jellyfin's media segments (intro, recap, credits … from Intro Skipper) of downloaded episodes and films, as it answers them. */
+let segments = new Map<string, unknown>()
 const loaded: Promise<void> = (async () => {
   try {
     if (typeof caches === 'undefined') return
-    const response = await (await caches.open(CACHE_NAME)).match(META)
+    const cache = await caches.open(CACHE_NAME)
+    const response = await cache.match(META)
     if (response) items = new Map(Object.entries((await response.json()) as Record<string, BaseItemDto>))
+    const kept = await cache.match(SEGMENTS_META)
+    // Kept ones first; any remembered meanwhile (before this finished) win.
+    if (kept) segments = new Map([...Object.entries((await kept.json()) as Record<string, unknown>), ...segments])
   } catch {
     // Nothing kept yet.
   }
@@ -34,6 +41,41 @@ function save() {
       .then((cache) => cache.put(META, new Response(JSON.stringify(Object.fromEntries(items)), { headers: { 'Content-Type': 'application/json' } })))
       .catch(() => undefined)
   }, 500)
+}
+
+let segmentsTimer: number | undefined
+function saveSegments() {
+  window.clearTimeout(segmentsTimer)
+  segmentsTimer = window.setTimeout(() => {
+    void caches
+      .open(CACHE_NAME)
+      .then((cache) => cache.put(SEGMENTS_META, new Response(JSON.stringify(Object.fromEntries(segments)), { headers: { 'Content-Type': 'application/json' } })))
+      .catch(() => undefined)
+  }, 500)
+}
+
+/** Keeps an item's media segments (Jellyfin's answer) for offline playback: skipping intros works without a connection. */
+export function rememberSegments(itemId: string, answer: unknown) {
+  segments.set(itemId, answer)
+  saveSegments()
+}
+
+/** Whether an item's media segments are kept (after loading what was kept before). */
+export async function hasSegments(itemId: string) {
+  await loaded
+  return segments.has(itemId)
+}
+
+/** Forgets the segments of items no download holds any more. */
+export async function forgetSegments(keep: Set<string>) {
+  await loaded
+  let changed = false
+  for (const id of segments.keys()) {
+    if (keep.has(id)) continue
+    segments.delete(id)
+    changed = true
+  }
+  if (changed) saveSegments()
 }
 
 /** A kept item (for names in the download manager). */
@@ -53,6 +95,7 @@ const ARTISTS_PATH = /\/Artists(?:\/AlbumArtists)?$/i
 const SEASONS_PATH = /\/Shows\/([0-9a-f]{32})\/Seasons$/i
 const EPISODES_PATH = /\/Shows\/([0-9a-f]{32})\/Episodes$/i
 const VIDEO_TYPES = ['Movie', 'Series', 'Episode', 'Season']
+const SEGMENTS_PATH = /\/MediaSegments\/([0-9a-f]{32})$/i
 
 /** Only what downloads still hold: collections removed since leave their items unused. */
 function available() {
@@ -87,6 +130,8 @@ function answer(url: URL): unknown {
   const path = url.pathname
   const params = url.searchParams
   const library = available()
+  const segmentsOf = path.match(SEGMENTS_PATH)?.[1]
+  if (segmentsOf) return segments.get(segmentsOf) ?? null
   const one = path.match(ITEM_PATH)?.[1]
   if (one) return items.get(one) ?? null
   const result = (found: BaseItemDto[]) => ({ Items: found, TotalRecordCount: found.length, StartIndex: 0 })
