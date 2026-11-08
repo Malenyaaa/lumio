@@ -8,6 +8,7 @@ import { readLocalSettings } from '@/features/settings/local-settings'
 import { jellyfin } from '@/lib/jellyfin'
 import { podcastProgress, recordPodcastProgress } from '../podcasts'
 import { reportActivity } from '@/features/social/social'
+import { flushPlayback, rememberPlayback } from '@/lib/playback-outbox'
 import { recordRecent } from '../recent'
 import { audioCacheAvailable, cachedAudioUrl, prefetchAudio, recordCachedPlay } from './audio-cache'
 import { DIRECT_FORMATS } from './quality'
@@ -342,6 +343,15 @@ function report(kind: 'start' | 'progress' | 'stopped', item = currentTrack()) {
     PlaySessionId: playSessionId,
     CanSeek: true,
   }
+  // When a play can't be reported (offline, e.g. a cached song), it is kept and handed in later, so it still counts.
+  const { userId } = connection
+  const keep = () => {
+    if (kind !== 'stopped') return
+    const duration = durationOf()
+    const played = !!duration && audio!.currentTime >= duration * 0.9
+    rememberPlayback(userId, { itemId: item.Id!, at: new Date().toISOString(), played, positionTicks: info.PositionTicks })
+  }
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return keep()
   const sessions = getSessionApi(connection.api)
   const call =
     kind === 'start'
@@ -349,7 +359,8 @@ function report(kind: 'start' | 'progress' | 'stopped', item = currentTrack()) {
       : kind === 'progress'
         ? sessions.reportPlaybackProgress({ playbackProgressInfo: info })
         : sessions.reportPlaybackStopped({ playbackStopInfo: info })
-  call.catch(() => undefined)
+  // Reachable again: what was kept goes out too.
+  call.then(() => kind === 'start' && void flushPlayback()).catch(keep)
 }
 
 // ---- transport ----

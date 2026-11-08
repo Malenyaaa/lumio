@@ -20,6 +20,7 @@ import { SyncPlayMenu } from '@/features/remote/syncplay-menu'
 import { useUserConfiguration } from '@/features/settings/use-user-configuration'
 import { secondsToTicks, ticksToSeconds } from '@/lib/format'
 import { portraitImageUrl } from '@/lib/images'
+import { rememberPlayback } from '@/lib/playback-outbox'
 import { useMessages } from '@/lib/i18n'
 import { music } from '@/features/listen/player/music-player'
 import { markAppReady } from '@/lib/boot'
@@ -90,7 +91,7 @@ function Player({ id }: { id: string }) {
   const initialTicks = Number(search.get('t') ?? 0)
   const navigate = useNavigate()
   const location = useLocation()
-  const { api } = useAuthedSession()
+  const { api, session } = useAuthedSession()
   const item = useItem(id)
   const userConfig = useUserConfiguration()
   const next = useNextItem(item.data)
@@ -193,6 +194,12 @@ function Player({ id }: { id: string }) {
     el.playbackRate = effectiveRate
   }, [effectiveRate, data])
 
+  // A stop that couldn't be reported (offline): kept for later, as watched when it got near the end.
+  const keepStop = useEffectEvent((ticks: number, elementTicks: number) => {
+    const runtime = item.data?.RunTimeTicks ?? elementTicks
+    rememberPlayback(session.userId, { itemId: id, at: new Date().toISOString(), played: !!runtime && ticks >= runtime * 0.9, positionTicks: ticks })
+  })
+
   const handleEnded = useEffectEvent(() => {
     // Watched to the end: a stored copy has done its job (episodes are rarely watched twice).
     if (isVideoCached(id)) void forgetVideo(id)
@@ -229,11 +236,15 @@ function Player({ id }: { id: string }) {
     })
     const report = (kind: 'progress' | 'stopped') => {
       if (kind === 'progress' && !startReached) return
+      // When the stop can't be reported (offline, e.g. a stored episode), it is kept and handed in later: watched to
+      // the end counts as watched, otherwise where it was left.
+      const keep = () => kind === 'stopped' && keepStop(positionTicks.current(), Number.isFinite(element.duration) ? secondsToTicks(element.duration) : 0)
+      if (!navigator.onLine) return keep()
       const call =
         kind === 'progress'
           ? sessionApi.reportPlaybackProgress({ playbackProgressInfo: info() })
           : sessionApi.reportPlaybackStopped({ playbackStopInfo: info() })
-      call.catch(() => undefined)
+      call.catch(keep)
     }
 
     let hls: Hls | undefined

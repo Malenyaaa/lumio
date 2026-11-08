@@ -6,6 +6,7 @@ import { itemOptions } from '@/features/items/queries'
 import { externalOf } from '@/lib/external-items'
 import { backdropImageUrl, portraitImageUrl } from '@/lib/images'
 import { artistsOf } from '@/lib/item-links'
+import { connectPlaybackOutbox } from '@/lib/playback-outbox'
 import { connectPodcastProgress } from '../podcasts'
 import { connectRecent } from '../recent'
 import { lyricsOptions } from './lyrics'
@@ -31,6 +32,8 @@ export function MusicPlayerHost() {
   const userId = session?.userId
   useEffect(() => {
     void connectPodcastProgress(api && userId ? { api, userId } : null)
+    // Plays kept while offline (music and video) are handed in now, and whenever the connection is back.
+    connectPlaybackOutbox(api && userId ? { api, userId } : null)
     void connectRecent(api && userId ? { api, userId } : null)
   }, [api, userId])
 
