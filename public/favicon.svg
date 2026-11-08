@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#26262b"/>
+      <stop offset="1" stop-color="#0a0a0c"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.55" stop-color="#ffe9b8"/>
+      <stop offset="1" stop-color="#ffb347"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffd58a" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ffd58a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#tile)"/>
+  <circle cx="32" cy="32" r="24" fill="url(#glow)"/>
+  <!-- Play triangle, centered by its centroid ((24 + 24 + 49) / 3 ≈ 32), which is how play icons look centered.
+       The round line join rounds its corners. -->
+  <path d="M24 17.5 L24 46.5 L49 32 Z" fill="url(#beam)" stroke="url(#beam)" stroke-width="5" stroke-linejoin="round"/>
+</svg>

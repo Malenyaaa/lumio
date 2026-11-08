@@ -1,0 +1,163 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useAuthedSession } from '@/features/auth/session'
+
+/**
+ * Talking to the Lumio server (server/), which holds what Jellyfin can't share between users: who follows whom,
+ * privacy choices, and what friends play.
+ */
+export interface SocialPerson {
+  id: string
+  name: string
+  imageTag: string | null
+}
+
+export interface SocialPrivacy {
+  showPlaylists: boolean
+  showFollowing: boolean
+  showFollowers: boolean
+  shareActivity: boolean
+}
+
+export interface SocialActivity {
+  itemId: string
+  name: string
+  subtitle?: string
+  context?: string
+  contextId?: string
+  kind: 'audio' | 'video'
+  playing: boolean
+  at: number
+}
+
+export interface SocialProfile {
+  person: SocialPerson
+  privacy: Partial<SocialPrivacy>
+  followingCount: number
+  followerCount: number
+  following: SocialPerson[] | null
+  followers: SocialPerson[] | null
+  followsYou: boolean
+  youFollow: boolean
+  friend: boolean
+  activity: SocialActivity | null
+}
+
+export interface FriendActivity {
+  user: SocialPerson
+  activity: SocialActivity | null
+}
+
+/**
+ * The Lumio server's API. Lumio always runs with its server, which also serves the app, so this is the same origin's
+ * /api (in development Vite passes it on to the local server). VITE_SOCIAL_URL overrides it for setups that serve the
+ * app from elsewhere.
+ */
+const API_BASE = (import.meta.env.VITE_SOCIAL_URL?.trim() || '/api').replace(/\/+$/, '')
+
+/** A picture from another host, relayed (and kept) by the Lumio server: cached like the app's own, drawable on canvases. */
+export const relayedImage = (url: string | undefined) => (url ? `${API_BASE}/image?url=${encodeURIComponent(url)}` : undefined)
+
+export function useSocialUrl(): string {
+  return API_BASE
+}
+
+// ---- the connection, also used outside React (the players report what plays) ----
+
+let connection: { base: string; token: string } | null = null
+let sharing = false
+
+export function setSocialConnection(next: typeof connection) {
+  connection = next
+}
+
+/**
+ * A GET to the Lumio server outside React, with the signed-in user's token; null when there is no connection yet (the
+ * caller then goes without the server).
+ */
+export async function lumioGet(path: string): Promise<Response | null> {
+  if (!connection) return null
+  return fetch(`${connection.base}${path}`, { headers: { Authorization: `MediaBrowser Token="${connection.token}"` } })
+}
+
+/** Whether the user shares what they play (the players only report when they do). */
+export function setSocialSharing(next: boolean) {
+  sharing = next
+}
+
+async function call<T>(base: string, token: string, path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${base}${path}`, {
+    ...init,
+    headers: { Authorization: `MediaBrowser Token="${token}"`, ...(init?.body ? { 'Content-Type': 'application/json' } : {}), ...init?.headers },
+  })
+  if (!response.ok) throw new Error(`Lumio server ${response.status}`)
+  return (response.status === 204 ? undefined : await response.json()) as T
+}
+
+/** Reports what plays now (null when playback stops), for friends to see. Quietly does nothing without the server. */
+export function reportActivity(activity: Omit<SocialActivity, 'at'> | null) {
+  if (!connection || !sharing) return
+  void call(connection.base, connection.token, '/me/activity', { method: 'POST', body: JSON.stringify(activity ?? {}) }).catch(() => undefined)
+}
+
+// ---- hooks ----
+
+function useCaller() {
+  const { session } = useAuthedSession()
+  const base = useSocialUrl()
+  return { base, call: <T,>(path: string, init?: RequestInit) => call<T>(base, session.accessToken, path, init) }
+}
+
+export function useSocialMe() {
+  const { base, call: request } = useCaller()
+  return useQuery({
+    queryKey: ['social', 'me', base],
+    enabled: !!base,
+    staleTime: 60_000,
+    retry: false,
+    queryFn: () => request<SocialProfile & { friends: SocialPerson[] }>('/me'),
+  })
+}
+
+export function useSocialProfile(userId: string | undefined) {
+  const { base, call: request } = useCaller()
+  return useQuery({
+    queryKey: ['social', 'user', base, userId],
+    enabled: !!base && !!userId,
+    staleTime: 30_000,
+    retry: false,
+    queryFn: () => request<SocialProfile>(`/users/${userId}`),
+  })
+}
+
+export function useSocialFollow() {
+  const { call: request } = useCaller()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ userId, follow }: { userId: string; follow: boolean }) => request<SocialProfile>(`/follows/${userId}`, { method: follow ? 'PUT' : 'DELETE' }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['social'] }),
+  })
+}
+
+export function useSetPrivacy() {
+  const { base, call: request } = useCaller()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (privacy: Partial<SocialPrivacy>) => request<SocialPrivacy>('/me/privacy', { method: 'PUT', body: JSON.stringify(privacy) }),
+    onMutate: (privacy) =>
+      queryClient.setQueryData<SocialProfile>(['social', 'me', base], (me) => (me ? { ...me, privacy: { ...me.privacy, ...privacy } } : me)),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ['social'] }),
+  })
+}
+
+export function useFriendActivity() {
+  const { base, call: request } = useCaller()
+  return useQuery({
+    queryKey: ['social', 'activity', base],
+    enabled: !!base,
+    staleTime: 60_000,
+    retry: false,
+    queryFn: () => request<FriendActivity[]>('/friends/activity'),
+  })
+}
+
+export { call as socialCall }

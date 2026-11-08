@@ -1,0 +1,302 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    /* Listen's accent (play buttons, active toggles, the playing track): a bright green by default, the branding's
+       accent colour when one is set (--listen-accent, see BrandingEffects). Hover is a lighter tone of it; text on it
+       stays readable (--listen-accent-foreground). */
+    --color-listen: var(--listen-accent, #1ed760);
+    --color-listen-hover: color-mix(in srgb, var(--listen-accent, #1ed760) 82%, white);
+    --color-listen-foreground: var(--listen-accent-foreground, #000000);
+    --font-heading: var(--font-sans);
+    --font-sans: 'Geist Variable', sans-serif;
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    /* Panels set apart by their tone rather than a border (Listen's library and side panel, the search field). */
+    --color-surface: var(--surface);
+    --color-surface-hover: var(--surface-hover);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+    --background: oklch(1 0 0);
+    --surface: oklch(0.965 0 0);
+    --surface-hover: oklch(0.93 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    /* A shade deeper than shadcn's, so placeholders and chips still show on the light panels (--surface). */
+    --muted: oklch(0.935 0 0);
+    --muted-foreground: oklch(0.5 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.922 0 0);
+    --input: oklch(0.922 0 0);
+    --ring: oklch(0.708 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --radius: 0.625rem;
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.145 0 0);
+    --sidebar-primary: oklch(0.205 0 0);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.97 0 0);
+    --sidebar-accent-foreground: oklch(0.205 0 0);
+    --sidebar-border: oklch(0.922 0 0);
+    --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+    --background: oklch(0.145 0 0);
+    --surface: oklch(0.195 0 0);
+    --surface-hover: oklch(0.24 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    }
+  body {
+    @apply bg-background text-foreground;
+    }
+  html {
+    @apply font-sans;
+    }
+}
+/* Native scrollbars, autofill and pickers match the theme (src/lib/theme.ts). */
+:root {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+/* Page transitions */
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-page-in {
+  animation: page-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-page-in {
+    animation: none;
+  }
+}
+
+/* View Transitions: the page cross-fades while the header stays put; posters morph into the detail poster. */
+::view-transition-old(root) {
+  animation: 150ms ease-out both vt-fade-out;
+}
+
+::view-transition-new(root) {
+  animation: 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both vt-fade-in;
+}
+
+::view-transition-group(app-header) {
+  animation: none;
+}
+
+::view-transition-group(*) {
+  animation-duration: 380ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes vt-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes vt-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/* Subtitles drawn by the browser (WebVTT). The --sub-* variables come from the user's subtitle settings; with the
+   "native" style the player leaves out .subs-custom and the browser's own cue styling applies. */
+.subs-custom video::cue {
+  background: rgb(0 0 0 / 0.65);
+  color: var(--sub-color, #fff);
+  font-family: var(--sub-family, inherit);
+  font-size: var(--sub-size, 1.5rem);
+  font-weight: var(--sub-weight, 400);
+  font-variant: var(--sub-variant, normal);
+  text-shadow: var(--sub-shadow, none);
+  line-height: 1.35;
+}
+
+html.smooth-scroll {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.smooth-scroll {
+    scroll-behavior: auto;
+  }
+}
+
+/* Wrong-code feedback for the code boxes. */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
+
+.animate-shake {
+  animation: shake 320ms ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-shake {
+    animation: none;
+  }
+}
+
+/*
+ * Pages that grow taller than the window get a scrollbar, which narrows the page and makes centered layouts (settings
+ * sidebar, grids) jump sideways. Always reserve its space while the app shell is shown; the full-screen player has no
+ * page scrollbar and must not get an empty strip.
+ */
+html:has([data-app-shell]) {
+  scrollbar-gutter: stable;
+}
+
+/* The player fills the window exactly; nothing in it (sliding panels, popups) may give the page a scrollbar. */
+html:has([data-player]) {
+  overflow: hidden;
+}
+
+/* "Seitenanimationen" switched off in the settings: no page fades and no View Transitions (they just swap). */
+html.no-page-animations .animate-page-in {
+  animation: none;
+}
+html.no-page-animations::view-transition-group(*),
+html.no-page-animations::view-transition-old(*),
+html.no-page-animations::view-transition-new(*) {
+  animation: none !important;
+}
+
+/* Hero pills: the active one fills up until the next title comes in. */
+/* The "now playing" bars in track lists. */
+@keyframes eq {
+  0%, 100% { height: 30%; }
+  50% { height: 100%; }
+}
+
+@keyframes hero-pill {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+/* The venue map's pin (a MapLibre marker, so plain CSS): a still green dot in Listen's accent. */
+.lumio-map-pin {
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: var(--color-listen);
+  border: 3px solid var(--background);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-listen) 25%, transparent), 0 4px 12px rgb(0 0 0 / 0.6);
+}

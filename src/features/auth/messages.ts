@@ -1,0 +1,63 @@
+import { defineMessages } from '@/lib/i18n'
+
+export const loginMessages = defineMessages({
+  de: {
+    signInTo: 'Bei deinem Jellyfin-Server anmelden',
+    server: 'Server',
+    withQuickConnect: 'Mit Quick Connect anmelden',
+    withPassword: 'Mit Passwort anmelden',
+    quickConnectBefore: 'Öffne Jellyfin auf einem angemeldeten Gerät, gehe zu',
+    quickConnectPath: 'Benutzer → Quick Connect',
+    quickConnectAfter: 'und gib diesen Code ein:',
+    waiting: 'Warte auf Bestätigung …',
+    cancel: 'Abbrechen',
+    requestCode: 'Code für Quick Connect anfordern',
+    startFailed: 'Quick Connect konnte nicht gestartet werden. Ist der Server erreichbar und Quick Connect aktiviert?',
+    codeExpired: 'Der Code ist abgelaufen. Bitte einen neuen anfordern.',
+    username: 'Benutzername',
+    password: 'Passwort',
+    signInFailed: 'Anmeldung fehlgeschlagen. Server, Benutzername und Passwort prüfen.',
+    signIn: 'Anmelden',
+    signingIn: 'Anmelden …',
+    language: 'Sprache',
+  },
+  en: {
+    signInTo: 'Sign in to your Jellyfin server',
+    server: 'Server',
+    withQuickConnect: 'Sign in with Quick Connect',
+    withPassword: 'Sign in with password',
+    quickConnectBefore: 'Open Jellyfin on a signed-in device, go to',
+    quickConnectPath: 'User → Quick Connect',
+    quickConnectAfter: 'and enter this code:',
+    waiting: 'Waiting for approval …',
+    cancel: 'Cancel',
+    requestCode: 'Request a Quick Connect code',
+    startFailed: 'Quick Connect could not be started. Is the server reachable and Quick Connect enabled?',
+    codeExpired: 'The code has expired. Please request a new one.',
+    username: 'Username',
+    password: 'Password',
+    signInFailed: 'Sign-in failed. Check the server, username and password.',
+    signIn: 'Sign in',
+    signingIn: 'Signing in …',
+    language: 'Language',
+  },
+})
+
+export const connectDeviceMessages = defineMessages({
+  de: {
+    connected: 'Gerät verbunden',
+    title: 'Gerät verbinden',
+    description: 'Wähle auf dem neuen Gerät „Quick Connect“ und gib den dort angezeigten Code ein.',
+    codeLabel: 'Quick-Connect-Code',
+    invalid: 'Code ungültig oder abgelaufen. Fordere auf dem Gerät einen neuen an.',
+    connect: 'Verbinden',
+  },
+  en: {
+    connected: 'Device connected',
+    title: 'Connect a device',
+    description: 'Choose “Quick Connect” on the new device and enter the code shown there.',
+    codeLabel: 'Quick Connect code',
+    invalid: 'Invalid or expired code. Request a new one on the device.',
+    connect: 'Connect',
+  },
+})

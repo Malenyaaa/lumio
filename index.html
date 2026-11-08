@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="de" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>Lumio</title>
+    <!-- The chosen theme (settings → interface) before the first paint, so a light page never flashes dark. -->
+    <script>
+      try {
+        var theme = localStorage.getItem('lumio.theme') || 'dark'
+        if (theme === 'system') theme = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+        if (theme === 'light') {
+          document.documentElement.classList.remove('dark')
+          document.documentElement.style.colorScheme = 'light'
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      } catch (error) {}
+    </script>
+  </head>
+  <body>
+    <!-- Boot screen: covers the page until the first view is ready (removed by src/lib/boot.ts). Self-contained, so it
+         shows before any app code or stylesheet has loaded; the server's branding comes from the last visit. -->
+    <div id="boot">
+      <style>
+        #boot { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: #0a0a0a; color: #fafafa;
+          font: 600 28px/1 system-ui, -apple-system, 'Segoe UI', sans-serif; letter-spacing: -0.02em; transition: opacity 0.35s ease; }
+        html:not(.dark) #boot { background: #ffffff; color: #0a0a0a; }
+        html:not(.dark) #boot .bar { background: rgb(0 0 0 / 0.1); }
+        html:not(.dark) #boot .bar::after { background: var(--boot-accent, rgb(0 0 0 / 0.6)); }
+        #boot[data-state='hidden'] { opacity: 0; pointer-events: none; }
+        #boot .brand { display: flex; flex-direction: column; align-items: center; gap: 20px; animation: boot-in 0.5s ease-out both; }
+        #boot .mark { display: flex; align-items: center; gap: 12px; }
+        #boot .mark img { height: 40px; width: auto; max-width: 240px; object-fit: contain; }
+        #boot .bar { position: relative; width: 120px; height: 2px; overflow: hidden; border-radius: 2px; background: rgb(255 255 255 / 0.1); }
+        #boot .bar::after { content: ''; position: absolute; inset: 0; width: 40%; border-radius: inherit; background: var(--boot-accent, rgb(255 255 255 / 0.7));
+          animation: boot-bar 1.1s ease-in-out infinite; }
+        @keyframes boot-in { from { opacity: 0; transform: scale(0.96); } }
+        @keyframes boot-bar { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+        @media (prefers-reduced-motion: reduce) { #boot .brand, #boot .bar::after { animation: none; } }
+      </style>
+      <div class="brand">
+        <div class="mark"><img id="boot-icon" src="/favicon.svg" alt="" /><span id="boot-name">Lumio</span></div>
+        <div class="bar"></div>
+      </div>
+      <script>
+        try {
+          var brand = JSON.parse(localStorage.getItem('lumio.brand') || 'null')
+          if (brand) {
+            // Pictures made for the light look, where the admin uploaded them.
+            if (!document.documentElement.classList.contains('dark')) {
+              brand.logo = brand.logoLight || brand.logo
+              brand.favicon = brand.faviconLight || brand.favicon
+            }
+            if (brand.logo) {
+              document.getElementById('boot-icon').src = brand.logo
+              document.getElementById('boot-name').remove()
+            } else {
+              if (brand.favicon) document.getElementById('boot-icon').src = brand.favicon
+              if (brand.appName) document.getElementById('boot-name').textContent = brand.appName
+            }
+            if (brand.primaryColor) document.getElementById('boot').style.setProperty('--boot-accent', brand.primaryColor)
+          }
+        } catch (error) {}
+      </script>
+    </div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

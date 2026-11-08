@@ -1,0 +1,2 @@
+# Keep LF everywhere (the files are written with LF; Docker and the server expect it).
+* text=auto eol=lf

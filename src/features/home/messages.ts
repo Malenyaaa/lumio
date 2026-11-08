@@ -1,0 +1,36 @@
+import { defineMessages } from '@/lib/i18n'
+
+export const homeMessages = defineMessages({
+  de: {
+    continueWatching: 'Weiterschauen',
+    continue: 'Weiter',
+    becauseYouWatched: (title: string) => `Weil du ${title} geschaut hast`,
+    genreForYou: (genre: string) => `${genre} für dich`,
+    discoverGenre: (genre: string) => `Mal was Neues: ${genre}`,
+    newlyAdded: 'Neu hinzugefügt',
+    featured: 'Hervorgehoben',
+    showSlide: (index: number, total: number) => `Titel ${index} von ${total} zeigen`,
+    myWatchlist: 'Meine Watchlist',
+    upNext: 'Als Nächstes',
+    latestIn: (library: string) => `Neu in ${library}`,
+    resume: 'Fortsetzen',
+    play: 'Abspielen',
+    details: 'Details',
+  },
+  en: {
+    continueWatching: 'Continue Watching',
+    continue: 'Continue',
+    becauseYouWatched: (title: string) => `Because you watched ${title}`,
+    genreForYou: (genre: string) => `${genre} for you`,
+    discoverGenre: (genre: string) => `Try something new: ${genre}`,
+    newlyAdded: 'Recently added',
+    featured: 'Featured',
+    showSlide: (index: number, total: number) => `Show title ${index} of ${total}`,
+    myWatchlist: 'My Watchlist',
+    upNext: 'Up Next',
+    latestIn: (library: string) => `New in ${library}`,
+    resume: 'Resume',
+    play: 'Play',
+    details: 'Details',
+  },
+})

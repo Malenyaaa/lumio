@@ -1,0 +1,10 @@
+{
+  "name": "lumio-server",
+  "private": true,
+  "type": "module",
+  "description": "Lumio companion server: follows, privacy and live friend activity for Lumio on top of Jellyfin.",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "start": "node --no-warnings src/main.ts"
+  }
+}

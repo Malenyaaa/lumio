@@ -1,0 +1,523 @@
+import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
+import {
+  IconArrowsDiagonal,
+  IconArrowsDiagonalMinimize2,
+  IconChevronLeft,
+  IconLayoutSidebarRightCollapse,
+  IconSettings,
+  IconX,
+} from '@tabler/icons-react'
+import { useEffect, useRef, type PointerEvent, type ReactNode } from 'react'
+import { Link } from '@/components/link'
+import { FadeImage } from '@/components/media/fade-image'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useAuthedSession } from '@/features/auth/session'
+import { useDominantColor } from '@/lib/dominant-color'
+import { externalOf } from '@/lib/external-items'
+import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
+import { portraitImageUrl } from '@/lib/images'
+import { artistsOf } from '@/lib/item-links'
+import { cn } from '@/lib/utils'
+import { useLyrics } from './lyrics'
+import { playerBarMessages } from './messages'
+import { currentTrack, music, useMusic, useMusicTime } from './music-player'
+import {
+  closeListenPanel,
+  openListenPanel,
+  RIGHT_LIMITS,
+  setListenLayout,
+  setListenPanelExpanded,
+  toggleListenPanel,
+  useListenLayout,
+  useListenPanel,
+  type ListenPanel,
+} from './panel'
+import { useTrackQuality } from './quality'
+import { ResizeHandle } from '../resize-handle'
+import { endTrackDrag, startTrackDrag } from '../track-drag'
+import { TrackContextMenu, TrackMenu } from '../track-menu'
+import { NowPlaying } from './now-playing'
+import { QueueDrop } from './player-bar'
+
+const messages = defineMessages({
+  de: {
+    close: 'Schließen',
+    open: 'Seitenleiste öffnen',
+    resize: 'Breite der Seitenleiste ändern',
+    aboutArtist: 'Über den Künstler',
+    listeners: (n: string) => `${n} Hörer`,
+    upNext: 'Als Nächstes',
+    nowPlaying: 'Läuft gerade',
+    emptyQueue: 'Danach kommt nichts mehr.',
+    remove: 'Aus der Warteschlange entfernen',
+    noLyrics: 'Für diesen Titel gibt es keinen Songtext.',
+    lyricsFrom: (source: string) => `Songtext von ${source}`,
+    fold: 'Seitenleiste einklappen',
+    nothingPlaying: 'Gerade läuft nichts. Wähle einen Song, ein Album oder einen Podcast, dann siehst du hier Cover, Songtext und was als Nächstes kommt.',
+    expand: 'Groß anzeigen',
+    shrink: 'Normal anzeigen',
+    quality: 'Wiedergabequalität',
+    playingQuality: 'Aktuelle Qualität',
+    lossless: (bits?: number) => (bits ? `Lossless ${bits} Bit` : 'Lossless'),
+    losslessShort: 'Lossless',
+    perHour: (amount: string) => `Bis zu ${amount} pro Stunde`,
+    bestAvailable: 'Beste Qualität dieses Titels',
+    delivery: 'So kommt er an',
+    direct: 'Unverändert, direkt vom Server',
+    convertedFormat: (codec: string) => `Vom Server in MP3 umgewandelt (dein Browser spielt ${codec} nicht ab)`,
+    convertedLimit: 'Vom Server in MP3 umgewandelt (wegen deiner Qualitätsgrenze)',
+    changeQuality: 'Qualitätseinstellungen ändern',
+    podcastQuality: 'Podcasts kommen direkt vom Anbieter, so wie er sie veröffentlicht.',
+    qualityExplained:
+      'Lossless heißt: Du hörst genau das, was in der Datei steckt, ohne dass etwas weggelassen wurde (wie bei einer CD). MP3 und AAC sparen Daten, indem sie kaum hörbare Teile weglassen. Wandelt der Server um, geht verlustfreie Qualität dabei verloren.',
+  },
+  en: {
+    close: 'Close',
+    open: 'Open side panel',
+    resize: 'Resize side panel',
+    aboutArtist: 'About the artist',
+    listeners: (n: string) => `${n} listeners`,
+    upNext: 'Next up',
+    nowPlaying: 'Now playing',
+    emptyQueue: 'Nothing comes after this.',
+    remove: 'Remove from queue',
+    noLyrics: 'There are no lyrics for this track.',
+    lyricsFrom: (source: string) => `Lyrics from ${source}`,
+    fold: 'Collapse side panel',
+    nothingPlaying: 'Nothing is playing. Pick a song, album or podcast to see its cover, lyrics and what comes next here.',
+    expand: 'Make big',
+    shrink: 'Make normal',
+    quality: 'Playback quality',
+    playingQuality: 'Playing quality',
+    lossless: (bits?: number) => (bits ? `Lossless ${bits}-bit` : 'Lossless'),
+    losslessShort: 'Lossless',
+    perHour: (amount: string) => `Up to ${amount} per hour`,
+    bestAvailable: 'Best quality of this track',
+    delivery: 'How it arrives',
+    direct: 'Unchanged, straight from the server',
+    convertedFormat: (codec: string) => `Converted to MP3 by the server (your browser can't play ${codec})`,
+    convertedLimit: 'Converted to MP3 by the server (because of your quality limit)',
+    changeQuality: 'Change quality settings',
+    podcastQuality: 'Podcasts come straight from their publisher, as published.',
+    qualityExplained:
+      "Lossless means you hear exactly what's in the file, with nothing left out (like a CD). MP3 and AAC save data by leaving out barely audible parts. When the server converts, lossless quality is lost on the way.",
+  },
+})
+
+/**
+ * The right-hand panel of Listen (like Spotify's): what's playing, the queue, the lyrics or the sound quality. Closed,
+ * it stays as a thin strip at the edge with an arrow; hovering lets it peek out a little, a click opens it. Opening
+ * and closing slide (the frame animates the width); the content keeps its full width meanwhile, so it doesn't reflow.
+ * Made big, it fills the window between header and player bar (the library sidebar hides), with the queue beside.
+ */
+export function SidePanel() {
+  const panel = useListenPanel()
+  const state = useMusic()
+  const track = currentTrack(state)
+  const t = useMessages(messages)
+  const bar = useMessages(playerBarMessages)
+  const layout = useListenLayout()
+  const dragFrom = useRef(0)
+  const { view, open, expanded, beside } = panel
+
+  // Escape leaves the big panel.
+  useEffect(() => {
+    if (!expanded) return
+    const onKeyDown = (event: KeyboardEvent) => event.key === 'Escape' && !event.defaultPrevented && setListenPanelExpanded(false)
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [expanded])
+
+  if (!track) return <EmptySidePanel open={open} />
+  const titles: Record<ListenPanel, string> = { nowPlaying: track.Album ?? bar.nowPlaying, queue: bar.queue, lyrics: bar.lyrics, quality: t.quality }
+  const title = titles[view]
+  return (
+    <aside
+      aria-label={title}
+      className={cn(
+        'group/panel fixed bottom-20 right-0 top-14 hidden overflow-hidden bg-background pb-2 pr-2 transition-[width] duration-300 ease-out lg:block [.cursor-col-resize_&]:transition-none',
+        expanded ? 'z-40 w-screen' : open ? 'z-30 w-(--listen-right)' : 'z-30 w-(--listen-right) hover:w-14',
+      )}
+    >
+      <div
+        // Its own tone with a gap around it, rather than a border against the page.
+        className={cn(
+          'absolute bottom-2 left-0 top-0 flex overflow-hidden rounded-xl bg-surface [--background:var(--surface)] transition-opacity duration-300',
+          !open && 'pointer-events-none opacity-0 group-hover/panel:opacity-20',
+        )}
+        style={{ width: expanded ? 'calc(100% - 0.5rem)' : layout.right - 8 }}
+      >
+        <PanelColumn view={view} title={title} track={track} expanded={expanded} />
+        {/* In the big panel, the queue or the quality sit in a column at the right edge. */}
+        {expanded && beside && (
+          <div className="flex w-80 shrink-0 flex-col bg-background/30">
+            <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-3">
+              <h2 className="truncate text-base font-semibold">{titles[beside]}</h2>
+              <IconButton label={t.close} onClick={() => toggleListenPanel(beside)}>
+                <IconX className="size-4" />
+              </IconButton>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 [scrollbar-width:thin]">
+              {beside === 'queue' ? (
+                <QueueDrop className="-mx-2 min-h-full rounded-lg px-2">
+                  <Queue />
+                </QueueDrop>
+              ) : (
+                <QualityView track={track} />
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+      {expanded ? null : open ? (
+        <ResizeHandle
+          edge="left"
+          label={t.resize}
+          onDragStart={() => (dragFrom.current = layout.right)}
+          onDrag={(delta) => setListenLayout({ right: Math.min(RIGHT_LIMITS.max, Math.max(RIGHT_LIMITS.min, dragFrom.current - delta)) })}
+        />
+      ) : (
+        <button
+          type="button"
+          aria-label={t.open}
+          title={t.open}
+          onClick={openListenPanel}
+          className="absolute inset-0 flex items-center justify-start pl-2.5 text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        >
+          <IconChevronLeft className="size-5" />
+        </button>
+      )}
+    </aside>
+  )
+}
+
+/**
+ * The panel's main column. Over the lyrics and the big cover it is "immersive": the whole column takes the cover's
+ * colour and the header floats over it, transparent, with only a soft shade from the top to keep its icons readable.
+ */
+function PanelColumn({ view, title, track, expanded }: { view: ListenPanel; title: string; track: BaseItemDto; expanded: boolean }) {
+  const { api } = useAuthedSession()
+  const immersive = view === 'lyrics' || (expanded && view === 'nowPlaying')
+  const tint = useDominantColor(immersive ? portraitImageUrl(api, track, { fillHeight: 64 }) : undefined).data
+  return (
+    <div className="relative flex min-w-0 flex-1 flex-col transition-colors duration-500" style={immersive ? { background: tint ?? 'var(--muted)' } : undefined}>
+      <PanelHeader title={title} track={track} expanded={expanded} immersive={immersive} />
+      <PanelBody view={view} track={track} expanded={expanded} immersive={immersive} />
+    </div>
+  )
+}
+
+/** The side panel while nothing is loaded: folds and opens as usual, with an empty "now playing" placeholder. */
+function EmptySidePanel({ open }: { open: boolean }) {
+  const t = useMessages(messages)
+  const bar = useMessages(playerBarMessages)
+  return (
+    <aside
+      aria-label={bar.nowPlaying}
+      className={cn(
+        'group/panel fixed bottom-20 right-0 top-14 z-30 hidden overflow-hidden bg-background pb-2 pr-2 transition-[width] duration-300 ease-out lg:block',
+        open ? 'w-(--listen-right)' : 'w-(--listen-right) hover:w-14',
+      )}
+    >
+      {open ? (
+        <div className="flex h-full flex-col rounded-xl bg-surface [--background:var(--surface)]">
+          <div className="flex items-center gap-1 px-2 pb-2 pt-2.5">
+            <IconButton label={t.fold} onClick={closeListenPanel}>
+              <IconLayoutSidebarRightCollapse className="size-5" />
+            </IconButton>
+            <h2 className="min-w-0 flex-1 truncate text-base font-semibold">{bar.nowPlaying}</h2>
+          </div>
+          <div aria-hidden className="space-y-4 px-4">
+            <div className="aspect-square rounded-lg bg-muted" />
+            <div className="space-y-2">
+              <div className="h-5 w-3/4 rounded bg-muted" />
+              <div className="h-3.5 w-1/2 rounded bg-muted/70" />
+            </div>
+            <div className="h-40 rounded-lg bg-muted/50" />
+          </div>
+          <p className="mt-6 px-4 text-sm text-muted-foreground">{t.nothingPlaying}</p>
+        </div>
+      ) : (
+        <button
+          type="button"
+          aria-label={t.open}
+          title={t.open}
+          onClick={openListenPanel}
+          className="absolute inset-0 flex items-center justify-start pl-2.5 text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        >
+          <IconChevronLeft className="size-5" />
+        </button>
+      )}
+    </aside>
+  )
+}
+
+/** Fold (left), the title, the track's menu and making the panel big or normal again (right), as in Spotify. */
+function PanelHeader({ title, track, expanded, immersive }: { title: string; track: BaseItemDto; expanded: boolean; immersive: boolean }) {
+  const t = useMessages(messages)
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-1 px-2 pb-2 pt-2.5',
+        immersive && 'absolute inset-x-0 top-0 z-10 bg-linear-to-b from-black/45 to-transparent pb-6 text-white [&_button]:text-white/85 [&_button:hover]:bg-white/10 [&_button:hover]:text-white',
+      )}
+    >
+      {!expanded && (
+        <IconButton label={t.fold} onClick={closeListenPanel}>
+          <IconLayoutSidebarRightCollapse className="size-5" />
+        </IconButton>
+      )}
+      <h2 className={cn('min-w-0 flex-1 truncate text-base font-semibold', expanded && 'pl-3')}>{title}</h2>
+      <TrackMenu track={track} visible />
+      <IconButton label={expanded ? t.shrink : t.expand} onClick={() => setListenPanelExpanded(!expanded)}>
+        {expanded ? <IconArrowsDiagonalMinimize2 className="size-4" /> : <IconArrowsDiagonal className="size-4" />}
+      </IconButton>
+    </div>
+  )
+}
+
+function PanelBody({ view, track, expanded, immersive }: { view: ListenPanel; track: BaseItemDto; expanded: boolean; immersive: boolean }) {
+  return (
+    <div
+      className={cn(
+        'min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]',
+        view === 'lyrics' ? 'pt-12' : 'px-4 pb-4',
+        expanded && view !== 'lyrics' && 'px-8',
+        // Under the floating header.
+        immersive && view === 'nowPlaying' && 'pt-12 text-white',
+      )}
+    >
+      {view === 'nowPlaying' && (expanded ? <BigNowPlaying track={track} /> : <NowPlaying track={track} />)}
+      {view === 'queue' && (
+        // Songs dragged here join the end of the queue.
+        <QueueDrop className="-mx-2 min-h-full rounded-lg px-2">
+          <Queue />
+        </QueueDrop>
+      )}
+      {view === 'lyrics' && <LyricsView track={track} big={expanded} />}
+      {view === 'quality' && (
+        <div className={cn(expanded && 'mx-auto max-w-md pt-6')}>
+          <QualityView track={track} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {children}
+    </button>
+  )
+}
+
+/** How far the big cover tilts towards the pointer, at most (degrees). */
+const TILT_DEG = 7
+
+/**
+ * The big panel's "now playing": just the cover, as large as the space allows, turning slightly towards the pointer
+ * (a 3D tilt with a soft sheen where the light catches it). Title and artists are in the player bar already.
+ */
+function BigNowPlaying({ track }: { track: BaseItemDto }) {
+  const { api } = useAuthedSession()
+  const cover = portraitImageUrl(api, track, { fillHeight: 1200 })
+  const card = useRef<HTMLDivElement>(null)
+  const sheen = useRef<HTMLDivElement>(null)
+
+  // Follows the pointer anywhere over the stage, written straight to the element (no re-render per move).
+  const tilt = (event: PointerEvent<HTMLDivElement>) => {
+    const element = card.current
+    if (!element || event.pointerType === 'touch') return
+    const rect = element.getBoundingClientRect()
+    const x = Math.max(-1, Math.min(1, (event.clientX - (rect.left + rect.width / 2)) / (rect.width / 2)))
+    const y = Math.max(-1, Math.min(1, (event.clientY - (rect.top + rect.height / 2)) / (rect.height / 2)))
+    element.style.transform = `rotateX(${-y * TILT_DEG}deg) rotateY(${x * TILT_DEG}deg)`
+    if (sheen.current) {
+      sheen.current.style.opacity = '1'
+      sheen.current.style.background = `radial-gradient(circle at ${50 + x * 40}% ${50 + y * 40}%, rgb(255 255 255 / 0.18), transparent 60%)`
+    }
+  }
+  const reset = () => {
+    if (card.current) card.current.style.transform = ''
+    if (sheen.current) sheen.current.style.opacity = '0'
+  }
+
+  return (
+    <div onPointerMove={tilt} onPointerLeave={reset} className="flex h-full items-center justify-center py-6 [perspective:1200px]">
+      <div
+        ref={card}
+        className="relative aspect-square h-[min(72svh,50rem)] max-w-full overflow-hidden rounded-xl bg-muted shadow-2xl shadow-black/50 transition-transform duration-300 ease-out [transform-style:preserve-3d] motion-reduce:transition-none motion-reduce:[transform:none]"
+      >
+        {/* Not draggable: the cover is for looking at (and the drag would fight the tilt). */}
+        {cover && <FadeImage key={cover} src={cover} alt="" draggable={false} className="size-full select-none object-cover" />}
+        <div ref={sheen} className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300" />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * How the track sounds and why, as Spotify explains its quality: what plays (lossless or the bitrate), how much data
+ * that is, the best the file in the library offers, whether the server converts it (and why), and the way to the
+ * quality setting.
+ */
+function QualityView({ track }: { track: BaseItemDto }) {
+  const t = useMessages(messages)
+  const locale = getLocaleTag(useLocale())
+  const quality = useTrackQuality(track)
+  const number = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 })
+  if (externalOf(track)) return <p className="py-4 text-sm text-muted-foreground">{t.podcastQuality}</p>
+  if (!quality) return <Skeleton className="h-48 rounded-xl" />
+  const { playing, source } = quality
+  const format = (info: { codec: string; bitDepth?: number; sampleRate?: number; bitrate?: number }, lossless: boolean) =>
+    [
+      lossless && info.bitDepth ? `${info.bitDepth} Bit` : undefined,
+      info.sampleRate ? `${number.format(info.sampleRate / 1000)} kHz` : undefined,
+      !lossless && info.bitrate ? `${Math.round(info.bitrate / 1000)} kbps` : undefined,
+      info.codec.toUpperCase(),
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  // Data per hour from the bitrate (lossless files: the file's own).
+  const perHour = (playing.bitrate ?? source.bitrate ?? 0) * 3600 / 8
+  const amount = perHour >= 1e9 ? `${number.format(perHour / 1e9)} GB` : `${Math.round(perHour / 1e6)} MB`
+  return (
+    <div className="space-y-4">
+      <div className="space-y-4 rounded-xl bg-muted/60 p-5">
+        <div>
+          <p className="text-xs font-medium text-muted-foreground">{t.playingQuality}</p>
+          <p className={cn('mt-1 text-2xl font-bold', quality.lossless && 'text-listen')}>{quality.lossless ? t.lossless(playing.bitDepth) : quality.label}</p>
+          {perHour > 0 && <p className={cn('text-sm', quality.lossless ? 'text-listen' : 'text-muted-foreground')}>{t.perHour(amount)}</p>}
+          <p className={cn('text-sm', quality.lossless ? 'text-listen' : 'text-muted-foreground')}>{format(playing, quality.lossless)}</p>
+        </div>
+        <div className="space-y-3 border-t pt-4 text-sm">
+          <div>
+            <p className="text-muted-foreground">{t.bestAvailable}</p>
+            <p className="font-semibold">{source.codec ? `${quality.sourceLossless ? `${t.losslessShort} · ` : ''}${format(source, quality.sourceLossless)}` : '–'}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">{t.delivery}</p>
+            <p className="font-semibold">{quality.converted ? (quality.reason === 'limit' ? t.convertedLimit : t.convertedFormat(source.codec.toUpperCase())) : t.direct}</p>
+          </div>
+        </div>
+        <Link
+          to="/listen/settings/playback"
+          className="flex items-center gap-2 border-t pt-4 text-sm font-semibold hover:underline"
+        >
+          <IconSettings className="size-4" /> {t.changeQuality}
+        </Link>
+      </div>
+      <p className="px-1 text-xs leading-relaxed text-muted-foreground">{t.qualityExplained}</p>
+    </div>
+  )
+}
+
+function Queue() {
+  const t = useMessages(messages)
+  const state = useMusic()
+  const track = currentTrack(state)
+  const upcoming = state.queue.slice(state.index + 1)
+  return (
+    <div className="space-y-5">
+      {track && (
+        <section className="space-y-1">
+          <h3 className="text-sm font-semibold">{t.nowPlaying}</h3>
+          <QueueRow item={track} index={state.index} current />
+        </section>
+      )}
+      <section className="space-y-1">
+        <h3 className="text-sm font-semibold">{t.upNext}</h3>
+        {upcoming.length === 0 && <p className="py-2 text-sm text-muted-foreground">{t.emptyQueue}</p>}
+        {upcoming.map((item, offset) => (
+          <QueueRow key={`${item.Id}-${state.index + 1 + offset}`} item={item} index={state.index + 1 + offset} removable />
+        ))}
+      </section>
+    </div>
+  )
+}
+
+function QueueRow({ item, index, current, removable }: { item: BaseItemDto; index: number; current?: boolean; removable?: boolean }) {
+  const { api } = useAuthedSession()
+  const t = useMessages(messages)
+  const cover = portraitImageUrl(api, item, { fillHeight: 96 })
+  return (
+    <TrackContextMenu track={item}>
+      <div
+        draggable
+        onDragStart={(event) => startTrackDrag(event, [item])}
+        onDragEnd={endTrackDrag}
+        className="group flex items-center gap-3 rounded-md p-1.5 hover:bg-muted data-popup-open:bg-muted"
+      >
+        <button type="button" onClick={() => !current && music.jump(index)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+          <span className="size-10 shrink-0 overflow-hidden rounded bg-muted">{cover && <FadeImage src={cover} alt="" className="size-full object-cover" />}</span>
+          <span className="min-w-0">
+            <span className={cn('block truncate text-sm', current && 'text-listen')}>{item.Name}</span>
+            <span className="block truncate text-xs text-muted-foreground">{artistsOf(item).map((artist) => artist.name).join(', ')}</span>
+          </span>
+        </button>
+        {removable && (
+          <button
+            type="button"
+            aria-label={t.remove}
+            title={t.remove}
+            onClick={() => music.remove(index)}
+            className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground opacity-0 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+          >
+            <IconX className="size-4" />
+          </button>
+        )}
+      </div>
+    </TrackContextMenu>
+  )
+}
+
+/**
+ * Lyrics on the cover's colour; synced ones follow the music (the current line lit, scrolled into view) and a click on
+ * a line jumps there. In the big panel they are set large for singing along.
+ */
+function LyricsView({ track, big }: { track: BaseItemDto; big: boolean }) {
+  const t = useMessages(messages)
+  const lyrics = useLyrics(track)
+  const { position } = useMusicTime()
+  const list = useRef<HTMLDivElement>(null)
+  const lines = lyrics.data?.lines ?? []
+  const synced = !!lyrics.data?.synced
+  let current = -1
+  if (synced) for (let i = 0; i < lines.length; i++) if ((lines[i]!.time ?? Infinity) <= position + 0.2) current = i
+
+  useEffect(() => {
+    if (current < 0) return
+    list.current?.querySelector<HTMLElement>(`[data-line="${current}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [current])
+
+  const frame = cn('text-white', big ? 'mx-auto max-w-4xl px-10 py-12' : 'px-5 py-5')
+  if (lyrics.isLoading) return <div className={cn(frame, 'space-y-3')}>{Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-6 bg-white/10" />)}</div>
+  if (!lines.length) return <p className={cn(frame, 'text-sm text-white/70')}>{t.noLyrics}</p>
+  return (
+    <div ref={list} className={cn(frame, big ? 'space-y-5' : 'space-y-3')}>
+      {lines.map((line, index) => (
+        <p
+          key={index}
+          data-line={index}
+          onClick={() => synced && line.time !== undefined && music.seek(line.time)}
+          className={cn(
+            'font-bold leading-snug transition-colors duration-300',
+            big ? 'text-3xl sm:text-4xl xl:text-5xl' : 'text-xl',
+            !synced ? 'text-white' : index === current ? 'text-white' : index < current ? 'text-white/55' : 'text-white/35',
+            synced && 'cursor-pointer hover:text-white/90',
+          )}
+        >
+          {line.text || '♪'}
+        </p>
+      ))}
+      <p className="pt-4 text-xs text-white/60">{t.lyricsFrom(lyrics.data?.source === 'lrclib' ? 'LRCLIB' : 'Jellyfin')}</p>
+    </div>
+  )
+}

@@ -1,0 +1,464 @@
+import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
+import {
+  IconCircleCheckFilled,
+  IconCirclePlus,
+  IconClock,
+  IconDots,
+  IconLock,
+  IconPencil,
+  IconPlayerPauseFilled,
+  IconPlayerPlayFilled,
+  IconPlaylistAdd,
+  IconTrash,
+  IconWorld,
+} from '@tabler/icons-react'
+import { useState, type ReactNode } from 'react'
+import { Navigate, useNavigate, useParams } from 'react-router'
+import { ModeTile } from '@/components/app-switcher'
+import { Link } from '@/components/link'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useBranding } from '@/features/admin/branding'
+import { useAuthedSession } from '@/features/auth/session'
+import { useItem } from '@/features/items/queries'
+import { formatRuntime } from '@/lib/format'
+import { defineMessages, useMessages } from '@/lib/i18n'
+import { cn } from '@/lib/utils'
+import { TRACK_GRID, TrackTableRow } from './album-view'
+import { useOfficialPlaylists } from './official'
+import { playCircle } from './play-circle'
+import { music, START, useMusic } from './player/music-player'
+import { ShuffleToggle } from './shuffle-toggle'
+import { PlaylistDetailsDialog } from './playlist-details-dialog'
+import { LikedCover, OfficialCover, PlaylistCover } from './playlist-cards'
+import { useLikedSongs, useListenLibrary, usePlaylistAccess, usePlaylistActions, usePlaylistTracks } from './playlists'
+import { ProfileAvatar } from './profile-page'
+import { usePlaylistOwner, useProfile } from './profiles'
+
+const messages = defineMessages({
+  de: {
+    playlist: 'Playlist',
+    publicPlaylist: 'Öffentliche Playlist',
+    privatePlaylist: 'Private Playlist',
+    liked: 'Lieblingssongs',
+    songs: (n: number) => (n === 1 ? '1 Song' : `${n} Songs`),
+    play: 'Abspielen',
+    pause: 'Pausieren',
+    shuffle: 'Zufallswiedergabe an',
+    shuffleOff: 'Zufallswiedergabe aus',
+    save: 'In der Bibliothek speichern',
+    saved: 'In deiner Bibliothek',
+    more: 'Weitere Optionen',
+    addToQueue: 'Zur Warteschlange hinzufügen',
+    rename: 'Umbenennen',
+    editDetails: 'Details bearbeiten',
+    makePublic: 'Öffentlich machen',
+    makePrivate: 'Privat machen',
+    delete: 'Löschen',
+    deleteConfirm: (name: string) => `„${name}“ wird endgültig gelöscht.`,
+    cancel: 'Abbrechen',
+    saveName: 'Speichern',
+    name: 'Name',
+    title: 'Titel',
+    album: 'Album',
+    empty: 'Noch keine Songs. Füge welche über das „…“-Menü eines Songs hinzu.',
+    likedEmpty: 'Songs, die du mit dem Herz markierst, landen hier.',
+    madeFor: (name: string) => `Von ${name}`,
+    madeForPrefix: 'Für',
+  },
+  en: {
+    playlist: 'Playlist',
+    publicPlaylist: 'Public playlist',
+    privatePlaylist: 'Private playlist',
+    liked: 'Liked Songs',
+    songs: (n: number) => (n === 1 ? '1 song' : `${n} songs`),
+    play: 'Play',
+    pause: 'Pause',
+    shuffle: 'Turn on shuffle',
+    shuffleOff: 'Turn off shuffle',
+    save: 'Save to your library',
+    saved: 'In your library',
+    more: 'More options',
+    addToQueue: 'Add to queue',
+    rename: 'Rename',
+    editDetails: 'Edit details',
+    makePublic: 'Make public',
+    makePrivate: 'Make private',
+    delete: 'Delete',
+    deleteConfirm: (name: string) => `"${name}" will be deleted for good.`,
+    cancel: 'Cancel',
+    saveName: 'Save',
+    name: 'Name',
+    title: 'Title',
+    album: 'Album',
+    empty: 'No songs yet. Add some from a song’s "…" menu.',
+    likedEmpty: 'Songs you like with the heart end up here.',
+    madeFor: (name: string) => `By ${name}`,
+    madeForPrefix: 'For',
+  },
+})
+
+interface CollectionProps {
+  kind: string
+  title: string
+  cover: ReactNode
+  /** Owner and stats line under the title. */
+  byline: ReactNode
+  description?: string
+  tracks: BaseItemDto[]
+  loading: boolean
+  /** Identifies the collection in the player (so its page knows it is the one playing). */
+  source: string
+  /** Header gradient color. */
+  tint?: string
+  /** Extra buttons next to play/shuffle (save, owner menu). */
+  actions?: ReactNode
+  empty?: string
+  /** Removes an entry (own playlists). */
+  onRemove?: (track: BaseItemDto) => void
+  /** Moves an entry to another position (own playlists; rows can then be dragged). */
+  onMove?: (track: BaseItemDto, index: number) => void
+  /** Opens "Edit details" (own playlists): clicking the title or the cover. */
+  onEdit?: (from: 'title' | 'cover') => void
+  /** A column beside the songs (plays, listeners), by track id, with its heading. */
+  extras?: Record<string, string>
+  extraLabel?: string
+}
+
+/** The layout shared by playlists, official playlists and liked songs: header, actions, track table with albums. */
+function Collection({ kind, title, cover, byline, description, tracks: loaded, loading, source, tint, actions, empty, onRemove, onMove, onEdit, extras, extraLabel }: CollectionProps) {
+  const t = useMessages(messages)
+  // Dragging reorders right away; the server's order replaces it once it has saved the move.
+  const [reordered, setReordered] = useState<{ from: BaseItemDto[]; order: BaseItemDto[] } | null>(null)
+  const tracks = reordered && reordered.from === loaded ? reordered.order : loaded
+  const [dragging, setDragging] = useState<number | null>(null)
+  const [over, setOver] = useState<number | null>(null)
+  const drop = (to: number) => {
+    if (dragging === null || dragging === to || !onMove) return
+    const order = [...tracks]
+    const [moved] = order.splice(dragging, 1)
+    order.splice(to, 0, moved!)
+    setReordered({ from: loaded, order })
+    onMove(moved!, to)
+  }
+  const state = useMusic()
+  const here = state.source === source && state.index >= 0
+  const totalTicks = tracks.reduce((sum, track) => sum + (track.RunTimeTicks ?? 0), 0)
+  const playAll = () => (here ? music.toggle() : music.play(tracks, START, { source }))
+  return (
+    <div className="pb-12">
+      <div className="relative pt-14" style={{ background: `linear-gradient(to bottom, ${tint ?? 'rgb(72 72 80)'} 0%, transparent 100%)` }}>
+        <div className="flex flex-col gap-6 px-4 pb-6 pt-10 sm:flex-row sm:items-end sm:px-8">
+          {onEdit ? (
+            <button
+              type="button"
+              aria-label={t.editDetails}
+              onClick={() => onEdit('cover')}
+              className="group relative size-48 shrink-0 overflow-hidden rounded-md bg-muted shadow-2xl shadow-black/50 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-56"
+            >
+              {cover}
+              <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 text-sm font-semibold text-white opacity-0 transition-opacity group-hover:opacity-100">
+                <IconPencil className="size-10" stroke={1.5} />
+                {t.editDetails}
+              </span>
+            </button>
+          ) : (
+            <div className="size-48 shrink-0 overflow-hidden rounded-md bg-muted shadow-2xl shadow-black/50 sm:size-56">{cover}</div>
+          )}
+          <div className="min-w-0 space-y-3">
+            <p className="text-sm font-medium">{kind}</p>
+            {onEdit ? (
+              <button type="button" onClick={() => onEdit('title')} className="block text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <h1 className="line-clamp-2 text-4xl font-black leading-none tracking-tight text-balance sm:text-6xl xl:text-7xl">{title}</h1>
+              </button>
+            ) : (
+              <h1 className="line-clamp-2 text-4xl font-black leading-none tracking-tight text-balance sm:text-6xl xl:text-7xl">{title}</h1>
+            )}
+            {description && <p className="line-clamp-2 text-sm text-foreground/70">{description}</p>}
+            <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-foreground/80">
+              {byline}
+              {tracks.length > 0 && (
+                <span>
+                  • {t.songs(tracks.length)}, {formatRuntime(totalTicks)}
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-5 px-4 py-5 sm:px-8">
+        <button type="button" aria-label={here && state.playing ? t.pause : t.play} onClick={() => playAll()} disabled={!tracks.length} className={cn('size-14', playCircle.listen)}>
+          {here && state.playing ? <IconPlayerPauseFilled className="size-6" /> : <IconPlayerPlayFilled className="size-6 translate-x-px" />}
+        </button>
+        <ShuffleToggle source={source} />
+        {actions}
+      </div>
+
+      <div className="px-4 sm:px-8">
+        <div
+          className={cn(
+            'grid items-center gap-4 border-b px-4 pb-2 text-sm text-muted-foreground',
+            extras ? 'grid-cols-[2rem_minmax(0,1fr)_6rem_2rem] sm:grid-cols-[2rem_minmax(0,1fr)_9rem_6rem_2rem]' : TRACK_GRID,
+          )}
+        >
+          <span className="text-right">#</span>
+          <span>{t.title}</span>
+          {extras && <span className="hidden text-right sm:block">{extraLabel}</span>}
+          <span className="flex justify-end">
+            <IconClock className="size-4" />
+          </span>
+          <span />
+        </div>
+        <div className="mt-2">
+          {loading && Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="mb-1 h-14 rounded-md" />)}
+          {!loading && tracks.length === 0 && empty && <p className="px-4 py-8 text-sm text-muted-foreground">{empty}</p>}
+          {tracks.map((track, index) => (
+            <div
+              key={`${track.PlaylistItemId ?? track.Id}-${index}`}
+              // The row itself is dragged (onto playlists or the queue too); here it also reorders.
+              onDragStart={() => onMove && setDragging(index)}
+              onDragOver={(event) => {
+                if (dragging === null) return
+                event.preventDefault()
+                event.dataTransfer.dropEffect = 'move'
+                setOver(index)
+              }}
+              onDrop={(event) => {
+                event.preventDefault()
+                drop(index)
+                setDragging(null)
+                setOver(null)
+              }}
+              onDragEnd={() => {
+                setDragging(null)
+                setOver(null)
+              }}
+              className={cn(
+                'rounded-md transition-opacity',
+                dragging === index && 'opacity-40',
+                // A line (drawn inside, so nothing shifts) shows where the dragged song will land.
+                over === index &&
+                  dragging !== null &&
+                  dragging !== index &&
+                  (dragging < index ? 'shadow-[inset_0_-2px_0_var(--color-listen)]' : 'shadow-[inset_0_2px_0_var(--color-listen)]'),
+              )}
+            >
+              <TrackTableRow
+                track={track}
+                number={index + 1}
+                cover
+                extra={extras ? (extras[track.Id ?? ''] ?? '') : undefined}
+                onPlay={() => music.play(tracks, index, { source })}
+                onRemove={onRemove ? () => onRemove(track) : undefined}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SaveButton({ id }: { id: string }) {
+  const t = useMessages(messages)
+  const library = useListenLibrary()
+  const saved = library.isSaved(id)
+  return (
+    <button
+      type="button"
+      aria-pressed={saved}
+      aria-label={saved ? t.saved : t.save}
+      title={saved ? t.saved : t.save}
+      onClick={() => library.toggle(id)}
+      className={cn('grid size-10 place-items-center rounded-full transition-colors', saved ? 'text-listen' : 'text-muted-foreground hover:text-foreground')}
+    >
+      {saved ? <IconCircleCheckFilled className="size-8" /> : <IconCirclePlus className="size-8" />}
+    </button>
+  )
+}
+
+/** The playlist's creator, linking to their profile. */
+function OwnerByline({ userId }: { userId: string }) {
+  const profile = useProfile(userId)
+  const name = profile.data?.Name
+  return (
+    <Link to={`/listen/user/${userId}`} className="flex items-center gap-1.5 font-bold text-foreground hover:underline">
+      <ProfileAvatar userId={userId} name={name} className="size-6 text-[10px]" />
+      {name}
+    </Link>
+  )
+}
+
+/** The platform as an owner: the instance's mark and name, like "Spotify" under its own playlists; opens its profile. */
+function PlatformByline() {
+  const { appName } = useBranding('listen')
+  return (
+    <Link to="/listen/platform" className="flex items-center gap-1.5 font-bold text-foreground hover:underline">
+      <ModeTile mode="listen" className="size-5 rounded-full" /> {appName}
+    </Link>
+  )
+}
+
+export function PlaylistPage() {
+  const { id = '' } = useParams()
+  const t = useMessages(messages)
+  const { session } = useAuthedSession()
+  const navigate = useNavigate()
+  const playlist = useItem(id)
+  const tracks = usePlaylistTracks(id)
+  const access = usePlaylistAccess(id)
+  const editor = usePlaylistOwner(id)
+  const actions = usePlaylistActions()
+  const [editing, setEditing] = useState<'title' | 'cover' | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  if (playlist.isError) return <Navigate to="/listen" replace />
+  const item = playlist.data
+  const mine = item?.CanDelete !== false
+  const owner = editor ?? (mine ? session.userId : undefined)
+  const isPublic = !!access.data?.OpenAccess
+  const list = tracks.data ?? []
+
+  return (
+    <>
+      <Collection
+        kind={isPublic ? t.publicPlaylist : mine ? t.privatePlaylist : t.playlist}
+        title={item?.Name ?? ''}
+        description={item?.Overview ?? undefined}
+        cover={item ? <PlaylistCover playlist={item} tracks={list} /> : null}
+        byline={owner ? <OwnerByline userId={owner} /> : null}
+        tracks={list}
+        loading={tracks.isLoading}
+        source={`playlist:${id}`}
+        empty={mine ? t.empty : undefined}
+        onRemove={mine ? (track) => track.PlaylistItemId && actions.remove.mutate({ playlistId: id, entryIds: [track.PlaylistItemId] }) : undefined}
+        onMove={mine ? (track, index) => track.PlaylistItemId && actions.move.mutate({ playlistId: id, entryId: track.PlaylistItemId, index }) : undefined}
+        onEdit={mine && item ? setEditing : undefined}
+        actions={
+          <>
+            {!mine && <SaveButton id={id} />}
+            <DropdownMenu>
+              <DropdownMenuTrigger aria-label={t.more} className="grid size-10 place-items-center rounded-full text-muted-foreground outline-none hover:text-foreground">
+                <IconDots className="size-7" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuItem onClick={() => music.addToQueue(list)}>
+                  <IconPlaylistAdd /> {t.addToQueue}
+                </DropdownMenuItem>
+                {mine && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setEditing('title')}>
+                      <IconPencil /> {t.editDetails}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => actions.update.mutate({ playlistId: id, isPublic: !isPublic })}>
+                      {isPublic ? <IconLock /> : <IconWorld />} {isPublic ? t.makePrivate : t.makePublic}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem variant="destructive" onClick={() => setDeleting(true)}>
+                      <IconTrash /> {t.delete}
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        }
+      />
+
+      {item && (
+        <PlaylistDetailsDialog
+          playlist={item}
+          tracks={list}
+          isPublic={isPublic}
+          open={editing !== null}
+          onOpenChange={(open) => !open && setEditing(null)}
+          focus={editing === 'cover' ? 'none' : 'name'}
+        />
+      )}
+
+      <Dialog open={deleting} onOpenChange={setDeleting}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t.delete}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{t.deleteConfirm(item?.Name ?? '')}</p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleting(false)}>
+              {t.cancel}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() =>
+                actions.destroy.mutate(id, {
+                  onSuccess: () => {
+                    setDeleting(false)
+                    void navigate('/listen', { replace: true })
+                  },
+                })
+              }
+            >
+              {t.delete}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+export function OfficialPlaylistPage() {
+  const { slug = '' } = useParams()
+  const t = useMessages(messages)
+  const { session } = useAuthedSession()
+  const { playlists, isLoading } = useOfficialPlaylists()
+  const playlist = playlists.find((entry) => entry.slug === slug)
+  if (!isLoading && !playlist) return <Navigate to="/listen" replace />
+  return (
+    <Collection
+      kind={t.playlist}
+      title={playlist?.title ?? ''}
+      description={playlist?.description}
+      cover={playlist ? <OfficialCover playlist={playlist} /> : <Skeleton className="size-full" />}
+      byline={
+        <>
+          <PlatformByline />
+          {/* Made for whoever opens it: the same link shows everyone their own. */}
+          {playlist?.personal && (
+            <span>
+              • {t.madeForPrefix} <span className="font-bold text-foreground">{session.userName}</span>
+            </span>
+          )}
+        </>
+      }
+      extras={playlist?.extras}
+      extraLabel={playlist?.extraLabel}
+      tracks={playlist?.tracks ?? []}
+      loading={isLoading}
+      source={`official:${slug}`}
+      tint="rgb(40 90 70)"
+      actions={<SaveButton id={`official:${slug}`} />}
+    />
+  )
+}
+
+export function LikedSongsPage() {
+  const t = useMessages(messages)
+  const { session } = useAuthedSession()
+  const liked = useLikedSongs()
+  return (
+    <Collection
+      kind={t.playlist}
+      title={t.liked}
+      cover={<LikedCover />}
+      byline={<span className="font-bold text-foreground">{session.userName}</span>}
+      tracks={liked.data ?? []}
+      loading={liked.isLoading}
+      source="liked"
+      tint="rgb(80 56 160)"
+      empty={t.likedEmpty}
+    />
+  )
+}

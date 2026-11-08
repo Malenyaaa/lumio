@@ -1,0 +1,332 @@
+import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
+import {
+  IconCircleCheckFilled,
+  IconFolder,
+  IconFolderPlus,
+  IconLink,
+  IconPencil,
+  IconPinned,
+  IconPinnedOff,
+  IconPlaylistAdd,
+  IconPlus,
+  IconRadio,
+  IconTrash,
+  IconUserMinus,
+} from '@tabler/icons-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router'
+import { toast } from 'sonner'
+import { DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from '@/components/ui/dropdown-menu'
+import { useAuthedSession } from '@/features/auth/session'
+import { albumTracksOptions, useSetFavorite } from '@/features/items/queries'
+import { useSocialFollow } from '@/features/social/social'
+import { defineMessages, useMessages } from '@/lib/i18n'
+import type { OfficialPlaylist } from './official'
+import { music } from './player/music-player'
+import { useListenLibrary, usePlaylistActions, usePlaylists, usePlaylistTracks } from './playlists'
+import { useArtistRadio } from './radio'
+
+const messages = defineMessages({
+  de: {
+    unfollow: 'Nicht mehr folgen',
+    radio: 'Zum Künstler*innen-Radio',
+    pin: 'Anheften',
+    unpin: 'Lösen',
+    moveToFolder: 'In Ordner verschieben',
+    newFolder: 'Neuer Ordner',
+    removeFromFolder: 'Aus Ordner entfernen',
+    folderName: (n: number) => (n === 1 ? 'Neuer Ordner' : `Neuer Ordner ${n}`),
+    copyLink: 'Link kopieren',
+    linkCopied: 'Link kopiert',
+    removeFromLibrary: 'Aus Bibliothek entfernen',
+    addToQueue: 'Zur Warteschlange hinzufügen',
+    addToPlaylist: 'Zu Playlist hinzufügen',
+    addToOtherPlaylist: 'Zu einer anderen Playlist hinzufügen',
+    newPlaylist: 'Neue Playlist',
+    newPlaylistName: (n: number) => `Meine Playlist Nr. ${n}`,
+    createPlaylist: 'Playlist erstellen',
+    createFolder: 'Ordner erstellen',
+    addedTo: (name: string) => `Zu „${name}“ hinzugefügt`,
+    addedToQueue: 'Zur Warteschlange hinzugefügt',
+    rename: 'Umbenennen',
+    deleteFolder: 'Ordner löschen',
+  },
+  en: {
+    unfollow: 'Unfollow',
+    radio: 'Go to artist radio',
+    pin: 'Pin',
+    unpin: 'Unpin',
+    moveToFolder: 'Move to folder',
+    newFolder: 'New folder',
+    removeFromFolder: 'Remove from folder',
+    folderName: (n: number) => (n === 1 ? 'New folder' : `New folder ${n}`),
+    copyLink: 'Copy link',
+    linkCopied: 'Link copied',
+    removeFromLibrary: 'Remove from library',
+    addToQueue: 'Add to queue',
+    addToPlaylist: 'Add to playlist',
+    addToOtherPlaylist: 'Add to other playlist',
+    newPlaylist: 'New playlist',
+    newPlaylistName: (n: number) => `My Playlist #${n}`,
+    createPlaylist: 'Create playlist',
+    createFolder: 'Create folder',
+    addedTo: (name: string) => `Added to "${name}"`,
+    addedToQueue: 'Added to queue',
+    rename: 'Rename',
+    deleteFolder: 'Delete folder',
+  },
+})
+
+export const libraryMenuMessages = messages
+
+async function copyLink(path: string, done: string) {
+  try {
+    await navigator.clipboard.writeText(new URL(path, window.location.origin).toString())
+    toast.success(done)
+  } catch {
+    // No clipboard here.
+  }
+}
+
+/** Pin, folder and link: what every entry of the library offers. */
+function CommonItems({ entry, path }: { entry: string; path: string }) {
+  const t = useMessages(messages)
+  const library = useListenLibrary()
+  const pinned = library.isPinned(entry)
+  const current = library.folderOf(entry)
+  return (
+    <>
+      <DropdownMenuItem onClick={() => library.togglePin(entry)}>
+        {pinned ? <IconPinnedOff /> : <IconPinned />} {pinned ? t.unpin : t.pin}
+      </DropdownMenuItem>
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>
+          <IconFolder /> {t.moveToFolder}
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent className="max-h-80 w-56 overflow-y-auto">
+          <DropdownMenuItem onClick={() => library.createFolder(t.folderName(library.folders.length + 1), entry)}>
+            <IconFolderPlus /> {t.newFolder}
+          </DropdownMenuItem>
+          {library.folders.length > 0 && <DropdownMenuSeparator />}
+          {library.folders.map((folder) => (
+            <DropdownMenuItem key={folder.id} disabled={folder.id === current} onClick={() => library.moveToFolder(entry, folder.id)}>
+              <span className="truncate">{folder.name}</span>
+            </DropdownMenuItem>
+          ))}
+          {current && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => library.moveToFolder(entry, null)}>{t.removeFromFolder}</DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onClick={() => void copyLink(path, t.linkCopied)}>
+        <IconLink /> {t.copyLink}
+      </DropdownMenuItem>
+    </>
+  )
+}
+
+/** "Add to playlist ▸": the user's playlists and a new one, for a list of tracks. */
+function AddToPlaylist({ tracks, label, exclude }: { tracks: () => Promise<BaseItemDto[]>; label: string; exclude?: string }) {
+  const t = useMessages(messages)
+  const navigate = useNavigate()
+  const playlists = usePlaylists()
+  const actions = usePlaylistActions()
+  const mine = (playlists.data ?? []).filter((playlist) => playlist.CanDelete !== false && playlist.Id !== exclude)
+  const add = async (playlist: BaseItemDto) => {
+    const ids = (await tracks()).map((track) => track.Id!).filter(Boolean)
+    if (ids.length) actions.add.mutate({ playlistId: playlist.Id!, ids, name: t.addedTo(playlist.Name ?? '') })
+  }
+  const create = async () => {
+    const ids = (await tracks()).map((track) => track.Id!).filter(Boolean)
+    const id = await actions.create.mutateAsync({ name: t.newPlaylistName((playlists.data?.length ?? 0) + 1), ids })
+    void navigate(`/listen/playlist/${id}`)
+  }
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>
+        <IconPlus /> {label}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="max-h-80 w-56 overflow-y-auto">
+        <DropdownMenuItem onClick={() => void create()}>
+          <IconPlus /> {t.newPlaylist}
+        </DropdownMenuItem>
+        {mine.length > 0 && <DropdownMenuSeparator />}
+        {mine.map((playlist) => (
+          <DropdownMenuItem key={playlist.Id} onClick={() => void add(playlist)}>
+            <span className="truncate">{playlist.Name}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  )
+}
+
+export function ArtistMenuItems({ artist }: { artist: BaseItemDto }) {
+  const t = useMessages(messages)
+  const favorite = useSetFavorite(artist.Id!)
+  const radio = useArtistRadio()
+  return (
+    <>
+      <DropdownMenuItem onClick={() => favorite.mutate(false)}>
+        <IconUserMinus /> {t.unfollow}
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => void radio(artist)}>
+        <IconRadio /> {t.radio}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <CommonItems entry={`artist:${artist.Id}`} path={`/listen/artist/${artist.Id}`} />
+    </>
+  )
+}
+
+export function AlbumMenuItems({ album }: { album: BaseItemDto }) {
+  const t = useMessages(messages)
+  const { api, session } = useAuthedSession()
+  const queryClient = useQueryClient()
+  const favorite = useSetFavorite(album.Id!)
+  const tracks = () => queryClient.fetchQuery(albumTracksOptions(api, session.userId, album.Id!))
+  return (
+    <>
+      <DropdownMenuItem onClick={() => favorite.mutate(false)}>
+        <IconCircleCheckFilled className="text-listen" /> {t.removeFromLibrary}
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        onClick={() =>
+          void tracks().then((list) => {
+            music.addToQueue(list)
+            toast.success(t.addedToQueue)
+          })
+        }
+      >
+        <IconPlaylistAdd /> {t.addToQueue}
+      </DropdownMenuItem>
+      <AddToPlaylist tracks={tracks} label={t.addToPlaylist} />
+      <DropdownMenuSeparator />
+      <CommonItems entry={`album:${album.Id}`} path={`/listen/album/${album.Id}`} />
+    </>
+  )
+}
+
+export function PlaylistMenuItems({ playlist, onCreatePlaylist, onCreateFolder }: { playlist: BaseItemDto; onCreatePlaylist: () => void; onCreateFolder: () => void }) {
+  const t = useMessages(messages)
+  const list = usePlaylistTracks(playlist.Id ?? undefined)
+  const tracks = async () => list.data ?? []
+  return (
+    <>
+      <DropdownMenuItem
+        onClick={() => {
+          music.addToQueue(list.data ?? [])
+          toast.success(t.addedToQueue)
+        }}
+      >
+        <IconPlaylistAdd /> {t.addToQueue}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onClick={onCreatePlaylist}>
+        <IconPlus /> {t.createPlaylist}
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={onCreateFolder}>
+        <IconFolderPlus /> {t.createFolder}
+      </DropdownMenuItem>
+      <AddToPlaylist tracks={tracks} label={t.addToOtherPlaylist} exclude={playlist.Id ?? undefined} />
+      <DropdownMenuSeparator />
+      <CommonItems entry={`playlist:${playlist.Id}`} path={`/listen/playlist/${playlist.Id}`} />
+    </>
+  )
+}
+
+export function OfficialMenuItems({ playlist }: { playlist: OfficialPlaylist }) {
+  const t = useMessages(messages)
+  const library = useListenLibrary()
+  return (
+    <>
+      <DropdownMenuItem onClick={() => library.toggle(`official:${playlist.slug}`)}>
+        <IconCircleCheckFilled className="text-listen" /> {t.removeFromLibrary}
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        onClick={() => {
+          music.addToQueue(playlist.tracks)
+          toast.success(t.addedToQueue)
+        }}
+      >
+        <IconPlaylistAdd /> {t.addToQueue}
+      </DropdownMenuItem>
+      <AddToPlaylist tracks={async () => playlist.tracks} label={t.addToPlaylist} />
+      <DropdownMenuSeparator />
+      <CommonItems entry={`official:${playlist.slug}`} path={`/listen/official/${playlist.slug}`} />
+    </>
+  )
+}
+
+export function PodcastMenuItems({ podcastId }: { podcastId: string }) {
+  const t = useMessages(messages)
+  const library = useListenLibrary()
+  return (
+    <>
+      <DropdownMenuItem onClick={() => library.toggle(`podcast:${podcastId}`)}>
+        <IconUserMinus /> {t.unfollow}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <CommonItems entry={`podcast:${podcastId}`} path={`/listen/podcast/${podcastId}`} />
+    </>
+  )
+}
+
+export function ProfileMenuItems({ userId }: { userId: string }) {
+  const t = useMessages(messages)
+  const follow = useSocialFollow()
+  return (
+    <>
+      <DropdownMenuItem onClick={() => follow.mutate({ userId, follow: false })}>
+        <IconUserMinus /> {t.unfollow}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <CommonItems entry={`user:${userId}`} path={`/listen/user/${userId}`} />
+    </>
+  )
+}
+
+export function FolderMenuItems({ folderId, onRename }: { folderId: string; onRename: () => void }) {
+  const t = useMessages(messages)
+  const library = useListenLibrary()
+  const pinned = library.isPinned(`folder:${folderId}`)
+  return (
+    <>
+      <DropdownMenuItem onClick={onRename}>
+        <IconPencil /> {t.rename}
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => library.togglePin(`folder:${folderId}`)}>
+        {pinned ? <IconPinnedOff /> : <IconPinned />} {pinned ? t.unpin : t.pin}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem variant="destructive" onClick={() => library.deleteFolder(folderId)}>
+        <IconTrash /> {t.deleteFolder}
+      </DropdownMenuItem>
+    </>
+  )
+}
+
+/** The library's own "+" and empty-space menu. */
+/** Liked Songs and Your Episodes: pin and folder, like everything else in the library. */
+export function FixedMenuItems({ entry, path }: { entry: 'liked' | 'episodes'; path: string }) {
+  return <CommonItems entry={entry} path={path} />
+}
+
+export function CreateMenuItems({ onCreatePlaylist, onCreateFolder }: { onCreatePlaylist: () => void; onCreateFolder: () => void }) {
+  const t = useMessages(messages)
+  return (
+    <>
+      <DropdownMenuItem onClick={onCreatePlaylist}>
+        <IconPlus /> {t.createPlaylist}
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={onCreateFolder}>
+        <IconFolderPlus /> {t.createFolder}
+      </DropdownMenuItem>
+    </>
+  )
+}
+

@@ -1,0 +1,294 @@
+import { IconMicrophone, IconMicrophone2, IconPlayerPauseFilled, IconPlayerPlayFilled } from '@tabler/icons-react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { Link } from '@/components/link'
+import { FadeImage } from '@/components/media/fade-image'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useAuthedSession } from '@/features/auth/session'
+import { useItem, useLibraryArtists } from '@/features/items/queries'
+import { useCategories } from '@/features/library/categories'
+import { markAppReady } from '@/lib/boot'
+import { defineMessages, useMessages } from '@/lib/i18n'
+import { portraitImageUrl } from '@/lib/images'
+import { itemHref } from '@/lib/item-links'
+import { cn } from '@/lib/utils'
+import { CardRow, MusicRow, usePlayCollection } from './music-card'
+import { FollowedPodcastsRow } from './podcast-pages'
+import { useOfficialPlaylists } from './official'
+import { playCircle } from './play-circle'
+import { music, START, useMusic } from './player/music-player'
+import { LikedCover, OfficialCard, OfficialCover, PlaylistCard, PlaylistCover } from './playlist-cards'
+import { useLikedSongs, usePlaylists, usePlaylistTracks } from './playlists'
+import { usePodcast } from './podcasts'
+import { useListeningStats } from './profiles'
+import { RadioCard } from './radio-card'
+import { useRecentSources } from './recent'
+import { useNewestAlbums, useRecentAlbums } from './queries'
+
+const messages = defineMessages({
+  de: {
+    morning: 'Guten Morgen',
+    day: 'Guten Tag',
+    evening: 'Guten Abend',
+    night: 'Gute Nacht',
+    liked: 'Lieblingssongs',
+    play: (name: string) => `${name} abspielen`,
+    pause: (name: string) => `${name} pausieren`,
+    recent: 'Zuletzt gehört',
+    radios: 'Radio-Sender für dich',
+    forYou: 'Für dich',
+    yourPlaylists: 'Deine Playlists',
+    newAlbums: 'Neue Alben',
+    artists: 'Deine Künstler',
+    audiobooks: 'Hörbücher',
+  },
+  en: {
+    morning: 'Good morning',
+    day: 'Good afternoon',
+    evening: 'Good evening',
+    night: 'Good night',
+    liked: 'Liked Songs',
+    play: (name: string) => `Play ${name}`,
+    pause: (name: string) => `Pause ${name}`,
+    recent: 'Recently played',
+    radios: 'Radio stations for you',
+    forYou: 'Made for you',
+    yourPlaylists: 'Your playlists',
+    newAlbums: 'New albums',
+    artists: 'Your artists',
+    audiobooks: 'Audiobooks',
+  },
+})
+
+/** The part of the day the greeting is for. */
+function dayPart(hour: number): 'morning' | 'day' | 'evening' | 'night' {
+  return hour >= 5 && hour < 11 ? 'morning' : hour >= 11 && hour < 17 ? 'day' : hour >= 17 && hour < 22 ? 'evening' : 'night'
+}
+
+/** "Good morning" to "Good night" by the clock, switching over while the page stays open. */
+function useGreeting(t: (typeof messages)['de']) {
+  const [part, setPart] = useState(() => dayPart(new Date().getHours()))
+  useEffect(() => {
+    const timer = window.setInterval(() => setPart(dayPart(new Date().getHours())), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  return t[part]
+}
+
+/** How many tiles the greeting grid holds. */
+const QUICK_TILES = 8
+
+/** Listen's start page: a greeting with quick access to what was played last, then rows of music and audiobooks. */
+export function ListenHome() {
+  const t = useMessages(messages)
+  const { categories } = useCategories('listen')
+  const musicViews = categories.find((category) => category.id === 'music')?.views ?? []
+  const bookViews = categories.find((category) => category.id === 'audiobooks')?.views ?? []
+  const recent = useRecentAlbums()
+  const newest = useNewestAlbums(musicViews)
+  const artists = useLibraryArtists(musicViews)
+  const audiobooks = useNewestAlbums(bookViews)
+  const official = useOfficialPlaylists()
+  const playlists = usePlaylists()
+  const greeting = useGreeting(t)
+  // Radios around the artists listened to most lately (or followed).
+  const stats = useListeningStats()
+  const followedArtists = artists.data ?? []
+  const radioArtists = (stats.data?.topArtists.length ? stats.data.topArtists : followedArtists).slice(0, 8)
+  // The grid: what was played from most recently (any kind), topped up with recently played albums.
+  const sources = useRecentSources()
+  const quick = [...new Set([...sources, ...(recent.data ?? []).map((album) => `album:${album.Id}`)])].slice(0, QUICK_TILES)
+
+  useEffect(() => {
+    if (!recent.isLoading) markAppReady()
+  }, [recent.isLoading])
+
+  return (
+    <div className="relative isolate space-y-10 pb-12 pt-20">
+      <MoodGradient />
+      <section className="space-y-4 px-4 sm:px-8">
+        <h1 className="text-3xl font-bold tracking-tight">{greeting}</h1>
+        {/* Like Spotify's top grid: the last few things played, one click away. */}
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {recent.isLoading
+            ? Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-14 rounded-md" />)
+            : quick.map((source) => <QuickTile key={source} source={source} />)}
+        </div>
+      </section>
+      {/* The platform's own playlists, then the user's. */}
+      {(official.isLoading || official.playlists.length > 0) && (
+        <CardRow title={t.forYou} loading={official.isLoading}>
+          {official.playlists.slice(0, 12).map((playlist) => (
+            <OfficialCard key={playlist.slug} playlist={playlist} />
+          ))}
+        </CardRow>
+      )}
+      <MusicRow title={t.recent} items={recent.data} loading={recent.isLoading} />
+      {!!radioArtists.length && (
+        <CardRow title={t.radios}>
+          {radioArtists.map((artist) => (
+            <RadioCard key={artist.Id} artist={artist} />
+          ))}
+        </CardRow>
+      )}
+      {!!playlists.data?.length && (
+        <CardRow title={t.yourPlaylists}>
+          {playlists.data.map((playlist) => (
+            <PlaylistCard key={playlist.Id} playlist={playlist} />
+          ))}
+        </CardRow>
+      )}
+      <MusicRow title={t.newAlbums} items={newest.data} loading={newest.isLoading && musicViews.length > 0} />
+      <MusicRow title={t.artists} items={artists.data} loading={artists.isLoading && musicViews.length > 0} />
+      <FollowedPodcastsRow />
+      <MusicRow title={t.audiobooks} items={audiobooks.data} loading={audiobooks.isLoading && bookViews.length > 0} />
+    </div>
+  )
+}
+
+/** One tile of the greeting grid, for whatever kind of collection it stands for (`source` as the player keys it). */
+function QuickTile({ source }: { source: string }) {
+  const [kind, id = ''] = source.split(/:(.*)/s)
+  if (kind === 'album' || kind === 'artist') return <ItemTile id={id} source={source} />
+  if (kind === 'playlist') return <PlaylistTile id={id} source={source} />
+  if (kind === 'official') return <OfficialTile slug={id} source={source} />
+  if (kind === 'liked') return <LikedTile source={source} />
+  if (kind === 'podcast') return <PodcastTile id={id} source={source} />
+  return null
+}
+
+function ItemTile({ id, source }: { id: string; source: string }) {
+  const { api } = useAuthedSession()
+  const item = useItem(id).data
+  const play = usePlayCollection()
+  if (!item) return null
+  const cover = portraitImageUrl(api, item, { fillHeight: 120 })
+  return (
+    <TileShell
+      href={itemHref(item)}
+      title={item.Name ?? ''}
+      source={source}
+      round={item.Type === 'MusicArtist'}
+      onPlay={() => void play(item)}
+      cover={
+        cover ? (
+          <FadeImage src={cover} alt="" className="size-full object-cover" />
+        ) : (
+          <span className="grid size-full place-items-center text-muted-foreground">
+            <IconMicrophone2 className="size-1/2" stroke={1.5} />
+          </span>
+        )
+      }
+    />
+  )
+}
+
+function PlaylistTile({ id, source }: { id: string; source: string }) {
+  const playlist = useItem(id).data
+  const tracks = usePlaylistTracks(id)
+  if (!playlist) return null
+  return (
+    <TileShell
+      href={`/listen/playlist/${id}`}
+      title={playlist.Name ?? ''}
+      source={source}
+      onPlay={() => music.play(tracks.data ?? [], START, { source })}
+      cover={<PlaylistCover playlist={playlist} tracks={tracks.data ?? []} />}
+    />
+  )
+}
+
+function OfficialTile({ slug, source }: { slug: string; source: string }) {
+  const playlist = useOfficialPlaylists().playlists.find((entry) => entry.slug === slug)
+  if (!playlist) return null
+  return (
+    <TileShell
+      href={`/listen/official/${slug}`}
+      title={playlist.title}
+      source={source}
+      onPlay={() => music.play(playlist.tracks, START, { source })}
+      cover={<OfficialCover playlist={playlist} />}
+    />
+  )
+}
+
+function LikedTile({ source }: { source: string }) {
+  const t = useMessages(messages)
+  const liked = useLikedSongs()
+  return <TileShell href="/listen/liked" title={t.liked} source={source} onPlay={() => music.play(liked.data ?? [], START, { source })} cover={<LikedCover />} />
+}
+
+function PodcastTile({ id, source }: { id: string; source: string }) {
+  const podcast = usePodcast(id).data
+  if (!podcast) return null
+  const latest = podcast.episodes[0]
+  return (
+    <TileShell
+      href={`/listen/podcast/${id}`}
+      title={podcast.podcast.name}
+      source={source}
+      onPlay={() => latest && music.play([latest.item], START, { source })}
+      cover={
+        podcast.podcast.image ? (
+          <FadeImage src={podcast.podcast.image} alt="" className="size-full object-cover" />
+        ) : (
+          <span className="grid size-full place-items-center text-muted-foreground">
+            <IconMicrophone className="size-1/2" stroke={1.5} />
+          </span>
+        )
+      }
+    />
+  )
+}
+
+/**
+ * The tile itself, as in Spotify's greeting grid: cover, name, and a play button that shows on hover (and stays while
+ * this collection plays); the name turns green while it plays.
+ */
+function TileShell({ href, title, cover, source, round, onPlay }: { href: string; title: string; cover: ReactNode; source: string; round?: boolean; onPlay: () => void }) {
+  const t = useMessages(messages)
+  const state = useMusic()
+  const here = state.source === source && state.index >= 0
+  const playing = here && state.playing
+  return (
+    <div className="group relative flex h-14 items-center gap-3 overflow-hidden rounded-md bg-foreground/[0.08] pr-2 transition-colors hover:bg-foreground/[0.16]">
+      <Link to={href} className="flex h-full min-w-0 flex-1 items-center gap-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+        <span className={cn('aspect-square h-full shrink-0 overflow-hidden bg-muted', round && 'scale-[0.8] rounded-full')}>{cover}</span>
+        <span className={cn('truncate text-sm font-semibold', here && 'text-listen')}>{title}</span>
+      </Link>
+      <button
+        type="button"
+        aria-label={playing ? t.pause(title) : t.play(title)}
+        onClick={() => (here ? music.toggle() : onPlay())}
+        className={cn(
+          playCircle.listen,
+          'size-8 shrink-0 shadow-lg shadow-black/40 transition-opacity',
+          playing ? 'opacity-100' : 'opacity-0 focus-visible:opacity-100 group-hover:opacity-100',
+        )}
+      >
+        {playing ? <IconPlayerPauseFilled className="size-4" /> : <IconPlayerPlayFilled className="size-4 translate-x-px" />}
+      </button>
+    </div>
+  )
+}
+
+/** The colours the start page's glow takes turns with: one for every six hours, the same for everyone at a time. */
+const MOOD_HUES = [295, 250, 200, 160, 25, 340, 80]
+const MOOD_PERIOD_MS = 6 * 60 * 60_000
+
+/**
+ * A soft glow of colour at the top of the start page that fades into the panel, as in Spotify; it changes every six
+ * hours, so the page feels a little different at each part of the day.
+ */
+function MoodGradient() {
+  const [hue] = useState(() => MOOD_HUES[Math.floor(Date.now() / MOOD_PERIOD_MS) % MOOD_HUES.length]!)
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[26rem] [--mood:oklch(0.82_0.1_var(--hue))] dark:[--mood:oklch(0.36_0.11_var(--hue))]"
+      style={{
+        ['--hue' as string]: hue,
+        background: 'linear-gradient(to bottom, color-mix(in oklch, var(--mood) 60%, var(--background)), var(--background))',
+      }}
+    />
+  )
+}
