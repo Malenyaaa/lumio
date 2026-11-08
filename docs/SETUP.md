@@ -55,7 +55,8 @@ In Jellyfin (Dashboard → Networking), while you can still reach it directly:
 
 How the addresses travel: your reverse proxy tells Lumio who the visitor is (`X-Forwarded-For`, `X-Forwarded-Proto`);
 Lumio passes that on to Jellyfin unchanged. So Lumio must be reachable **only through your reverse proxy** (don't
-publish its port to the internet), or anyone could claim any address.
+publish its port to the internet), or anyone could claim any address. Lumio believes these headers only from a
+proxy in a private network (Docker networks, LAN, `127.0.0.1`); from a public address it drops them.
 
 ### 3. Add Lumio and switch over
 
@@ -204,6 +205,9 @@ must allow it (CORS).
 - **Everyone shows up with the same IP in Jellyfin** (Lumio's): the range Lumio reaches Jellyfin from isn't in
   Jellyfin's *Known proxies*, or Jellyfin wasn't restarted since (see step 2).
 - **Remote control or live updates don't work**: WebSockets aren't passed by the reverse proxy.
+- **Jellyfin sees `http://` or the proxy's address although Known proxies are set**: the reverse proxy reaches Lumio
+  from a public address (another host over the internet, a tunnel), so Lumio drops its `X-Forwarded-*` headers. Let it
+  reach Lumio over a private network (Docker network, LAN or VPN).
 - **"Mismatching redirect URI" with `http://` in it**: Jellyfin doesn't trust Lumio's forwarded headers yet. Add
   the Lumio container (or the Docker network's range) to *Known proxies* and restart Jellyfin, or set the provider's
   *Scheme override* to `https` in the SSO plugin.
