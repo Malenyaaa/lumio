@@ -20,6 +20,7 @@ import { useArtistPhoto } from './artist-photo'
 import { ContextMenu } from '@base-ui/react/context-menu'
 import { DropdownMenuContent } from '@/components/ui/dropdown-menu'
 import { AlbumMenuItems, ArtistMenuItems } from './library-menu'
+import { TrackArtists } from './track-artists'
 
 const messages = defineMessages({
   de: { artist: 'Künstler', play: (name: string) => `${name} abspielen`, pause: (name: string) => `${name} pausieren` },
@@ -131,7 +132,7 @@ export function MusicCard({ item, className, subtitle }: { item: BaseItemDto; cl
       href={itemHref(item)}
       menu={isArtist ? <ArtistMenuItems artist={item} /> : item.Type === 'MusicAlbum' ? <AlbumMenuItems album={item} /> : undefined}
       title={item.Name ?? ''}
-      subtitle={subtitle ?? (isArtist ? t.artist : artistsOf(item).map((artist) => artist.name).join(', ') || item.ProductionYear)}
+      subtitle={subtitle ?? (isArtist ? t.artist : item.Type === 'Audio' ? <TrackArtists track={item} linked={false} /> : artistsOf(item).map((artist) => artist.name).join(', ') || item.ProductionYear)}
       round={isArtist}
       here={here}
       playing={playing}

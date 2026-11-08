@@ -30,6 +30,7 @@ import { ShuffleToggle } from './shuffle-toggle'
 import { endTrackDrag, startTrackDrag } from './track-drag'
 import { LikeToggle, TrackContextMenu, TrackMenu } from './track-menu'
 import { playCircle } from './play-circle'
+import { TrackArtists } from './track-artists'
 
 const messages = defineMessages({
   de: {
@@ -223,7 +224,7 @@ export function AlbumView({ item }: { item: BaseItemDto }) {
             {discs.length > 1 && <p className="px-4 pb-1 pt-3 text-sm font-semibold text-muted-foreground">{t.disc(disc)}</p>}
             {list.map((track, index) =>
               (track.ParentIndexNumber ?? 1) === disc ? (
-                <TrackTableRow key={track.Id} track={track} number={track.IndexNumber ?? index + 1} albumArtists={artists.map((artist) => artist.name)} onPlay={() => music.play(list, index, { source })} />
+                <TrackTableRow key={track.Id} track={track} number={track.IndexNumber ?? index + 1} onPlay={() => music.play(list, index, { source })} />
               ) : null,
             )}
           </div>
@@ -273,7 +274,6 @@ function RoundAction({ label, active, onClick, children }: { label: string; acti
 export function TrackTableRow({
   track,
   number,
-  albumArtists,
   onPlay,
   cover,
   extra,
@@ -281,7 +281,6 @@ export function TrackTableRow({
 }: {
   track: BaseItemDto
   number: number
-  albumArtists?: Array<string | undefined>
   onPlay: () => void
   /** Show the track's cover next to its title (lists spanning several albums). */
   cover?: boolean
@@ -293,7 +292,6 @@ export function TrackTableRow({
   const { api } = useAuthedSession()
   const state = useMusic()
   const isCurrent = currentTrack(state)?.Id === track.Id
-  const others = artistsOf(track).filter((artist) => !albumArtists?.includes(artist.name))
   const image = cover ? portraitImageUrl(api, track, { fillHeight: 80 }) : undefined
   return (
     <TrackContextMenu track={track} onRemove={onRemove}>
@@ -337,18 +335,8 @@ export function TrackTableRow({
           <span className="min-w-0">
             <span className={cn('block truncate', isCurrent ? 'text-listen' : 'text-foreground')}>{track.Name}</span>
             <span className="block truncate text-sm text-muted-foreground">
-              {(others.length ? others : artistsOf(track)).map((artist, index) => (
-                <Fragment key={artist.id ?? artist.name}>
-                  {index > 0 && ', '}
-                  {artist.id ? (
-                    <Link to={titlePath('MusicArtist', artist.id)} onClick={(event) => event.stopPropagation()} className="hover:text-foreground hover:underline">
-                      {artist.name}
-                    </Link>
-                  ) : (
-                    artist.name
-                  )}
-                </Fragment>
-              ))}
+              {/* All of them, with the featured artists (as Spotify lists them on an album too). */}
+              <TrackArtists track={track} stopPropagation />
             </span>
           </span>
         </span>

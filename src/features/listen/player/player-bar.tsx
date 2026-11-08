@@ -44,6 +44,7 @@ import { TrackContextMenu } from '../track-menu'
 import { usePlayerControls, usePlayerTime } from './player-controls'
 import { lengthLabel, toggleRemainingTime, useRemainingTime } from '@/lib/remaining-time'
 import { useTrackArtists } from '../credits'
+import { TrackArtists } from '../track-artists'
 
 /** Listen's player bar along the bottom: the track, the transport with its progress, and queue, lyrics and volume. */
 export function PlayerBar() {
@@ -151,8 +152,8 @@ function QualityLine({ track }: { track: BaseItemDto }) {
 
 /** "Kygo, Tom Odell", each a link to the artist's page. */
 export function ArtistLine({ item, className }: { item: BaseItemDto; className?: string }) {
-  // With the featured artists MusicBrainz names that the file's tags leave out.
-  const credited = useTrackArtists(item.Type === 'Audio' ? item : undefined)
+  // With the featured artists MusicBrainz names that the file's tags leave out (looked up now for what plays).
+  const credited = useTrackArtists(item.Type === 'Audio' ? item : undefined, true)
   const artists = item.Type === 'Audio' ? credited : artistsOf(item)
   return (
     <p className={cn('truncate text-xs text-muted-foreground', className)}>
@@ -435,7 +436,9 @@ export function MiniPlayer() {
       </button>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{track.Name}</p>
-        <p className="truncate text-xs text-muted-foreground">{artistsOf(track).map((artist) => artist.name).join(', ')}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          <TrackArtists track={track} linked={false} />
+        </p>
       </div>
       <button type="button" aria-label={state.playing ? t.pause : t.play} onClick={music.toggle} className={cn('size-8 shrink-0', playCircle.light)}>
         {state.playing ? <IconPlayerPauseFilled className="size-4" /> : <IconPlayerPlayFilled className="size-4 translate-x-px" />}

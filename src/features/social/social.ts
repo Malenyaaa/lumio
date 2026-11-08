@@ -79,6 +79,16 @@ export async function lumioGet(path: string): Promise<Response | null> {
   return fetch(`${connection.base}${path}`, { headers: { Authorization: `MediaBrowser Token="${connection.token}"` } })
 }
 
+/** A request with a JSON body (or none) to the Lumio server outside React; null when there is no connection yet. */
+export async function lumioSend(method: 'POST' | 'DELETE', path: string, body?: unknown): Promise<Response | null> {
+  if (!connection) return null
+  return fetch(`${connection.base}${path}`, {
+    method,
+    headers: { Authorization: `MediaBrowser Token="${connection.token}"`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+}
+
 /**
  * Asks an outside service through the Lumio server, which caches the answers for everyone (see the server's relay);
  * straight from the service while there is no connection, or when the server can't help.

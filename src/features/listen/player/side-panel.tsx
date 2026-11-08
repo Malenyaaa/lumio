@@ -8,7 +8,7 @@ import {
   IconSettings,
   IconX,
 } from '@tabler/icons-react'
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type PointerEvent, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type PointerEvent, type ReactNode } from 'react'
 import { Link } from '@/components/link'
 import { FadeImage } from '@/components/media/fade-image'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -17,7 +17,6 @@ import { useDominantColor } from '@/lib/dominant-color'
 import { externalOf } from '@/lib/external-items'
 import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
 import { portraitImageUrl } from '@/lib/images'
-import { artistsOf, titlePath } from '@/lib/item-links'
 import { cn } from '@/lib/utils'
 import { useLyrics } from './lyrics'
 import { playerBarMessages } from './messages'
@@ -31,6 +30,7 @@ import { TrackContextMenu, TrackMenu } from '../track-menu'
 import { NowPlaying } from './now-playing'
 import { SourceLink } from './queue-source'
 import { QueueDrop } from './player-bar'
+import { TrackArtists } from '../track-artists'
 
 const messages = defineMessages({
   de: {
@@ -594,7 +594,9 @@ function RemoteQueue({ remote }: { remote: NonNullable<ReturnType<typeof usePlay
         </span>
         <span className="min-w-0">
           <span className={cn('block truncate text-sm', isCurrent && 'text-listen')}>{item.Name}</span>
-          <span className="block truncate text-xs text-muted-foreground">{artistsOf(item).map((artist) => artist.name).join(', ')}</span>
+          <span className="block truncate text-xs text-muted-foreground">
+            <TrackArtists track={item} linked={false} />
+          </span>
         </span>
       </button>
     )
@@ -775,18 +777,7 @@ function QueueRow({ uid, item, index, kind, current }: { uid: string; item: Base
             {item.Name}
           </button>
           <span className="block truncate text-xs text-muted-foreground">
-            {artistsOf(item).map((artist, position) => (
-              <Fragment key={artist.id ?? artist.name}>
-                {position > 0 && ', '}
-                {artist.id ? (
-                  <Link to={titlePath('MusicArtist', artist.id)} className="hover:text-foreground hover:underline">
-                    {artist.name}
-                  </Link>
-                ) : (
-                  artist.name
-                )}
-              </Fragment>
-            ))}
+            <TrackArtists track={item} />
           </span>
         </span>
         <span className="opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-data-popup-open:opacity-100">

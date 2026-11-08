@@ -1,0 +1,41 @@
+import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
+import { Fragment } from 'react'
+import { Link } from '@/components/link'
+import { titlePath } from '@/lib/item-links'
+import { useTrackArtists } from './credits'
+
+/**
+ * A track's artists, each linking to their page where the library has them: the file's artists plus the featured ones
+ * MusicBrainz names (see useTrackArtists). `exclude` leaves out names already shown (an album's own artists).
+ */
+export function TrackArtists({
+  track,
+  exclude,
+  lookup,
+  linked = true,
+  stopPropagation,
+}: {
+  track: BaseItemDto
+  exclude?: string[]
+  /** Looks the credits up now when the server hasn't yet (the track that plays). */
+  lookup?: boolean
+  linked?: boolean
+  /** For rows that play on click: following a link shouldn't also play. */
+  stopPropagation?: boolean
+}) {
+  const all = useTrackArtists(track, lookup)
+  const others = exclude ? all.filter((artist) => !exclude.includes(artist.name)) : all
+  const artists = others.length ? others : all
+  return artists.map((artist, index) => (
+    <Fragment key={artist.id ?? artist.name}>
+      {index > 0 && ', '}
+      {linked && artist.id ? (
+        <Link to={titlePath('MusicArtist', artist.id)} onClick={stopPropagation ? (event) => event.stopPropagation() : undefined} className="hover:text-foreground hover:underline">
+          {artist.name}
+        </Link>
+      ) : (
+        artist.name
+      )}
+    </Fragment>
+  ))
+}

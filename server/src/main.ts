@@ -3,6 +3,7 @@ import { createReadStream } from 'node:fs'
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { extname, join, normalize, resolve, sep } from 'node:path'
+import { lookupCredits, sameName, type Failure, type JobState, type TrackCredits, type TrackMeta } from './credits.ts'
 import { DEFAULT_PRIVACY, Store, type Activity, type Person, type Privacy } from './store.ts'
 
 /**
@@ -116,7 +117,7 @@ const store = new Store(DATA_DIR)
 
 // ---- authentication: the user's own Jellyfin token ----
 
-const tokens = new Map<string, { person: Person; until: number }>()
+const tokens = new Map<string, { person: Person; admin: boolean; until: number }>()
 
 async function authenticate(token: string | null): Promise<Person | null> {
   if (!token) return null
@@ -125,14 +126,19 @@ async function authenticate(token: string | null): Promise<Person | null> {
   try {
     const response = await fetch(`${JELLYFIN_URL}/Users/Me`, { headers: { Authorization: `MediaBrowser Token="${token}"` } })
     if (!response.ok) return null
-    const user = (await response.json()) as { Id: string; Name: string; PrimaryImageTag?: string | null }
+    const user = (await response.json()) as { Id: string; Name: string; PrimaryImageTag?: string | null; Policy?: { IsAdministrator?: boolean } }
     const person = { id: user.Id, name: user.Name, imageTag: user.PrimaryImageTag ?? null }
     store.upsertPerson(person)
-    tokens.set(token, { person, until: Date.now() + TOKEN_TTL_MS })
+    tokens.set(token, { person, admin: !!user.Policy?.IsAdministrator, until: Date.now() + TOKEN_TTL_MS })
     return person
   } catch {
     return null
   }
+}
+
+/** Whether the token belongs to a Jellyfin administrator (checked by authenticate). */
+function isAdmin(token: string | null) {
+  return !!token && !!tokens.get(token)?.admin
 }
 
 function tokenOf(request: IncomingMessage, url: URL) {
@@ -256,17 +262,47 @@ async function serveApp(request: IncomingMessage, response: ServerResponse, path
  * GET /api/image?url=…: a podcast cover, fetched once and then kept on disk. Browsers get it from the app's own origin
  * (with CORS), so it is cached like the app's other pictures, works offline and can be drawn (drag images, colours).
  */
-async function serveImage(response: ServerResponse, source: string | null) {
+class ImageError extends Error {
+  readonly status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
+
+/** A picture from an allowed host, kept on disk (fetched the first time); throws an ImageError otherwise. */
+async function keptImage(source: string | null): Promise<{ body: Buffer; type: string }> {
   let target: URL
   try {
     target = new URL(source ?? '')
   } catch {
-    return send(response, 400, { error: 'Bad url' })
+    throw new ImageError(400, 'Bad url')
   }
-  if (target.protocol !== 'https:' || !IMAGE_HOSTS.test(target.hostname)) return send(response, 403, { error: 'Host not allowed' })
-  const name = createHash('sha256').update(target.href).digest('hex')
-  const file = join(IMAGE_DIR, name)
-  const reply = (body: Buffer, type: string) => {
+  if (target.protocol !== 'https:' || !IMAGE_HOSTS.test(target.hostname)) throw new ImageError(403, 'Host not allowed')
+  const file = join(IMAGE_DIR, createHash('sha256').update(target.href).digest('hex'))
+  try {
+    const [body, type] = await Promise.all([readFile(file), readFile(`${file}.type`, 'utf8')])
+    return { body, type }
+  } catch {
+    // Not kept yet.
+  }
+  try {
+    const upstream = await fetch(target, { signal: AbortSignal.timeout(15_000) })
+    const type = upstream.headers.get('content-type') ?? ''
+    if (!upstream.ok || !type.startsWith('image/')) throw new ImageError(502, 'Image unavailable')
+    const body = Buffer.from(await upstream.arrayBuffer())
+    if (body.length > IMAGE_LIMIT) throw new ImageError(502, 'Image too large')
+    await mkdir(IMAGE_DIR, { recursive: true })
+    await Promise.all([writeFile(file, body), writeFile(`${file}.type`, type)])
+    return { body, type }
+  } catch (error) {
+    throw error instanceof ImageError ? error : new ImageError(502, 'Image unavailable')
+  }
+}
+
+async function serveImage(response: ServerResponse, source: string | null) {
+  try {
+    const { body, type } = await keptImage(source)
     response.writeHead(200, {
       'Content-Type': type,
       'Content-Length': body.length,
@@ -275,24 +311,8 @@ async function serveImage(response: ServerResponse, source: string | null) {
       'Access-Control-Allow-Origin': '*',
     })
     response.end(body)
-  }
-  try {
-    const [body, type] = await Promise.all([readFile(file), readFile(`${file}.type`, 'utf8')])
-    return reply(body, type)
-  } catch {
-    // Not kept yet.
-  }
-  try {
-    const upstream = await fetch(target, { signal: AbortSignal.timeout(15_000) })
-    const type = upstream.headers.get('content-type') ?? ''
-    if (!upstream.ok || !type.startsWith('image/')) return send(response, 502, { error: 'Image unavailable' })
-    const body = Buffer.from(await upstream.arrayBuffer())
-    if (body.length > IMAGE_LIMIT) return send(response, 502, { error: 'Image too large' })
-    await mkdir(IMAGE_DIR, { recursive: true })
-    await Promise.all([writeFile(file, body), writeFile(`${file}.type`, type)])
-    reply(body, type)
-  } catch {
-    send(response, 502, { error: 'Image unavailable' })
+  } catch (error) {
+    send(response, error instanceof ImageError ? error.status : 502, { error: error instanceof Error ? error.message : 'Image unavailable' })
   }
 }
 
@@ -312,12 +332,20 @@ interface RelayEntry {
   body: string
 }
 
-/** GET /api/relay/<service>/<path>?…: a service's answer, from the cache while it is fresh. */
-async function serveRelay(response: ServerResponse, name: string, path: string, params: URLSearchParams) {
+class RelayError extends Error {
+  readonly status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
+
+/** A service's answer, from the cache while it is fresh (and when the service fails); throws a RelayError otherwise. */
+async function relayGet(name: string, path: string, params: URLSearchParams): Promise<RelayEntry> {
   const service = RELAY_SERVICES[name]
-  if (!service || !service.paths.test(path)) return send(response, 404, { error: 'Unknown relay path' })
+  if (!service || !service.paths.test(path)) throw new RelayError(404, 'Unknown relay path')
   const key = service.key ? service.key.value || params.get(service.key.param) : undefined
-  if (service.key && !key) return send(response, 503, { error: `No ${name} key` })
+  if (service.key && !key) throw new RelayError(503, `No ${name} key`)
   const query = new URLSearchParams([...params].filter(([param]) => param !== service.key?.param).sort(([a], [b]) => a.localeCompare(b)))
   const file = join(RELAY_DIR, name, createHash('sha256').update(`${path}?${query}`).digest('hex'))
   let cached: RelayEntry | null = null
@@ -326,27 +354,34 @@ async function serveRelay(response: ServerResponse, name: string, path: string, 
   } catch {
     // Not asked before.
   }
-  const reply = (entry: RelayEntry) => {
-    response.writeHead(entry.status, { 'Content-Type': entry.type, 'Cache-Control': 'private, max-age=3600' })
-    response.end(entry.body)
-  }
   const fresh = (entry: RelayEntry) => Date.now() - entry.at < (typeof service.ttl === 'number' ? service.ttl : service.ttl(entry.status, path, params))
-  if (cached && fresh(cached)) return reply(cached)
+  if (cached && fresh(cached)) return cached
   try {
     await relaySlot(name, service.spacing)
     if (service.key && key) query.set(service.key.param, key)
     const upstream = await fetch(`${service.base}${path}?${query}`, { headers: service.headers, signal: AbortSignal.timeout(15_000) })
     const entry: RelayEntry = { at: Date.now(), status: upstream.status, type: upstream.headers.get('content-type') ?? 'application/json', body: await upstream.text() }
     if (!(service.keep ?? ((status) => status < 400))(entry.status, entry.body)) {
-      if (cached) return reply(cached)
-      return send(response, 502, { error: `${name} ${upstream.status}` })
+      if (cached) return cached
+      throw new RelayError(502, `${name} ${upstream.status}`)
     }
     await mkdir(join(RELAY_DIR, name), { recursive: true })
     await writeFile(file, JSON.stringify(entry))
-    reply(entry)
-  } catch {
-    if (cached) return reply(cached)
-    send(response, 502, { error: `${name} unavailable` })
+    return entry
+  } catch (error) {
+    if (cached) return cached
+    throw error instanceof RelayError ? error : new RelayError(502, `${name} unavailable`)
+  }
+}
+
+/** GET /api/relay/<service>/<path>?…: a service's answer, from the cache while it is fresh. */
+async function serveRelay(response: ServerResponse, name: string, path: string, params: URLSearchParams) {
+  try {
+    const entry = await relayGet(name, path, params)
+    response.writeHead(entry.status, { 'Content-Type': entry.type, 'Cache-Control': 'private, max-age=3600' })
+    response.end(entry.body)
+  } catch (error) {
+    send(response, error instanceof RelayError ? error.status : 502, { error: error instanceof Error ? error.message : 'Relay failed' })
   }
 }
 
@@ -408,7 +443,7 @@ interface ArtistProfile {
  * which is read and kept: asked again after 90 days (a miss after 14), and kept when the site fails. Only the artist's
  * page by name, nothing else.
  */
-async function serveEpidemicProfile(response: ServerResponse, name: string | null) {
+async function epidemicProfile(name: string | null): Promise<ArtistProfile | null> {
   const slug = (name ?? '')
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -416,7 +451,7 @@ async function serveEpidemicProfile(response: ServerResponse, name: string | nul
     .replace(/&/g, 'and')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-  if (!slug || slug.length > 80) return send(response, 400, { error: 'Bad name' })
+  if (!slug || slug.length > 80) throw new RelayError(400, 'Bad name')
   const file = join(RELAY_DIR, 'epidemic', `${slug}.json`)
   let cached: { at: number; profile: ArtistProfile | null } | null = null
   try {
@@ -424,9 +459,8 @@ async function serveEpidemicProfile(response: ServerResponse, name: string | nul
   } catch {
     // Not asked before.
   }
-  const answer = (profile: ArtistProfile | null) => send(response, profile ? 200 : 404, profile ?? { error: 'Not on Epidemic Sound' })
   // Profiles change rarely: asked again after 90 days (a miss after 14); kept for good meanwhile.
-  if (cached && Date.now() - cached.at < (cached.profile ? 90 : 14) * 24 * HOUR) return answer(cached.profile)
+  if (cached && Date.now() - cached.at < (cached.profile ? 90 : 14) * 24 * HOUR) return cached.profile
   try {
     await relaySlot('epidemic', 600)
     const page = await fetch(`https://www.epidemicsound.com/artists/${slug}/`, {
@@ -450,17 +484,185 @@ async function serveEpidemicProfile(response: ServerResponse, name: string | nul
       if (profile && image) profile.image = image
     } else if (page.status !== 404) {
       // The site is down or blocks us: what was found before beats nothing.
-      return cached ? answer(cached.profile) : send(response, 502, { error: 'Epidemic Sound unavailable' })
+      if (cached) return cached.profile
+      throw new RelayError(502, 'Epidemic Sound unavailable')
     }
     // A page that no longer carries a profile (the site changed): keep the one found before.
-    if (!profile && cached?.profile && page.ok) return answer(cached.profile)
+    if (!profile && cached?.profile && page.ok) return cached.profile
     await mkdir(join(RELAY_DIR, 'epidemic'), { recursive: true })
     await writeFile(file, JSON.stringify({ at: Date.now(), profile }))
-    send(response, profile ? 200 : 404, profile ?? { error: 'Not on Epidemic Sound' })
-  } catch {
-    if (cached) return answer(cached.profile)
-    send(response, 502, { error: 'Epidemic Sound unavailable' })
+    return profile
+  } catch (error) {
+    if (cached) return cached.profile
+    throw error instanceof RelayError ? error : new RelayError(502, 'Epidemic Sound unavailable')
   }
+}
+
+async function serveEpidemicProfile(response: ServerResponse, name: string | null) {
+  try {
+    const profile = await epidemicProfile(name)
+    send(response, profile ? 200 : 404, profile ?? { error: 'Not on Epidemic Sound' })
+  } catch (error) {
+    send(response, error instanceof RelayError ? error.status : 502, { error: error instanceof Error ? error.message : 'Epidemic Sound unavailable' })
+  }
+}
+
+// ---- track credits (MusicBrainz), looked up once per track and kept for everyone ----
+
+/** A MusicBrainz call through the relay: the answer, null when MusicBrainz has nothing; throws when it can't answer. */
+async function musicbrainz(path: string, query: Record<string, string>): Promise<unknown> {
+  const entry = await relayGet('musicbrainz', path, new URLSearchParams({ ...query, fmt: 'json' }))
+  return entry.status < 400 ? (JSON.parse(entry.body) as unknown) : null
+}
+
+/** Lookups under way, so a track asked for twice at once is looked up once. */
+const creditLookups = new Map<string, Promise<TrackCredits | null>>()
+
+/** A track's credits: stored, or looked up now (a miss is asked again after 30 days). Throws when MusicBrainz fails. */
+async function creditsFor(id: string, meta: TrackMeta): Promise<TrackCredits | null> {
+  const stored = store.trackCredits([id])[id]
+  if (stored && (stored.data || Date.now() - stored.at < 30 * 24 * HOUR)) return stored.data as TrackCredits | null
+  const running = creditLookups.get(id)
+  if (running) return running
+  const lookup = lookupCredits(meta, musicbrainz)
+    .then((credits) => {
+      store.setTrackCredits(id, credits, meta)
+      return credits
+    })
+    .finally(() => creditLookups.delete(id))
+  creditLookups.set(id, lookup)
+  return lookup
+}
+
+type JobName = 'credits' | 'artists'
+
+/** The administrators' tasks on the library, each running on its own (one run at a time). */
+const jobs: Record<JobName, JobState & { stop?: boolean }> = {
+  credits: { running: false, total: 0, done: 0, found: 0, failed: 0, failures: [] },
+  artists: { running: false, total: 0, done: 0, found: 0, failed: 0, failures: [] },
+}
+
+/** Everything in the library of a kind, read with an administrator's token. */
+async function libraryItems<T>(token: string, userId: string, path: string, query: Record<string, string>): Promise<T[]> {
+  const items: T[] = []
+  for (let start = 0; ; start += 500) {
+    const params = new URLSearchParams({ ...query, StartIndex: String(start), Limit: '500', EnableImages: 'false', EnableUserData: 'false' })
+    const response = await fetch(`${JELLYFIN_URL}${path.replace('{user}', userId)}?${params}`, { headers: { Authorization: `MediaBrowser Token="${token}"` } })
+    if (!response.ok) throw new Error(`Jellyfin ${response.status}`)
+    const page = (await response.json()) as { Items?: T[]; TotalRecordCount?: number }
+    items.push(...(page.Items ?? []))
+    if (!page.Items?.length || items.length >= (page.TotalRecordCount ?? 0)) break
+  }
+  return items
+}
+
+/**
+ * Runs a task over a list: each entry once (once more after a pause when a service turned it away), counting what was
+ * found, keeping what failed. The administrator's token is held only while it runs.
+ */
+async function runJob<T>(job: JobState & { stop?: boolean }, load: () => Promise<T[]>, each: (item: T) => Promise<boolean>, describe: (item: T) => Omit<Failure, 'error'>) {
+  Object.assign(job, { running: true, stop: false, total: 0, done: 0, found: 0, failed: 0, failures: [], startedAt: Date.now(), finishedAt: undefined, error: undefined })
+  try {
+    const items = await load()
+    job.total = items.length
+    for (const item of items) {
+      if (job.stop) break
+      for (let attempt = 0; ; attempt++) {
+        try {
+          if (await each(item)) job.found++
+          break
+        } catch (error) {
+          if (attempt < 1) {
+            await new Promise((resolve) => setTimeout(resolve, 10_000))
+            continue
+          }
+          const failure = { ...describe(item), error: error instanceof Error ? error.message : String(error) }
+          console.warn(`${failure.title}${failure.artist ? ` (${failure.artist})` : ''}: ${failure.error}`)
+          job.failures.push(failure)
+          job.failed++
+          break
+        }
+      }
+      job.done++
+    }
+  } catch (error) {
+    job.error = error instanceof Error ? error.message : 'Failed'
+  } finally {
+    job.running = false
+    job.finishedAt = Date.now()
+  }
+}
+
+type Track = { Id: string; Name?: string; Artists?: string[]; AlbumArtist?: string; Album?: string; AlbumId?: string; RunTimeTicks?: number }
+type Artist = { Id: string; Name?: string; ProviderIds?: Record<string, string> }
+
+const trackMeta = (track: Track): TrackMeta => ({
+  title: track.Name!,
+  artist: track.Artists?.[0] ?? track.AlbumArtist!,
+  album: track.Album,
+  albumId: track.AlbumId,
+  seconds: track.RunTimeTicks ? track.RunTimeTicks / 10_000_000 : undefined,
+})
+
+/** Looks up the credits of every track that wasn't yet (about three seconds a track, at MusicBrainz's pace). */
+function scanCredits(token: string, userId: string) {
+  return runJob<Track>(
+    jobs.credits,
+    async () => {
+      const tracks = await libraryItems<Track>(token, userId, '/Users/{user}/Items', { Recursive: 'true', IncludeItemTypes: 'Audio' })
+      const known = store.trackCredits(tracks.map((track) => track.Id))
+      return tracks.filter((track) => !known[track.Id] && track.Name && (track.Artists?.[0] ?? track.AlbumArtist))
+    },
+    async (track) => !!(await creditsFor(track.Id, trackMeta(track))),
+    (track) => ({ id: track.Id, title: track.Name ?? '', artist: track.Artists?.[0] ?? track.AlbumArtist ?? '', album: track.Album, albumId: track.AlbumId }),
+  )
+}
+
+/**
+ * Fetches everything the app shows about each artist into the caches, exactly as the app asks for it (so its next
+ * look is answered at once): Last.fm's biography (German and English), top tracks and similar artists, the Epidemic
+ * Sound profile, the Deezer photo, the MusicBrainz links, and the photos themselves.
+ */
+function scanArtists(token: string, userId: string, lastfmKey: string | undefined) {
+  const lastfm = async (params: Record<string, string>) => {
+    const entry = await relayGet('lastfm', '', new URLSearchParams({ ...params, ...(lastfmKey ? { api_key: lastfmKey } : {}), format: 'json', autocorrect: '1' }))
+    return JSON.parse(entry.body) as { error?: number; artist?: { bio?: { content?: string } } }
+  }
+  return runJob<Artist>(
+    jobs.artists,
+    () => libraryItems<Artist>(token, userId, '/Artists', { userId, Fields: 'ProviderIds' }),
+    async (artist) => {
+      const name = artist.Name ?? ''
+      if (!name) return false
+      let found = false
+      if (lastfmKey || process.env.LASTFM_API_KEY) {
+        const info = await lastfm({ method: 'artist.getinfo', artist: name, lang: 'de' })
+        found ||= !!info.artist?.bio?.content
+        await lastfm({ method: 'artist.getinfo', artist: name, lang: 'en' })
+        await lastfm({ method: 'artist.gettoptracks', artist: name, limit: '50' })
+        await lastfm({ method: 'artist.getsimilar', artist: name, limit: '30' })
+      }
+      const profile = await epidemicProfile(name).catch(() => null)
+      if (profile?.image) await keptImage(profile.image).catch(() => null)
+      found ||= !!profile?.description
+      const deezer = JSON.parse((await relayGet('deezer', 'search/artist', new URLSearchParams({ q: name, limit: '5' }))).body) as {
+        data?: Array<{ name: string; picture_xl?: string; picture_big?: string }>
+      }
+      const match = deezer.data?.find((entry) => sameName(entry.name, name))
+      const picture = match?.picture_xl ?? match?.picture_big
+      if (picture && !picture.includes('/artist//')) await keptImage(picture).catch(() => null)
+      let id = artist.ProviderIds?.MusicBrainzArtist
+      if (!id) {
+        const search = JSON.parse((await relayGet('musicbrainz', 'artist', new URLSearchParams({ query: `artist:"${name}"`, fmt: 'json', limit: '3' }))).body) as {
+          artists?: Array<{ id: string; name: string; score: number }>
+        }
+        id = search.artists?.find((entry) => entry.score >= 95 && sameName(entry.name, name))?.id
+      }
+      if (id) await relayGet('musicbrainz', `artist/${id}`, new URLSearchParams({ inc: 'url-rels', fmt: 'json' }))
+      return found
+    },
+    (artist) => ({ id: artist.Id, title: artist.Name ?? '' }),
+  )
 }
 
 async function handle(request: IncomingMessage, response: ServerResponse) {
@@ -480,6 +682,59 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
 
   // GET /artist-profile/epidemic?name=…: an artist's description and photo from Epidemic Sound.
   if (path === '/artist-profile/epidemic' && request.method === 'GET') return serveEpidemicProfile(response, url.searchParams.get('name'))
+
+  // POST /credits {ids}: the credits known for these tracks (left out: not looked up yet; null: none found).
+  if (path === '/credits' && request.method === 'POST') {
+    const { ids } = await readJson<{ ids?: unknown }>(request).catch(() => ({ ids: undefined }))
+    if (!Array.isArray(ids) || ids.length > 300 || !ids.every((id) => typeof id === 'string' && /^[0-9a-f-]{32,36}$/i.test(id))) return send(response, 400, { error: 'Bad ids' })
+    const known = store.trackCredits(ids as string[])
+    return send(response, 200, Object.fromEntries(Object.entries(known).map(([id, entry]) => [id, entry.data])))
+  }
+
+  // POST /credits/lookup {id, title, artist, album, seconds}: one track's credits, looked up now if they weren't.
+  if (path === '/credits/lookup' && request.method === 'POST') {
+    const body = await readJson<Partial<TrackMeta> & { id?: string }>(request).catch(() => null)
+    if (!body || typeof body.id !== 'string' || !/^[0-9a-f-]{32,36}$/i.test(body.id) || typeof body.title !== 'string' || typeof body.artist !== 'string') {
+      return send(response, 400, { error: 'Bad track' })
+    }
+    try {
+      const credits = await creditsFor(body.id, {
+        title: body.title.slice(0, 300),
+        artist: body.artist.slice(0, 300),
+        album: typeof body.album === 'string' ? body.album.slice(0, 300) : undefined,
+        albumId: typeof body.albumId === 'string' && /^[0-9a-f-]{32,36}$/i.test(body.albumId) ? body.albumId : undefined,
+        seconds: typeof body.seconds === 'number' ? body.seconds : undefined,
+      })
+      return send(response, 200, { credits })
+    } catch {
+      return send(response, 502, { error: 'MusicBrainz unavailable' })
+    }
+  }
+
+  // /admin/jobs/<credits|artists>: an admin's task on the whole library (POST starts, DELETE stops, GET tells how far it
+  // is): looking up every track's credits, or fetching every artist's information into the caches.
+  const jobName = path.match(/^\/admin\/jobs\/(credits|artists)$/)?.[1] as JobName | undefined
+  if (jobName) {
+    if (!isAdmin(tokenOf(request, url))) return send(response, 403, { error: 'Administrators only' })
+    const job = jobs[jobName]
+    if (request.method === 'POST' && !job.running) {
+      const token = tokenOf(request, url)!
+      if (jobName === 'credits') void scanCredits(token, me.id)
+      else {
+        const { lastfmKey } = await readJson<{ lastfmKey?: unknown }>(request).catch(() => ({ lastfmKey: undefined }))
+        void scanArtists(token, me.id, typeof lastfmKey === 'string' && /^[0-9a-f]{32}$/i.test(lastfmKey) ? lastfmKey : undefined)
+      }
+    }
+    if (request.method === 'DELETE') job.stop = true
+    const { stop: _stop, ...state } = job
+    return send(response, 200, state)
+  }
+
+  // GET /admin/credits-missing: the tracks MusicBrainz had nothing for.
+  if (path === '/admin/credits-missing' && request.method === 'GET') {
+    if (!isAdmin(tokenOf(request, url))) return send(response, 403, { error: 'Administrators only' })
+    return send(response, 200, store.tracksWithoutCredits())
+  }
 
   // GET /feed?url=…: podcast feeds and the files they point to.
   if (path === '/feed' && request.method === 'GET') return serveFeed(response, url.searchParams.get('url'))

@@ -5,7 +5,8 @@ import { DatabaseSync } from 'node:sqlite'
 /**
  * What the Lumio server keeps (SQLite, one file): the people who used it (name and picture tag as Jellyfin reported
  * them, so others can see who they are), who follows whom, each person's privacy choices, what they last played, and
- * their Lumio settings that follow the account (the app decides which; the server keeps them as one JSON object).
+ * their Lumio settings that follow the account (the app decides which; the server keeps them as one JSON object),
+ * and the credits looked up for the library's tracks (see credits.ts), shared by everyone.
  */
 export interface Privacy {
   /** Others see the person's public playlists on their profile. */
@@ -54,7 +55,11 @@ export class Store {
       CREATE INDEX IF NOT EXISTS follows_followee ON follows (followee);
       CREATE TABLE IF NOT EXISTS activity (user_id TEXT PRIMARY KEY, payload TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS settings (user_id TEXT PRIMARY KEY, data TEXT NOT NULL, updated INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS track_credits (item_id TEXT PRIMARY KEY, data TEXT, at INTEGER NOT NULL);
     `)
+    // What the track was (title, artist, album), so a list of misses can name them.
+    const columns = this.db.prepare('PRAGMA table_info(track_credits)').all() as Array<{ name: string }>
+    if (!columns.some((column) => column.name === 'meta')) this.db.exec('ALTER TABLE track_credits ADD COLUMN meta TEXT')
   }
 
   /** Remembers who someone is (on every sign-in, so names and pictures stay current). */
@@ -143,5 +148,28 @@ export class Store {
 
   clearActivity(id: string) {
     this.db.prepare('DELETE FROM activity WHERE user_id = ?').run(id)
+  }
+
+  /** The credits looked up for these tracks (null: looked up, none found); tracks never looked up are left out. */
+  trackCredits(ids: string[]): Record<string, { data: unknown; at: number }> {
+    const result: Record<string, { data: unknown; at: number }> = {}
+    const query = this.db.prepare('SELECT data, at FROM track_credits WHERE item_id = ?')
+    for (const id of ids) {
+      const row = query.get(id) as { data: string | null; at: number } | undefined
+      if (row) result[id] = { data: row.data ? (JSON.parse(row.data) as unknown) : null, at: row.at }
+    }
+    return result
+  }
+
+  setTrackCredits(id: string, data: unknown, meta: unknown) {
+    this.db
+      .prepare('INSERT INTO track_credits (item_id, data, at, meta) VALUES (?, ?, ?, ?) ON CONFLICT(item_id) DO UPDATE SET data = excluded.data, at = excluded.at, meta = excluded.meta')
+      .run(id, data === null ? null : JSON.stringify(data), Date.now(), JSON.stringify(meta))
+  }
+
+  /** The tracks looked up without a result, most recent first. */
+  tracksWithoutCredits(): Array<{ id: string; at: number; meta: unknown }> {
+    const rows = this.db.prepare('SELECT item_id, at, meta FROM track_credits WHERE data IS NULL ORDER BY at DESC').all() as Array<{ item_id: string; at: number; meta: string | null }>
+    return rows.map((row) => ({ id: row.item_id, at: row.at, meta: row.meta ? (JSON.parse(row.meta) as unknown) : null }))
   }
 }

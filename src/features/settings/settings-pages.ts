@@ -1,4 +1,4 @@
-import { IconBadgeCc, IconCards, IconHome, IconKeyboard, IconLayoutDashboard, IconLock, IconPalette, IconPlayerPlay, IconPuzzle, IconUserCircle } from '@tabler/icons-react'
+import { IconBadgeCc, IconCards, IconHome, IconKeyboard, IconLayoutDashboard, IconLock, IconPalette, IconPlayerPlay, IconPuzzle, IconTags, IconUserCircle } from '@tabler/icons-react'
 import { inMode, useAppMode } from '@/lib/app-mode'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import { useUserConfiguration } from './use-user-configuration'
@@ -15,6 +15,7 @@ const labels = defineMessages({
     display: 'Darstellung',
     branding: 'Branding',
     plugins: 'Plugins',
+    metadata: 'Musik-Metadaten',
   },
   en: {
     profile: 'Account',
@@ -27,6 +28,7 @@ const labels = defineMessages({
     display: 'Display',
     branding: 'Branding',
     plugins: 'Plugins',
+    metadata: 'Music metadata',
   },
 })
 
@@ -42,6 +44,7 @@ const PAGES = [
   { key: 'display', to: '/settings/display', icon: IconCards, admin: true },
   { key: 'branding', to: '/settings/branding', icon: IconPalette, admin: true },
   { key: 'plugins', to: '/settings/plugins', icon: IconPuzzle, admin: true },
+  { key: 'metadata', to: '/settings/metadata', icon: IconTags, admin: true },
 ] as const
 
 /** The settings sub-pages, shared by the side navigation and the profile menu so both always list the same entries. */

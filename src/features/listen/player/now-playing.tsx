@@ -23,8 +23,9 @@ import { ArtistLine } from './player-bar'
 import { useTrackQuality } from './quality'
 import { usePlayerControls, usePlayerTime } from './player-controls'
 import { useArtistBio, useArtistPhoto } from '../artist-photo'
-import { useRecordingCredits, useTrackArtists } from '../credits'
+import { useArtistLookup, useTrackArtists, useTrackCredits } from '../credits'
 import { TrackContextMenu } from '../track-menu'
+import { TrackArtists } from '../track-artists'
 
 const messages = defineMessages({
   de: {
@@ -140,12 +141,14 @@ interface Credit {
 function useCredits(track: BaseItemDto | undefined) {
   const t = useMessages(messages)
   const item = useItem(track?.Id ?? '', !!track?.Id && !externalOf(track)).data ?? track
-  const recording = useRecordingCredits(item).data
-  const artists = useTrackArtists(item)
+  const recording = useTrackCredits(item, true)
+  const artists = useTrackArtists(item, true)
+  const find = useArtistLookup()
   if (!item) return { item, credits: [] as Credit[], recording }
   const credits: Credit[] = artists.map((artist, index) => ({ id: artist.id, name: artist.name, role: index === 0 ? t.mainArtist : t.artist }))
   const push = (name: string | null | undefined, role: string) => {
-    if (name && !credits.some((credit) => credit.name === name && credit.role === role)) credits.push({ name, role })
+    // Linked to the library's artist of that name (a producer who is also an artist here).
+    if (name && !credits.some((credit) => credit.name === name && credit.role === role)) credits.push({ ...find(name), role })
   }
   const roles: Record<string, string> = { Composer: t.composer, Lyricist: t.lyricist, Producer: t.producer, Writer: t.writer }
   for (const person of item.People ?? []) if (roles[person.Type ?? '']) push(person.Name, roles[person.Type ?? '']!)
@@ -184,7 +187,8 @@ function SongInfoDialog({ track, onClose }: { track: BaseItemDto | null; onClose
     : []
   return (
     <Dialog open={!!track} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="gap-5 p-6 sm:max-w-lg">
+      {/* Long credits scroll inside the popup, under the song's head, which stays. */}
+      <DialogContent className="flex max-h-[calc(100svh-2rem)] flex-col gap-5 overflow-hidden p-6 sm:max-w-lg">
         {shown && (
           <>
             <div className="flex items-center gap-4">
@@ -195,35 +199,37 @@ function SongInfoDialog({ track, onClose }: { track: BaseItemDto | null; onClose
                 <ArtistLine item={shown} className="text-sm" />
               </div>
             </div>
-            {credits.length > 0 && (
-              <section className="space-y-2">
-                <h3 className="text-sm font-semibold">{t.credits}</h3>
-                <ul className="space-y-2">
-                  {credits.map((credit) => (
-                    <li key={`${credit.role}-${credit.name}`} className="text-sm">
-                      {credit.id ? (
-                        <Link to={titlePath('MusicArtist', credit.id)} onClick={onClose} className="font-medium hover:underline">
-                          {credit.name}
-                        </Link>
-                      ) : (
-                        <span className="font-medium">{credit.name}</span>
-                      )}
-                      <span className="block text-xs text-muted-foreground">{credit.role}</span>
-                    </li>
+            <div className="-mx-6 -mb-6 min-h-0 space-y-5 overflow-y-auto px-6 pb-6">
+              {credits.length > 0 && (
+                <section className="space-y-2">
+                  <h3 className="text-sm font-semibold">{t.credits}</h3>
+                  <ul className="space-y-2">
+                    {credits.map((credit) => (
+                      <li key={`${credit.role}-${credit.name}`} className="text-sm">
+                        {credit.id ? (
+                          <Link to={titlePath('MusicArtist', credit.id)} onClick={onClose} className="font-medium hover:underline">
+                            {credit.name}
+                          </Link>
+                        ) : (
+                          <span className="font-medium">{credit.name}</span>
+                        )}
+                        <span className="block text-xs text-muted-foreground">{credit.role}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2 border-t pt-4 text-sm">
+                {rows
+                  .filter(([, value]) => !!value)
+                  .map(([label, value]) => (
+                    <div key={label} className="contents">
+                      <dt className="text-muted-foreground">{label}</dt>
+                      <dd className="truncate">{value}</dd>
+                    </div>
                   ))}
-                </ul>
-              </section>
-            )}
-            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2 border-t pt-4 text-sm">
-              {rows
-                .filter(([, value]) => !!value)
-                .map(([label, value]) => (
-                  <div key={label} className="contents">
-                    <dt className="text-muted-foreground">{label}</dt>
-                    <dd className="truncate">{value}</dd>
-                  </div>
-                ))}
-            </dl>
+              </dl>
+            </div>
           </>
         )}
       </DialogContent>
@@ -500,13 +506,22 @@ function NextInQueue() {
         </button>
       }
     >
-      <button type="button" onClick={() => (remote ? remote.jump(remote.index + 1) : music.jump(state.index + 1))} className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-md p-2 text-left transition-colors hover:bg-foreground/[0.07]">
-        <span className="size-11 shrink-0 overflow-hidden rounded bg-muted">{cover && <FadeImage src={cover} alt="" className="size-full object-cover" />}</span>
-        <span className="min-w-0">
+      {/* The whole row plays it; the artists on it are links of their own (above the row's button). */}
+      <div className="relative -mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-md p-2 transition-colors hover:bg-foreground/[0.07]">
+        <button
+          type="button"
+          aria-label={next.Name ?? undefined}
+          onClick={() => (remote ? remote.jump(remote.index + 1) : music.jump(state.index + 1))}
+          className="absolute inset-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+        <span className="pointer-events-none size-11 shrink-0 overflow-hidden rounded bg-muted">{cover && <FadeImage src={cover} alt="" className="size-full object-cover" />}</span>
+        <span className="pointer-events-none min-w-0">
           <span className="block truncate text-sm font-medium">{next.Name}</span>
-          <span className="block truncate text-xs text-muted-foreground">{artistsOf(next).map((artist) => artist.name).join(', ')}</span>
+          <span className="block truncate text-xs text-muted-foreground [&_a]:pointer-events-auto [&_a]:relative">
+            <TrackArtists track={next} />
+          </span>
         </span>
-      </button>
+      </div>
     </Card>
   )
 }
