@@ -158,25 +158,8 @@ export function SidePanel() {
       >
         <PanelColumn view={view} titles={titles} track={track} expanded={expanded} />
         {/* In the big panel, the queue or the quality sit in a column at the right edge. */}
-        {expanded && beside && (
-          <div className="flex w-80 shrink-0 flex-col bg-background/30">
-            <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-3">
-              <h2 className="truncate text-base font-semibold">{titles[beside]}</h2>
-              <IconButton label={t.close} onClick={() => toggleListenPanel(beside)}>
-                <IconX className="size-4" />
-              </IconButton>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 [scrollbar-width:thin]">
-              {beside === 'queue' ? (
-                <QueueDrop className="-mx-2 min-h-full rounded-lg px-2">
-                  <Queue />
-                </QueueDrop>
-              ) : (
-                <QualityView track={track} />
-              )}
-            </div>
-          </div>
-        )}
+        {/* In the big panel, the queue or the quality slide in as a column at the right edge (and out again). */}
+        <BesideColumn target={expanded ? beside : null} titles={titles} track={track} />
       </div>
       {expanded ? null : open ? (
         <ResizeHandle
@@ -252,6 +235,47 @@ function PanelLayer({ view, title, track, expanded }: { view: ListenPanel; title
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col transition-colors duration-500" style={immersive ? { background: tint ?? 'var(--muted)' } : undefined}>
       <PanelHeader view={view} title={title} track={track} expanded={expanded} immersive={immersive} />
       <PanelBody view={view} track={track} expanded={expanded} immersive={immersive} />
+    </div>
+  )
+}
+
+/** The big panel's column at the right edge (queue or quality): it slides in from the right and out again when closed. */
+function BesideColumn({ target, titles, track }: { target: 'queue' | 'quality' | null; titles: Record<ListenPanel, string>; track: BaseItemDto }) {
+  const t = useMessages(messages)
+  const [shown, setShown] = useState(target)
+  const [leaving, setLeaving] = useState(false)
+  if (target && target !== shown) {
+    setShown(target)
+    setLeaving(false)
+  } else if (!target && shown && !leaving) setLeaving(true)
+  if (!shown) return null
+  return (
+    <div
+      onAnimationEnd={(event) => {
+        if (!leaving || event.target !== event.currentTarget) return
+        setShown(null)
+        setLeaving(false)
+      }}
+      // The column opens from nothing at the right edge, its content held there, so it slides in from the right.
+      className={cn('flex w-80 shrink-0 justify-end overflow-hidden', leaving ? 'beside-out' : 'beside-in')}
+    >
+      <div className="flex w-80 shrink-0 flex-col bg-background/30">
+        <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-3">
+          <h2 className="truncate text-base font-semibold">{titles[shown]}</h2>
+          <IconButton label={t.close} onClick={() => toggleListenPanel(shown)}>
+            <IconX className="size-4" />
+          </IconButton>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 [scrollbar-width:thin]">
+          {shown === 'queue' ? (
+            <QueueDrop className="-mx-2 min-h-full rounded-lg px-2">
+              <Queue />
+            </QueueDrop>
+          ) : (
+            <QualityView track={track} />
+          )}
+        </div>
+      </div>
     </div>
   )
 }
