@@ -101,7 +101,7 @@ export interface LocalSettings {
   videoPrefetch: number
   /** Space the episode cache may take, in GB. */
   videoCacheGb: number
-  /** Bitrate episodes are downloaded at, in Mbit/s. */
+  /** Bitrate episodes are stored ahead at, in Mbit/s; 0 = their original quality. */
   videoBitrateMbit: number
   /** Bitrate films and episodes are downloaded at (Watch's downloads), in Mbit/s; 0 = their original quality. */
   videoDownloadMbit: number

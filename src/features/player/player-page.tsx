@@ -149,7 +149,7 @@ function Player({ id }: { id: string }) {
   const hasStored = useVideoStored(id)
   const storedBitrateKnown = hasStored ? storedQuality(id) : undefined
   // Copies stored before their quality was noted were made in the cache's quality.
-  const storedBitrate = !hasStored ? undefined : storedBitrateKnown === undefined ? settings.videoBitrateMbit * 1_000_000 : storedBitrateKnown
+  const storedBitrate = !hasStored ? undefined : storedBitrateKnown === undefined ? (settings.videoBitrateMbit ? settings.videoBitrateMbit * 1_000_000 : null) : storedBitrateKnown
   // The item as it is now, for telling friends what plays (read inside the stream effect).
   const itemRef = useRef(item.data)
   useEffect(() => {

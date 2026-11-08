@@ -434,7 +434,7 @@ export function DownloadsPage() {
             label={t.videoBitrateLabel}
             hint={t.videoBitrateHint}
             value={settings.videoBitrateMbit}
-            options={[3, 5, 8, 12, 20].map((mbit) => ({ value: mbit, label: `${mbit} Mbit/s` }))}
+            options={[{ value: 0, label: t.videoOriginal }, ...[20, 12, 8, 5, 3].map((mbit) => ({ value: mbit, label: `${mbit} Mbit/s` }))]}
             onChange={(value) => update({ videoBitrateMbit: value })}
           />
         </Section>
