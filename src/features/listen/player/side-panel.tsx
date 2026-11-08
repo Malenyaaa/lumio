@@ -136,6 +136,7 @@ export function SidePanel() {
   const title = titles[view]
   return (
     <aside
+      data-side-panel
       aria-label={title}
       onPointerEnter={() => !open && !expanded && setListenPanelPeek(true)}
       onPointerLeave={() => setListenPanelPeek(false)}

@@ -331,3 +331,16 @@ html.panel-transition::view-transition-group(listen-cover) {
 html.panel-transition::view-transition-group(app-header) {
   animation: none;
 }
+/* The new layout is captured at once: the panel and the content must be at their final size then, not halfway
+   through their width animation (the cover would be squeezed into the old width, or fly to a stale spot). */
+html.panel-transition [data-side-panel],
+html.panel-transition [data-scroll-root] {
+  transition: none !important;
+}
+/* The cover keeps its proportions while it flies (both shots are square; the box between them may not be). */
+html.panel-transition::view-transition-old(listen-cover),
+html.panel-transition::view-transition-new(listen-cover) {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+}
