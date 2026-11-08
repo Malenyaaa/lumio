@@ -184,7 +184,7 @@ export function SidePanel() {
           aria-label={t.open}
           title={t.open}
           onClick={openListenPanel}
-          className="absolute inset-0 flex items-center justify-start pl-2.5 text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          className="absolute bottom-2 left-0 right-2 top-0 flex items-center justify-start rounded-xl bg-surface pl-2 text-muted-foreground outline-none transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
           <IconChevronLeft className="size-5" />
         </button>
@@ -203,7 +203,7 @@ function PanelColumn({ view, title, track, expanded }: { view: ListenPanel; titl
   const tint = useDominantColor(immersive ? portraitImageUrl(api, track, { fillHeight: 64 }) : undefined).data
   return (
     <div className="relative flex min-w-0 flex-1 flex-col transition-colors duration-500" style={immersive ? { background: tint ?? 'var(--muted)' } : undefined}>
-      <PanelHeader title={title} track={track} expanded={expanded} immersive={immersive} />
+      <PanelHeader view={view} title={title} track={track} expanded={expanded} immersive={immersive} />
       <PanelBody view={view} track={track} expanded={expanded} immersive={immersive} />
     </div>
   )
@@ -245,7 +245,7 @@ function EmptySidePanel({ open }: { open: boolean }) {
           aria-label={t.open}
           title={t.open}
           onClick={openListenPanel}
-          className="absolute inset-0 flex items-center justify-start pl-2.5 text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          className="absolute bottom-2 left-0 right-2 top-0 flex items-center justify-start rounded-xl bg-surface pl-2 text-muted-foreground outline-none transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
           <IconChevronLeft className="size-5" />
         </button>
@@ -255,7 +255,7 @@ function EmptySidePanel({ open }: { open: boolean }) {
 }
 
 /** Fold (left), the title, the track's menu and making the panel big or normal again (right), as in Spotify. */
-function PanelHeader({ title, track, expanded, immersive }: { title: string; track: BaseItemDto; expanded: boolean; immersive: boolean }) {
+function PanelHeader({ view, title, track, expanded, immersive }: { view: ListenPanel; title: string; track: BaseItemDto; expanded: boolean; immersive: boolean }) {
   const t = useMessages(messages)
   return (
     <div
@@ -264,11 +264,17 @@ function PanelHeader({ title, track, expanded, immersive }: { title: string; tra
         immersive && 'absolute inset-x-0 top-0 z-10 bg-linear-to-b from-black/45 to-transparent pb-6 text-white [&_button]:text-white/85 [&_button:hover]:bg-white/10 [&_button:hover]:text-white',
       )}
     >
-      {!expanded && (
-        <IconButton label={t.fold} onClick={closeListenPanel}>
-          <IconLayoutSidebarRightCollapse className="size-5" />
-        </IconButton>
-      )}
+      {/* Queue, lyrics and quality close (back to what was shown before); "now playing" folds the panel away. */}
+      {!expanded &&
+        (view === 'nowPlaying' ? (
+          <IconButton label={t.fold} onClick={closeListenPanel}>
+            <IconLayoutSidebarRightCollapse className="size-5" />
+          </IconButton>
+        ) : (
+          <IconButton label={t.close} onClick={closeListenPanel}>
+            <IconX className="size-5" />
+          </IconButton>
+        ))}
       <h2 className={cn('min-w-0 flex-1 truncate text-base font-semibold', expanded && 'pl-3')}>{title}</h2>
       <TrackMenu track={track} visible />
       <IconButton label={expanded ? t.shrink : t.expand} onClick={() => setListenPanelExpanded(!expanded)}>

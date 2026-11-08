@@ -45,6 +45,7 @@ import { categoryOf, categoryPath, useCategories } from '@/features/library/cate
 import { DeviceMenu } from '@/features/remote/device-menu'
 import { SyncPlayMenu } from '@/features/remote/syncplay-menu'
 import { MiniPlayer } from '@/features/listen/player/player-bar'
+import { setListenPanelExpanded, useListenPanel } from '@/features/listen/player/panel'
 import { HeaderSearch } from '@/features/search/header-search'
 import { useLocalSettings } from '@/features/settings/local-settings'
 import { useSettingsPages } from '@/features/settings/settings-pages'
@@ -67,12 +68,14 @@ export function BackButton() {
   const t = useMessages(shellMessages)
   // React Router numbers its history entries; 0 is the first page of this visit.
   const index = (window.history.state as { idx?: number } | null)?.idx ?? 0
-  const visible = pathname !== modeHome(mode) && index > 0
+  // Listen's big side panel (lyrics, the cover) covers the page: "back" first shrinks it to the side again.
+  const expanded = useListenPanel().expanded && mode === 'listen'
+  const visible = expanded || (pathname !== modeHome(mode) && index > 0)
   // The slot is always there (empty when there is nowhere to go), so the logo and navigation never shift.
   return (
     <div className="-ml-2 size-9 shrink-0">
       {visible && (
-        <Button variant="ghost" size="icon" aria-label={t.back} title={t.back} className="animate-in fade-in-0 duration-200" onClick={() => void navigate(-1)}>
+        <Button variant="ghost" size="icon" aria-label={t.back} title={t.back} className="animate-in fade-in-0 duration-200" onClick={() => (expanded ? setListenPanelExpanded(false) : void navigate(-1))}>
           <IconArrowLeft />
         </Button>
       )}

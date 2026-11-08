@@ -6,7 +6,7 @@ import { AppBrand } from '@/components/app-switcher'
 import { PageTransition } from '@/components/page-transition'
 import { useSession } from '@/features/auth/session'
 import { HeaderSearch } from '@/features/search/header-search'
-import { LEFT_LIMITS, RIGHT_LIMITS, setListenLayout, useListenLayout, useListenPanel } from './player/panel'
+import { LEFT_LIMITS, RIGHT_LIMITS, setListenLayout, setListenPanelExpanded, useListenLayout, useListenPanel } from './player/panel'
 import { SongInfoHost } from './player/now-playing'
 import { PlayerBar } from './player/player-bar'
 import { SidePanel } from './player/side-panel'
@@ -176,6 +176,8 @@ function SignedInListen() {
           <NavLink
             to="/listen"
             end
+            // Home also shrinks the big side panel back to the side.
+            onClick={() => setListenPanelExpanded(false)}
             aria-label={t.home}
             title={t.home}
             className="grid size-11 shrink-0 place-items-center rounded-full bg-surface text-muted-foreground outline-none transition-[color,background-color,scale] hover:scale-105 hover:bg-surface-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:text-foreground"
