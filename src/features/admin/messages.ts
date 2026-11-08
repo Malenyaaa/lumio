@@ -52,6 +52,9 @@ export const adminMessages = defineMessages({
     primaryColor: 'Akzentfarbe',
     primaryColorHint: 'Für Buttons, Hervorhebungen und Fokusrahmen. Leer = Standard.',
     defaultColor: 'Standard',
+    modeColor: (app: string) => `Farbe für ${app}`,
+    modeColorHint: (mode: string) =>
+      mode === 'listen' ? 'Nur in Listen, auch für die Play-Buttons. Leer = die allgemeine Farbe, ohne sie das Grün von Listen.' : 'Nur in Watch. Leer = die allgemeine Farbe.',
     customCss: 'Eigenes CSS',
     customCssHint: 'Gilt nur für Lumio (das eigene CSS in Jellyfin lädt auch jellyfin-web).',
     save: 'Speichern',
@@ -142,6 +145,9 @@ export const adminMessages = defineMessages({
     primaryColor: 'Accent color',
     primaryColorHint: 'For buttons, highlights and focus rings. Empty = default.',
     defaultColor: 'Default',
+    modeColor: (app: string) => `Color for ${app}`,
+    modeColorHint: (mode: string) =>
+      mode === 'listen' ? 'In Listen only, also for the play buttons. Empty = the overall color, or without one Listen’s green.' : 'In Watch only. Empty = the overall color.',
     customCss: 'Custom CSS',
     customCssHint: "Applies to Lumio only (Jellyfin's own custom CSS is loaded by jellyfin-web too).",
     save: 'Save',

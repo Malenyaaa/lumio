@@ -133,18 +133,22 @@ export function BrandingEffects() {
     link.type = favicon ? (favicon.match(/^data:([^;,]+)/)?.[1] ?? '') : 'image/svg+xml'
   }, [favicon])
 
+  const watchColor = config.modes?.watch?.primaryColor
+  const listenColor = config.modes?.listen?.primaryColor
   useEffect(() => {
-    const color = config.primaryColor
-    const style = styleElement('lumio-brand-colors')
-    if (!color || !/^#[0-9a-f]{6}$/i.test(color)) {
-      style.textContent = ''
-      return
-    }
-    // Text on the primary color must stay readable: dark on light colors, white on dark ones.
-    const foreground = luminance(color) > 0.45 ? '#0a0a0a' : '#ffffff'
-    // Listen's own accent (its green by default) follows too.
-    style.textContent = `:root, .dark { --primary: ${color}; --primary-foreground: ${foreground}; --ring: ${color}; --sidebar-primary: ${color}; --listen-accent: ${color}; --listen-accent-foreground: ${foreground}; }`
-  }, [config.primaryColor])
+    const valid = (color: string | undefined): color is string => !!color && /^#[0-9a-f]{6}$/i.test(color)
+    // Text on the color must stay readable: dark on light colors, white on dark ones.
+    const on = (color: string) => (luminance(color) > 0.45 ? '#0a0a0a' : '#ffffff')
+    const primary = (color: string) => `--primary: ${color}; --primary-foreground: ${on(color)}; --ring: ${color}; --sidebar-primary: ${color};`
+    const listen = (color: string) => `--listen-accent: ${color}; --listen-accent-foreground: ${on(color)};`
+    const rules: string[] = []
+    // The overall color, for both apps (Listen's own accent follows too).
+    if (valid(config.primaryColor)) rules.push(`:root, .dark { ${primary(config.primaryColor)} ${listen(config.primaryColor)} }`)
+    // Each app's own, while it is shown (menus open in a portal outside the app's frame, hence on the whole page).
+    if (valid(watchColor)) rules.push(`html:has([data-app-shell][data-mode='watch']) { ${primary(watchColor)} }`)
+    if (valid(listenColor)) rules.push(`html:has([data-app-shell][data-mode='listen']) { ${primary(listenColor)} ${listen(listenColor)} }`)
+    styleElement('lumio-brand-colors').textContent = rules.join('\n')
+  }, [config.primaryColor, watchColor, listenColor])
 
   useEffect(() => {
     styleElement('lumio-custom-css').textContent = config.customCss ?? ''

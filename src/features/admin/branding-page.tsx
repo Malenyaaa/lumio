@@ -36,8 +36,6 @@ export function BrandingPage() {
     )
   }
 
-  const colorText = value.primaryColor ?? ''
-
   return (
     <SettingsPage title={t.brandingTitle} description={t.brandingDescription}>
       <Section title={t.identity}>
@@ -106,48 +104,21 @@ export function BrandingPage() {
 
       <Section title={t.colors}>
         <Row label={t.primaryColor} hint={t.primaryColorHint} htmlFor="primary-color">
-          <div className="space-y-3">
-            <div className="flex flex-wrap gap-2" role="group" aria-label={t.primaryColor}>
-              <button
-                type="button"
-                aria-pressed={!value.primaryColor}
-                onClick={() => edit({ primaryColor: undefined })}
-                className={cn('h-8 rounded-full border px-3 text-xs transition-colors hover:bg-muted', !value.primaryColor && 'ring-2 ring-ring')}
-              >
-                {t.defaultColor}
-              </button>
-              {COLOR_SWATCHES.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  aria-label={color}
-                  aria-pressed={value.primaryColor?.toLowerCase() === color}
-                  onClick={() => edit({ primaryColor: color })}
-                  className={cn(
-                    'size-8 rounded-full ring-offset-2 ring-offset-background transition-transform hover:scale-110',
-                    value.primaryColor?.toLowerCase() === color && 'ring-2 ring-foreground',
-                  )}
-                  style={{ background: color }}
-                />
-              ))}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="size-8 shrink-0 rounded-md border" style={{ background: HEX.test(colorText) ? colorText : 'transparent' }} aria-hidden />
-              <Input
-                id="primary-color"
-                value={colorText}
-                placeholder="#3b82f6"
-                maxLength={7}
-                className="w-32 font-mono"
-                onChange={(event) => {
-                  const text = event.target.value.trim()
-                  edit({ primaryColor: text || undefined })
-                }}
-                aria-invalid={!!colorText && !HEX.test(colorText)}
-              />
-            </div>
-          </div>
+          <ColorPicker id="primary-color" value={value.primaryColor} onChange={(primaryColor) => edit({ primaryColor })} />
         </Row>
+        {/* Each app can have its own: a calm one for films, a lively one for music. */}
+        {APP_MODES.map((mode) => {
+          const own = value.modes?.[mode] ?? {}
+          return (
+            <Row key={mode} label={t.modeColor(DEFAULT_MODE_LABELS[mode])} hint={t.modeColorHint(mode)} htmlFor={`primary-color-${mode}`}>
+              <ColorPicker
+                id={`primary-color-${mode}`}
+                value={own.primaryColor}
+                onChange={(primaryColor) => edit({ modes: { ...value.modes, [mode]: { ...own, primaryColor } } })}
+              />
+            </Row>
+          )
+        })}
       </Section>
 
       <Section title={t.customCss}>
@@ -176,7 +147,7 @@ export function BrandingPage() {
               {t.discard}
             </Button>
             <Button
-              disabled={save.isPending || (!!draft.primaryColor && !HEX.test(draft.primaryColor))}
+              disabled={save.isPending || [value.primaryColor, value.modes?.watch?.primaryColor, value.modes?.listen?.primaryColor].some((color) => !!color && !HEX.test(color))}
               onClick={() => save.mutate((current) => ({ ...current, ...draft }), { onSuccess: () => setDraft({}) })}
             >
               {save.isPending ? t.saving : t.save}
@@ -185,6 +156,49 @@ export function BrandingPage() {
         </div>
       )}
     </SettingsPage>
+  )
+}
+
+/** Swatches, "default", and a field for any #rrggbb. */
+function ColorPicker({ id, value, onChange }: { id: string; value: string | undefined; onChange: (value: string | undefined) => void }) {
+  const t = useMessages(adminMessages)
+  const text = value ?? ''
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2" role="group" aria-label={t.primaryColor}>
+        <button
+          type="button"
+          aria-pressed={!value}
+          onClick={() => onChange(undefined)}
+          className={cn('h-8 rounded-full border px-3 text-xs transition-colors hover:bg-muted', !value && 'ring-2 ring-ring')}
+        >
+          {t.defaultColor}
+        </button>
+        {COLOR_SWATCHES.map((color) => (
+          <button
+            key={color}
+            type="button"
+            aria-label={color}
+            aria-pressed={value?.toLowerCase() === color}
+            onClick={() => onChange(color)}
+            className={cn('size-8 rounded-full ring-offset-2 ring-offset-background transition-transform hover:scale-110', value?.toLowerCase() === color && 'ring-2 ring-foreground')}
+            style={{ background: color }}
+          />
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="size-8 shrink-0 rounded-md border" style={{ background: HEX.test(text) ? text : 'transparent' }} aria-hidden />
+        <Input
+          id={id}
+          value={text}
+          placeholder="#3b82f6"
+          maxLength={7}
+          className="w-32 font-mono"
+          onChange={(event) => onChange(event.target.value.trim() || undefined)}
+          aria-invalid={!!text && !HEX.test(text)}
+        />
+      </div>
+    </div>
   )
 }
 

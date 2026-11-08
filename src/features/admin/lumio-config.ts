@@ -42,6 +42,8 @@ export interface ModeBranding {
   logoLight?: string
   /** Shows only the app's label (with its switcher) in the header, without the instance's name. */
   hideName?: boolean
+  /** This app's accent as #rrggbb (Watch: buttons and highlights; Listen: also its play buttons); else the overall one. */
+  primaryColor?: string
 }
 
 export interface HoverPreviewRules {

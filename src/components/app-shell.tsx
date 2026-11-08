@@ -262,7 +262,7 @@ function SignedInShell() {
   if (!session) return null
 
   return (
-    <div data-app-shell className="min-h-svh">
+    <div data-app-shell data-mode="watch" className="min-h-svh">
       <header
         className={cn(
           '[view-transition-name:app-header] fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between gap-4 border-b px-4 transition-colors duration-300 sm:px-8',
