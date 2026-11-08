@@ -156,7 +156,7 @@ export function SidePanel() {
         )}
         style={{ width: expanded ? 'calc(100% - 1rem)' : layout.right - 8 }}
       >
-        <PanelColumn view={view} title={title} track={track} expanded={expanded} />
+        <PanelColumn view={view} titles={titles} track={track} expanded={expanded} />
         {/* In the big panel, the queue or the quality sit in a column at the right edge. */}
         {expanded && beside && (
           <div className="flex w-80 shrink-0 flex-col bg-background/30">
@@ -204,12 +204,52 @@ export function SidePanel() {
  * The panel's main column. Over the lyrics and the big cover it is "immersive": the whole column takes the cover's
  * colour and the header floats over it, transparent, with only a soft shade from the top to keep its icons readable.
  */
-function PanelColumn({ view, title, track, expanded }: { view: ListenPanel; title: string; track: BaseItemDto; expanded: boolean }) {
+function PanelColumn({ view, titles, track, expanded }: { view: ListenPanel; titles: Record<ListenPanel, string>; track: BaseItemDto; expanded: boolean }) {
+  // The big panel switches views in place.
+  if (expanded) return <PanelLayer view={view} title={titles[view]} track={track} expanded />
+  return <SlidingViews view={view} titles={titles} track={track} />
+}
+
+/**
+ * The normal panel: "now playing" underneath; the queue, lyrics and quality slide up over it from the bottom and back
+ * down when closed (the leaving view stays until it is out of sight).
+ */
+function SlidingViews({ view, titles, track }: { view: ListenPanel; titles: Record<ListenPanel, string>; track: BaseItemDto }) {
+  const over = view === 'nowPlaying' ? null : view
+  const [shown, setShown] = useState<ListenPanel | null>(over)
+  const [leaving, setLeaving] = useState(false)
+  // Follow the panel's view during render: a new view slides in; closing lets the shown one slide out first.
+  if (over && over !== shown) {
+    setShown(over)
+    setLeaving(false)
+  } else if (!over && shown && !leaving) setLeaving(true)
+  return (
+    <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+      <PanelLayer view="nowPlaying" title={titles.nowPlaying} track={track} expanded={false} />
+      {shown && (
+        <div
+          key={shown}
+          onAnimationEnd={(event) => {
+            // Only its own slide (animations inside it, such as the playing bars, bubble up too).
+            if (!leaving || event.target !== event.currentTarget) return
+            setShown(null)
+            setLeaving(false)
+          }}
+          className={cn('absolute inset-0 z-10 flex flex-col bg-surface', leaving ? 'panel-slide-out' : 'panel-slide-in')}
+        >
+          <PanelLayer view={shown} title={titles[shown]} track={track} expanded={false} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PanelLayer({ view, title, track, expanded }: { view: ListenPanel; title: string; track: BaseItemDto; expanded: boolean }) {
   const { api } = useAuthedSession()
   const immersive = view === 'lyrics' || (expanded && view === 'nowPlaying')
   const tint = useDominantColor(immersive ? portraitImageUrl(api, track, { fillHeight: 64 }) : undefined).data
   return (
-    <div className="relative flex min-w-0 flex-1 flex-col transition-colors duration-500" style={immersive ? { background: tint ?? 'var(--muted)' } : undefined}>
+    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col transition-colors duration-500" style={immersive ? { background: tint ?? 'var(--muted)' } : undefined}>
       <PanelHeader view={view} title={title} track={track} expanded={expanded} immersive={immersive} />
       <PanelBody view={view} track={track} expanded={expanded} immersive={immersive} />
     </div>

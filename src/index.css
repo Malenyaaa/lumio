@@ -344,3 +344,27 @@ html.panel-transition::view-transition-new(listen-cover) {
   width: 100%;
   object-fit: cover;
 }
+
+/* Listen's side panel: the queue, lyrics and quality slide up over "now playing" and back down when closed. */
+@keyframes panel-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes panel-down {
+  to {
+    transform: translateY(100%);
+  }
+}
+.panel-slide-in {
+  animation: panel-up 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.panel-slide-out {
+  animation: panel-down 240ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel-slide-in,
+  .panel-slide-out {
+    animation-duration: 1ms;
+  }
+}
