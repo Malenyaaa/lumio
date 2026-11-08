@@ -342,6 +342,9 @@ function report(kind: 'start' | 'progress' | 'stopped', item = currentTrack()) {
     PlayMethod: PlayMethod.DirectStream,
     PlaySessionId: playSessionId,
     CanSeek: true,
+    // So a device steering this one shows shuffle and repeat as they are.
+    RepeatMode: ({ off: 'RepeatNone', all: 'RepeatAll', one: 'RepeatOne' } as const)[state.repeat],
+    PlaybackOrder: state.shuffle ? ('Shuffle' as const) : ('Default' as const),
   }
   // When a play can't be reported (offline, e.g. a cached song), it is kept and handed in later, so it still counts.
   const { userId } = connection
@@ -667,6 +670,14 @@ export const music = {
   /** Goes on if paused (a remote "unpause"). */
   resume() {
     if (state.index >= 0 && !state.playing) music.toggle()
+  },
+  /** Sets repeat (a remote's command). */
+  setRepeat(mode: RepeatMode) {
+    setState({ repeat: mode })
+  },
+  /** Turns shuffle on or off (a remote's command). */
+  setShuffle(on: boolean) {
+    if (state.shuffle !== on) music.toggleShuffle()
   },
   /** Jumps by some seconds (a remote's rewind / fast forward). */
   seekBy(seconds: number) {

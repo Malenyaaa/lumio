@@ -1,6 +1,7 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
 import {
   IconArrowsShuffle,
+  IconCast,
   IconHeadphones,
   IconHeart,
   IconHeartFilled,
@@ -33,7 +34,7 @@ import { externalOf } from '@/lib/external-items'
 import { artistsOf, itemHref, titlePath } from '@/lib/item-links'
 import { cn } from '@/lib/utils'
 import { playerBarMessages } from './messages'
-import { currentTrack, music, useMusic, useMusicTime } from './music-player'
+import { currentTrack, music, useMusic } from './music-player'
 import { useLyrics } from './lyrics'
 import { useTrackQuality } from './quality'
 import { toggleListenPanel, useListenPanel, type ListenPanel } from './panel'
@@ -41,20 +42,36 @@ import { playCircle } from '../play-circle'
 import { endTrackDrag, startTrackDrag, useTrackDrop } from '../track-drag'
 import { TrackContextMenu } from '../track-menu'
 import { useRemote } from '@/features/remote/remote-provider'
-import { RemotePlayerBar } from './remote-player-bar'
+import type { RemoteTarget } from '@/features/remote/remote-provider'
+import { PlayerControlsContext, useLocalControls, usePlayerControls, useRemoteControls } from './player-controls'
 
 /** Listen's player bar along the bottom: the track, the transport with its progress, and queue, lyrics and volume. */
 export function PlayerBar() {
   const remote = useRemote()
-  // Controlling another device: the whole bar becomes its remote control.
-  if (remote.target) return <RemotePlayerBar target={remote.target} onDisconnect={() => remote.setTarget(null)} />
-  return <LocalPlayerBar />
+  // Controlling another device: the same bar, steering that device instead (its track, position, volume …).
+  if (remote.target) return <RemoteBar target={remote.target} onDisconnect={() => remote.setTarget(null)} />
+  return <LocalBar />
 }
 
-function LocalPlayerBar() {
+function LocalBar() {
+  return (
+    <PlayerControlsContext value={useLocalControls()}>
+      <Bar />
+    </PlayerControlsContext>
+  )
+}
+
+function RemoteBar({ target, onDisconnect }: { target: RemoteTarget; onDisconnect: () => void }) {
+  return (
+    <PlayerControlsContext value={useRemoteControls(target, onDisconnect)}>
+      <Bar />
+    </PlayerControlsContext>
+  )
+}
+
+function Bar() {
   const t = useMessages(playerBarMessages)
-  const state = useMusic()
-  const track = currentTrack(state)
+  const { track } = usePlayerControls()
   return (
     <div
       role="region"
@@ -87,6 +104,7 @@ function EmptyTrackInfo() {
 function TrackInfo({ track }: { track: BaseItemDto }) {
   const { api } = useAuthedSession()
   const t = useMessages(playerBarMessages)
+  const { remote } = usePlayerControls()
   const cover = portraitImageUrl(api, track, { fillHeight: 128 })
   const liked = !!track.UserData?.IsFavorite
   const [likedNow, setLikedNow] = useState<{ id: string; value: boolean } | null>(null)
@@ -106,7 +124,13 @@ function TrackInfo({ track }: { track: BaseItemDto }) {
             {track.Name}
           </Link>
           <ArtistLine item={track} />
-          <QualityLine track={track} />
+          {remote ? (
+            <p className="flex items-center gap-1 truncate text-xs font-semibold text-listen">
+              <IconCast className="size-3.5 shrink-0" /> {t.playingOn(remote.name)}
+            </p>
+          ) : (
+            <QualityLine track={track} />
+          )}
         </div>
         {!external && (
           <button
@@ -167,22 +191,22 @@ export function ArtistLine({ item, className }: { item: BaseItemDto; className?:
 
 function Transport() {
   const t = useMessages(playerBarMessages)
-  const state = useMusic()
+  const state = usePlayerControls()
   const RepeatIcon = state.repeat === 'one' ? IconRepeatOnce : IconRepeat
   const repeatLabel = state.repeat === 'off' ? t.repeatOff : state.repeat === 'all' ? t.repeatAll : t.repeatOne
   return (
     <div className="flex min-w-0 flex-col items-center gap-1">
       <div className="flex items-center gap-2">
-        <ToggleButton label={state.shuffle ? t.shuffleOn : t.shuffleOff} active={state.shuffle} onClick={music.toggleShuffle} className="hidden sm:grid">
+        <ToggleButton label={state.shuffle ? t.shuffleOn : t.shuffleOff} active={state.shuffle} onClick={state.toggleShuffle} className="hidden sm:grid">
           <IconArrowsShuffle className="size-4" />
         </ToggleButton>
-        <IconButton label={t.previous} onClick={music.previous}>
+        <IconButton label={t.previous} onClick={state.previous}>
           <IconPlayerSkipBackFilled className="size-4" />
         </IconButton>
         <button
           type="button"
           aria-label={state.playing ? t.pause : t.play}
-          onClick={music.toggle}
+          onClick={state.toggle}
           className={cn('size-9', playCircle.light)}
         >
           {state.buffering && !state.playing ? (
@@ -193,10 +217,10 @@ function Transport() {
             <IconPlayerPlayFilled className="size-4 translate-x-px" />
           )}
         </button>
-        <IconButton label={t.next} onClick={music.next}>
+        <IconButton label={t.next} onClick={state.next}>
           <IconPlayerSkipForwardFilled className="size-4" />
         </IconButton>
-        <ToggleButton label={repeatLabel} active={state.repeat !== 'off'} onClick={music.cycleRepeat} className="hidden sm:grid">
+        <ToggleButton label={repeatLabel} active={state.repeat !== 'off'} onClick={state.cycleRepeat} className="hidden sm:grid">
           <RepeatIcon className="size-4" />
         </ToggleButton>
       </div>
@@ -208,7 +232,7 @@ function Transport() {
 /** Time, a slim seek bar (dragging previews the position, letting go seeks) and the length. */
 function Progress() {
   const t = useMessages(playerBarMessages)
-  const { position, duration } = useMusicTime()
+  const { position, duration, seek } = usePlayerControls()
   const track = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<number | null>(null)
   const fractionAt = (event: PointerEvent) => {
@@ -232,7 +256,7 @@ function Progress() {
           const step = { ArrowLeft: -5, ArrowRight: 5 }[event.key]
           if (step === undefined) return
           event.preventDefault()
-          music.seek(position + step)
+          seek(position + step)
         }}
         onPointerDown={(event) => {
           if (!duration) return
@@ -242,7 +266,7 @@ function Progress() {
         onPointerMove={(event) => drag !== null && setDrag(fractionAt(event))}
         onPointerUp={(event) => {
           if (drag === null) return
-          music.seek(fractionAt(event) * duration)
+          seek(fractionAt(event) * duration)
           setDrag(null)
         }}
         onPointerCancel={() => setDrag(null)}
@@ -263,9 +287,9 @@ function Progress() {
 
 function Extras() {
   const t = useMessages(playerBarMessages)
-  const state = useMusic()
+  const state = usePlayerControls()
   const panel = useListenPanel()
-  const lyrics = useLyrics(currentTrack(state))
+  const lyrics = useLyrics(state.remote ? undefined : state.track)
   const noLyrics = !lyrics.isLoading && !lyrics.data?.lines.length
   const VolumeIcon = state.muted || state.volume === 0 ? IconVolume3 : state.volume < 0.5 ? IconVolume2 : IconVolume
   const toggles: Array<{ target: Exclude<ListenPanel, 'nowPlaying'>; label: string; icon: ReactNode; disabled?: boolean }> = [
@@ -274,7 +298,17 @@ function Extras() {
   ]
   return (
     <div className="hidden items-center justify-end gap-1 md:flex">
-      {toggles.map((toggle) =>
+      {/* Lyrics, queue and quality are this device's; while steering another one, "disconnect" takes their place. */}
+      {state.remote ? (
+        <button
+          type="button"
+          onClick={state.remote.disconnect}
+          className="mr-1 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-muted-foreground outline-none transition-colors hover:bg-foreground/[0.07] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <IconX className="size-3.5" /> {t.disconnect}
+        </button>
+      ) : (
+        toggles.map((toggle) =>
         toggle.target === 'queue' ? (
           <QueueDrop key={toggle.target} className="rounded-full">
             <ToggleButton label={toggle.label} active={panel.expanded ? panel.beside === 'queue' : panel.open && panel.view === toggle.target} onClick={() => toggleListenPanel(toggle.target)}>
@@ -292,8 +326,9 @@ function Extras() {
             {toggle.icon}
           </ToggleButton>
         ),
+        )
       )}
-      <IconButton label={state.muted ? t.unmute : t.mute} onClick={music.toggleMute}>
+      <IconButton label={state.muted ? t.unmute : t.mute} onClick={state.toggleMute}>
         <VolumeIcon className="size-4" />
       </IconButton>
       {/* The slider fills its parent; the wrapper gives it its width. */}
@@ -314,7 +349,7 @@ function Extras() {
           min={0}
           max={100}
           value={[state.muted ? 0 : Math.round(state.volume * 100)]}
-          onValueChange={(value) => music.setVolume((Array.isArray(value) ? value[0]! : value) / 100)}
+          onValueChange={(value) => state.setVolume((Array.isArray(value) ? value[0]! : value) / 100)}
         />
       </div>
     </div>

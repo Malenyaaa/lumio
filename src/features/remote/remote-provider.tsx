@@ -309,6 +309,13 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
         else music.setVolume(volume)
         break
       }
+      // Shuffle and repeat for Listen's music (sent by a device steering this one).
+      case 'SetRepeatMode':
+        music.setRepeat(args.RepeatMode === 'RepeatAll' ? 'all' : args.RepeatMode === 'RepeatOne' ? 'one' : 'off')
+        break
+      case 'SetShuffleQueue':
+        music.setShuffle(args.ShuffleMode === 'Shuffle')
+        break
       case 'Mute':
       case 'Unmute':
       case 'ToggleMute':
@@ -465,7 +472,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       .postFullCapabilities({
         clientCapabilitiesDto: {
           PlayableMediaTypes: ['Audio', 'Video'],
-          SupportedCommands: ['DisplayMessage', 'SetVolume', 'Mute', 'Unmute', 'ToggleMute'],
+          SupportedCommands: ['DisplayMessage', 'SetVolume', 'Mute', 'Unmute', 'ToggleMute', 'SetRepeatMode', 'SetShuffleQueue'],
           SupportsMediaControl: true,
         },
       })
