@@ -11,10 +11,11 @@ const GB = 1024 * 1024 * 1024
 const ORIGINAL_BITRATE_UNKNOWN = 40_000_000
 
 /**
- * While an episode plays, its next episodes (as many as set) are downloaded into the video cache one after another,
+ * While an episode plays, its next episodes (as many as set) are downloaded into the video cache one after another
+ * (with the audio track in the language being watched),
  * so they start at once and play offline. Starts once the episode is under way, to leave the start its bandwidth.
  */
-export function useVideoPrefetch(item: BaseItemDto | undefined, active: boolean) {
+export function useVideoPrefetch(item: BaseItemDto | undefined, active: boolean, audioLanguage?: string | null) {
   const { api, session } = useAuthedSession()
   const { settings } = useLocalSettings()
   const count = settings.videoPrefetch
@@ -40,11 +41,12 @@ export function useVideoPrefetch(item: BaseItemDto | undefined, active: boolean)
           bitrate: original ? episode.MediaSources?.[0]?.Bitrate || ORIGINAL_BITRATE_UNKNOWN : settings.videoBitrateMbit * MBIT,
           original,
           originalQuality: original,
+          audioLanguage,
         })
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [active, count, seriesId, itemId, api, session, settings.videoCacheGb, settings.videoBitrateMbit])
+  }, [active, count, seriesId, itemId, api, session, settings.videoCacheGb, settings.videoBitrateMbit, audioLanguage])
 }

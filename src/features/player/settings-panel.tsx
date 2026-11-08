@@ -26,6 +26,8 @@ interface SettingsPanelProps {
   playingStored?: boolean
   /** Offline with a stored copy: there is nothing else to pick. */
   qualityLocked?: boolean
+  /** The audio track of the copy on the device (the others stream, so offline they can't be picked). */
+  storedAudioIndex?: number
   /** Opens the "Statistik für Interessierte" overlay (and closes the panel). */
   onShowStats: () => void
   speed: number
@@ -53,9 +55,16 @@ type Page = 'main' | 'audio' | 'subtitles' | 'quality' | 'speed' | 'fit'
 const ROW =
   'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm outline-none transition-colors hover:bg-white/10 focus-visible:bg-white/10'
 
-function Choice({ selected, onSelect, children }: { selected: boolean; onSelect: () => void; children: ReactNode }) {
+function Choice({ selected, onSelect, disabled, children }: { selected: boolean; onSelect: () => void; disabled?: boolean; children: ReactNode }) {
   return (
-    <button type="button" role="menuitemradio" aria-checked={selected} onClick={onSelect} className={cn(ROW, selected && 'font-medium')}>
+    <button
+      type="button"
+      role="menuitemradio"
+      aria-checked={selected}
+      disabled={disabled}
+      onClick={onSelect}
+      className={cn(ROW, selected && 'font-medium', 'disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent')}
+    >
       <span className="grid size-4 shrink-0 place-items-center">{selected && <IconCheck className="size-4" />}</span>
       <span className="min-w-0 flex-1 truncate">{children}</span>
     </button>
@@ -101,6 +110,7 @@ export function SettingsPanel({
   storedBitrate,
   playingStored,
   qualityLocked,
+  storedAudioIndex,
   onShowStats,
   speed,
   speedLocked,
@@ -194,7 +204,7 @@ export function SettingsPanel({
       style={{ height: contentHeight === null ? undefined : contentHeight + PANEL_PADDING }}
       inert={closing}
       className={cn(
-        'absolute bottom-[4.75rem] right-4 z-20 max-h-[65svh] w-72 origin-bottom-right overflow-y-auto overflow-x-hidden overscroll-contain rounded-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border border-white/10 bg-black/85 p-1.5 text-white shadow-2xl backdrop-blur-md transition-[height] duration-200 ease-out motion-reduce:transition-none sm:right-8',
+        'absolute bottom-[calc(4.75rem+var(--safe-bottom))] right-4 z-20 max-h-[65svh] w-72 max-w-[calc(100%-2rem)] origin-bottom-right overflow-y-auto overflow-x-hidden overscroll-contain rounded-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border border-white/10 bg-black/85 p-1.5 text-white shadow-2xl backdrop-blur-md transition-[height] duration-200 ease-out motion-reduce:transition-none sm:right-8',
         // Grows out of the settings button (bottom right) and shrinks back into it.
         closing
           ? 'pointer-events-none animate-out fade-out-0 zoom-out-95 slide-out-to-bottom-2 fill-mode-forwards duration-150'
@@ -231,8 +241,16 @@ export function SettingsPanel({
       {page === 'audio' && (
         <Submenu title={t.audio} onBack={back}>
           {audio.map((option) => (
-            <Choice key={option.index} selected={option.index === audioIndex} onSelect={pick(() => onAudio(option.index))}>
-              {option.title}
+            <Choice
+              key={option.index}
+              selected={option.index === audioIndex}
+              disabled={qualityLocked && storedAudioIndex !== undefined && option.index !== storedAudioIndex}
+              onSelect={pick(() => onAudio(option.index))}
+            >
+              <span className="flex items-center gap-2">
+                <span className="truncate">{option.title}</span>
+                {storedAudioIndex !== undefined && option.index === storedAudioIndex && <OnDevice label={t.onDevice} />}
+              </span>
             </Choice>
           ))}
         </Submenu>

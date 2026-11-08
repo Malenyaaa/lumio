@@ -6,7 +6,7 @@ import { getMediaSegmentApi } from '@jellyfin/sdk/lib/utils/api/media-segment-ap
 import { forgetSegments, hasSegments, offlineItem, rememberItems, rememberSegments } from '@/features/listen/offline-library'
 import { backdropImageUrl, landscapeImageUrl, portraitImageUrl } from '@/lib/images'
 import { remindPersistentStorage } from '@/lib/persistent-storage'
-import { downloadVideo, forgetVideo, isVideoPinned, pinnedVideoIds, pinVideo, videoBytes, videoCacheAvailable } from './video-cache'
+import { downloadVideo, forgetVideo, isVideoPinned, storedAudio, pinnedVideoIds, pinVideo, videoBytes, videoCacheAvailable } from './video-cache'
 
 /**
  * Downloads for Watch: films, whole seasons and single episodes, kept on this device for good (unlike the episodes the
@@ -30,6 +30,8 @@ interface Collection {
   /** A season's episodes taken out by hand: not fetched again when the season is brought up to date. */
   excluded?: string[]
   seriesId?: string
+  /** The language of the audio track to download (a file's code); the file's default when unset. */
+  audioLanguage?: string | null
   added: number
 }
 
@@ -145,6 +147,7 @@ async function run() {
           pinned: true,
           original: true,
           originalQuality: bitrate === null,
+          audioLanguage: Object.values(index).find((collection) => collection.ids.includes(id))?.audioLanguage,
           signal: abortCurrent.signal,
           onProgress: (bytes, total) => {
             if (!current || current.id !== id) return
@@ -213,11 +216,25 @@ async function fetchMissingSegments({ api }: Source) {
  * Downloads a film, a season or an episode. `items`: what it holds (the film, the season's episodes); `context`: what
  * the pages need besides offline (the series, its seasons, the other episodes of the season).
  */
-export function downloadVideos(key: string, kind: VideoDownloadKind, name: string, items: BaseItemDto[], context: BaseItemDto[] = []) {
+export function downloadVideos(
+  key: string,
+  kind: VideoDownloadKind,
+  name: string,
+  items: BaseItemDto[],
+  context: BaseItemDto[] = [],
+  audioLanguage?: string | null,
+) {
   if (!videoCacheAvailable || !items.length) return
   // Without persistent storage the browser may delete downloads again: said once more when starting one.
   if (!index[key]) remindPersistentStorage()
-  index[key] = { kind, name, ids: items.map((item) => item.Id!), seriesId: items[0]?.SeriesId ?? undefined, added: index[key]?.added ?? Date.now() }
+  index[key] = {
+    kind,
+    name,
+    ids: items.map((item) => item.Id!),
+    seriesId: items[0]?.SeriesId ?? undefined,
+    audioLanguage: audioLanguage ?? undefined,
+    added: index[key]?.added ?? Date.now(),
+  }
   rememberItems([...items, ...context])
   if (source) warmImages(source.api, [...items, ...context.filter((item) => item.Type === 'Series' || item.Type === 'Movie')])
   reconcile()
@@ -304,6 +321,8 @@ export interface DownloadedVideo {
   bytes: number
   /** The keys of the downloads holding it (a season, the episode on its own). */
   keys: string[]
+  /** The language of its audio track, once it is there. */
+  language?: string
   added: number
 }
 
@@ -313,7 +332,7 @@ export function useDownloadedVideos(): DownloadedVideo[] {
   const byId = new Map<string, DownloadedVideo>()
   for (const [key, collection] of Object.entries(index)) {
     for (const id of collection.ids) {
-      const entry = byId.get(id) ?? { id, item: offlineItem(id), state: stateOf(id)!, bytes: videoBytes(id), keys: [], added: collection.added }
+      const entry = byId.get(id) ?? { id, item: offlineItem(id), state: stateOf(id)!, bytes: videoBytes(id), keys: [], language: storedAudio(id)?.language, added: collection.added }
       entry.keys.push(key)
       byId.set(id, entry)
     }

@@ -60,6 +60,8 @@ interface PlayerControlsProps {
   /** Omitted when the browser has no picture-in-picture (or the item no picture). */
   onTogglePip?: () => void
   pip?: boolean
+  /** Fingers: play and skip sit in the middle of the picture (TouchTransport), volume is the device's. */
+  touch?: boolean
 }
 
 const BACK_ICONS = { 5: IconRewindBackward5, 10: IconRewindBackward10, 15: IconRewindBackward15, 20: IconRewindBackward20, 30: IconRewindBackward30 } as const
@@ -86,6 +88,7 @@ export function PlayerControls({
   onNext,
   onTogglePip,
   pip,
+  touch,
 }: PlayerControlsProps) {
   const t = useMessages(controlsMessages)
   const showRemaining = useRemainingTime()
@@ -95,26 +98,30 @@ export function PlayerControls({
   const VolumeIcon = silent ? IconVolume3 : state.volume < 0.5 ? IconVolume2 : IconVolume
 
   return (
-    <div className="absolute inset-x-0 bottom-0 z-10 bg-linear-to-t from-black/80 via-black/40 to-transparent px-4 pb-4 pt-16 text-white sm:px-8">
+    <div className="absolute inset-x-0 bottom-0 z-10 bg-linear-to-t from-black/80 via-black/40 to-transparent pt-16 pr-[max(1rem,var(--safe-right))] pb-[max(1rem,var(--safe-bottom))] pl-[max(1rem,var(--safe-left))] text-white sm:pr-[max(2rem,var(--safe-right))] sm:pl-[max(2rem,var(--safe-left))]">
       <SeekBar currentTime={state.currentTime} duration={state.duration} buffered={state.buffered} onSeek={onSeek} frameAt={frameAt} pictureArea={pictureArea} onScrub={onScrub} />
 
       <div className="flex items-center gap-1">
-        <Button variant="ghost" size="icon" aria-label={state.paused ? t.play : t.pause} onClick={onTogglePlay}>
-          {state.paused ? <IconPlayerPlay className="fill-current" /> : <IconPlayerPause className="fill-current" />}
-        </Button>
-        <Button variant="ghost" size="icon" aria-label={t.skipBack(skipBackSeconds)} onClick={() => onSeekBy(-skipBackSeconds)}>
-          <BackIcon />
-        </Button>
-        <Button variant="ghost" size="icon" aria-label={t.skipForward(skipForwardSeconds)} onClick={() => onSeekBy(skipForwardSeconds)}>
-          <ForwardIcon />
-        </Button>
+        {!touch && (
+          <>
+            <Button variant="ghost" size="icon" aria-label={state.paused ? t.play : t.pause} onClick={onTogglePlay}>
+              {state.paused ? <IconPlayerPlay className="fill-current" /> : <IconPlayerPause className="fill-current" />}
+            </Button>
+            <Button variant="ghost" size="icon" aria-label={t.skipBack(skipBackSeconds)} onClick={() => onSeekBy(-skipBackSeconds)}>
+              <BackIcon />
+            </Button>
+            <Button variant="ghost" size="icon" aria-label={t.skipForward(skipForwardSeconds)} onClick={() => onSeekBy(skipForwardSeconds)}>
+              <ForwardIcon />
+            </Button>
+          </>
+        )}
         {onNext && (
-          <Button variant="ghost" size="icon" aria-label={t.next} title={t.next} onClick={onNext}>
+          <Button variant="ghost" size={touch ? 'icon-lg' : 'icon'} aria-label={t.next} title={t.next} onClick={onNext}>
             <IconPlayerSkipForward />
           </Button>
         )}
 
-        <div className="group/volume flex items-center">
+        <div className={cn('group/volume flex items-center', touch && 'hidden')}>
           <Button variant="ghost" size="icon" aria-label={silent ? t.unmute : t.mute} onClick={onToggleMute}>
             <VolumeIcon />
           </Button>
@@ -140,7 +147,7 @@ export function PlayerControls({
           </div>
         </div>
 
-        <span className="ml-3 text-sm tabular-nums text-white/90">
+        <span className={cn('text-sm tabular-nums text-white/90', !touch && 'ml-3')}>
           {formatClock(state.currentTime)} /{' '}
           {/* A click switches between the length and the time left (also in the music bar). */}
           <button type="button" onClick={toggleRemainingTime} title={t.lengthToggle} className="tabular-nums outline-none hover:text-white focus-visible:underline">
@@ -185,6 +192,34 @@ export function PlayerControls({
           </Button>
         )}
       </div>
+    </div>
+  )
+}
+
+/** Fingers: play/pause and the skips large in the middle of the picture, as phone video apps have them. */
+export function TouchTransport({
+  paused,
+  onTogglePlay,
+  onSeekBy,
+  skipBackSeconds,
+  skipForwardSeconds,
+}: Pick<PlayerControlsProps, 'onTogglePlay' | 'onSeekBy' | 'skipBackSeconds' | 'skipForwardSeconds'> & { paused: boolean }) {
+  const t = useMessages(controlsMessages)
+  const BackIcon = BACK_ICONS[skipBackSeconds as keyof typeof BACK_ICONS] ?? IconRewindBackward10
+  const ForwardIcon = FORWARD_ICONS[skipForwardSeconds as keyof typeof FORWARD_ICONS] ?? IconRewindForward10
+  const round = 'pointer-events-auto grid place-items-center rounded-full bg-black/35 text-white outline-none backdrop-blur-sm active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-white/70'
+  return (
+    // Taps beside the buttons reach the picture (show/hide the controls, double tap to skip).
+    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-10">
+      <button type="button" aria-label={t.skipBack(skipBackSeconds)} onClick={() => onSeekBy(-skipBackSeconds)} className={cn(round, 'size-14')}>
+        <BackIcon className="size-7" />
+      </button>
+      <button type="button" aria-label={paused ? t.play : t.pause} onClick={onTogglePlay} className={cn(round, 'size-18')}>
+        {paused ? <IconPlayerPlay className="size-9 translate-x-0.5 fill-current" /> : <IconPlayerPause className="size-9 fill-current" />}
+      </button>
+      <button type="button" aria-label={t.skipForward(skipForwardSeconds)} onClick={() => onSeekBy(skipForwardSeconds)} className={cn(round, 'size-14')}>
+        <ForwardIcon className="size-7" />
+      </button>
     </div>
   )
 }

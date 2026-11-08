@@ -29,15 +29,16 @@ import { cn } from '@/lib/utils'
 import { EpisodePanel } from './episode-panel'
 import { LoadingIndicator } from './loading-indicator'
 import { PauseSpotlight } from './pause-spotlight'
-import { PlayerControls } from './player-controls'
+import { PlayerControls, TouchTransport } from './player-controls'
 import { playerMessages, segmentSkipLabels } from './messages'
 import { initialChoice, usePlayback, useStreamOptions, type PlaybackChoice } from './playback'
 import { reportActivity } from '@/features/social/social'
 import { usePreloadNext } from './preload-next'
 import { useVideoPrefetch } from './use-video-prefetch'
-import { forgetVideo, isVideoCached, isVideoPinned, storedQuality, useVideoStored } from './video-cache'
+import { forgetVideo, isVideoCached, isVideoPinned, storedAudio, storedQuality, useVideoStored } from './video-cache'
 import { useOffline } from '@/lib/network'
 import { useBackLayer } from '@/lib/back'
+import { useTouch } from '@/lib/use-media-query'
 import { inJellyfinApp, setAppFullscreen } from '@/lib/native-app'
 import { startAfterIntro, useMediaSegments } from './segments'
 import { fitLabels } from './labels'
@@ -496,9 +497,24 @@ function Player({ id }: { id: string }) {
     if (el) el.muted = !el.muted
   }, [])
   const toggleFullscreen = useCallback(() => {
-    if (document.fullscreenElement) void document.exitFullscreen()
-    else void container.current?.requestFullscreen().catch(() => undefined)
+    if (document.fullscreenElement) return void document.exitFullscreen()
+    const element = container.current
+    const el = video.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null
+    // iPhone Safari can only put the video itself fullscreen (with its own controls).
+    if (!element?.requestFullscreen) return el?.webkitEnterFullscreen?.()
+    void element
+      .requestFullscreen()
+      // A phone turns a wide picture sideways (Chrome on Android allows this only while fullscreen).
+      .then(() => {
+        const orientation = window.screen.orientation as ScreenOrientation & { lock?: (to: string) => Promise<void> }
+        if (el && el.videoWidth > el.videoHeight) void orientation.lock?.('landscape').catch(() => undefined)
+      })
+      .catch(() => undefined)
   }, [])
+  // Leaving fullscreen lets the phone turn freely again.
+  useEffect(() => {
+    if (!fullscreen) (window.screen.orientation as ScreenOrientation & { unlock?: () => void } | undefined)?.unlock?.()
+  }, [fullscreen])
   // Inside Jellyfin's Android app the player is always fullscreen (no system bars, turned to landscape); there is no
   // fullscreen to toggle.
   const inApp = inJellyfinApp()
@@ -612,6 +628,36 @@ function Player({ id }: { id: string }) {
 
   const [statsOpen, setStatsOpen] = useState(false)
 
+  // Fingers: a tap shows or hides the controls; a second tap on the left or right side skips back or ahead (and the
+  // first tap's show/hide is undone), as in phone video apps.
+  const touch = useTouch()
+  const lastTap = useRef<{ at: number; side: 'back' | 'forward' | null; wasAwake: boolean } | null>(null)
+  const [skipHint, setSkipHint] = useState<{ side: 'back' | 'forward'; seconds: number; key: number } | null>(null)
+  const onTouchTap = (event: React.PointerEvent) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const x = (event.clientX - rect.left) / rect.width
+    const side = x < 0.4 ? 'back' : x > 0.6 ? 'forward' : null
+    const previous = lastTap.current
+    const now = event.timeStamp
+    if (previous && side && previous.side === side && now - previous.at < 320) {
+      const seconds = side === 'back' ? settings.skipBackSeconds : settings.skipForwardSeconds
+      seekBy(side === 'back' ? -seconds : seconds)
+      setSkipHint((hint) => ({ side, seconds: hint?.side === side && now - previous.at < 1000 ? hint.seconds + seconds : seconds, key: now }))
+      if (previous.wasAwake) wake()
+      else setAwake(false)
+      lastTap.current = { at: now, side, wasAwake: previous.wasAwake }
+      return
+    }
+    lastTap.current = { at: now, side, wasAwake: awake }
+    if (awake) setAwake(false)
+    else wake()
+  }
+  useEffect(() => {
+    if (!skipHint) return
+    const timer = window.setTimeout(() => setSkipHint(null), 700)
+    return () => window.clearTimeout(timer)
+  }, [skipHint])
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return
@@ -705,7 +751,9 @@ function Player({ id }: { id: string }) {
     started && state.duration > 0 && (state.duration - state.currentTime < 90 || (!!outro && state.currentTime >= outro.start - 20))
   usePreloadNext(next, settings.preloadNextEpisode && !syncActive && endingSoon)
   // The next episodes are downloaded for later once this one is under way (a minute in).
-  useVideoPrefetch(item.data, started && state.currentTime > 60)
+  // In the language being watched.
+  const watchedLanguage = data?.streams.find((stream) => stream.Type === 'Audio' && stream.Index === data.audioIndex)?.Language
+  useVideoPrefetch(item.data, started && state.currentTime > 60, watchedLanguage)
   useEffect(() => {
     if (!activeSegment || segmentAction !== 'Skip' || autoSkipped.current.has(activeSegment.id)) return
     autoSkipped.current.add(activeSegment.id)
@@ -856,19 +904,30 @@ function Player({ id }: { id: string }) {
 
       {/* Click surface: mouse toggles playback, touch toggles the controls. */}
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 touch-manipulation"
         onPointerUp={(event) => {
           if (panelOpen) {
             setSettingsOpen(false)
             setEpisodesOpen(false)
-          } else if (event.pointerType === 'touch') {
-            if (awake) setAwake(false)
-            else wake()
-          }
+          } else if (event.pointerType === 'touch') onTouchTap(event)
           else togglePlay()
         }}
-        onDoubleClick={inApp ? undefined : toggleFullscreen}
+        // A finger's double tap skips (onTouchTap); only a mouse's double click toggles fullscreen.
+        onDoubleClick={inApp || touch ? undefined : toggleFullscreen}
       />
+
+      {skipHint && (
+        <div
+          key={skipHint.key}
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute inset-y-0 z-10 flex w-2/5 items-center justify-center bg-white/10 text-lg font-semibold text-white animate-out fade-out-0 fill-mode-forwards delay-300 duration-400',
+            skipHint.side === 'back' ? 'left-0 rounded-r-[50%]' : 'right-0 rounded-l-[50%]',
+          )}
+        >
+          {skipHint.side === 'back' ? `−${skipHint.seconds} s` : `+${skipHint.seconds} s`}
+        </div>
+      )}
 
       {!isAudio && <PauseSpotlight item={item.data} visible={spotlightVisible} />}
 
@@ -901,7 +960,7 @@ function Player({ id }: { id: string }) {
       )}
 
       <div className={cn('transition-opacity duration-300', !controlsVisible && 'pointer-events-none opacity-0')}>
-        <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 bg-linear-to-b from-black/70 to-transparent p-4 text-white">
+        <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 bg-linear-to-b from-black/70 to-transparent pt-[max(1rem,var(--safe-top))] pr-[max(1rem,var(--safe-right))] pb-4 pl-[max(1rem,var(--safe-left))] text-white">
           <Button variant="ghost" size="icon" aria-label={t.back} onClick={goBack}>
             <IconArrowLeft />
           </Button>
@@ -937,6 +996,7 @@ function Player({ id }: { id: string }) {
             storedBitrate={storedBitrate}
             playingStored={!!data.stats.offline}
             qualityLocked={offline && !!data.stats.offline}
+            storedAudioIndex={hasStored ? storedAudio(id)?.index : undefined}
             onShowStats={() => {
               setSettingsOpen(false)
               setStatsOpen(true)
@@ -950,7 +1010,18 @@ function Player({ id }: { id: string }) {
           />
         )}
 
+        {touch && !panelOpen && (
+          <TouchTransport
+            paused={state.paused}
+            onTogglePlay={togglePlay}
+            onSeekBy={seekBy}
+            skipBackSeconds={settings.skipBackSeconds}
+            skipForwardSeconds={settings.skipForwardSeconds}
+          />
+        )}
+
         <PlayerControls
+          touch={touch}
           state={state}
           fullscreen={fullscreen}
           onTogglePlay={togglePlay}

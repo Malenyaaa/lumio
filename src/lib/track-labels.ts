@@ -84,6 +84,12 @@ function intlName(names: Intl.DisplayNames, code: string) {
   }
 }
 
+/** One key per language, whatever code a file uses for it ("ger", "deu" and "de" are all "de"). */
+export function languageKey(code?: string | null): string {
+  const key = (code ?? '').toLowerCase()
+  return LANGUAGE_CODES[key] ?? key
+}
+
 /** "ger" -> "Deutsch" / "German", in the app's language unless another is asked for. */
 export function languageName(code?: string | null, locale: Locale = getLocale()): string {
   if (!code) return ''

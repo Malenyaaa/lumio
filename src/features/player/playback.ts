@@ -168,7 +168,8 @@ export function playbackOptions(
           transcoded: false,
           mediaSourceId: itemId,
           playSessionId: crypto.randomUUID(),
-          streams: stored.streams.filter((stream) => (stream.Type === 'Audio' && stream.Index === stored.audioIndex) || (stream.Type === 'Subtitle' && subtitles.includes(stream.Index!))),
+          // Every audio track is offered (the others stream, online); the stored subtitles only.
+          streams: stored.streams.filter((stream) => stream.Type === 'Audio' || (stream.Type === 'Subtitle' && subtitles.includes(stream.Index!))),
           subtitleUrls: stored.subtitleUrls,
           audioIndex: stored.audioIndex,
           subtitleIndex: choice.subtitle != null && subtitles.includes(choice.subtitle) ? choice.subtitle : -1,

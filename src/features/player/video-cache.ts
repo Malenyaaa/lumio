@@ -2,6 +2,7 @@ import type { Api } from '@jellyfin/sdk'
 import type { BaseItemDto, MediaStream } from '@jellyfin/sdk/lib/generated-client/models'
 import { useSyncExternalStore } from 'react'
 import { jellyfin } from '@/lib/jellyfin'
+import { languageKey } from '@/lib/track-labels'
 
 /**
  * Episodes kept in the browser ahead of watching. Unlike songs, films and episodes are rarely watched twice, so the
@@ -82,6 +83,13 @@ export function useVideoCacheStats() {
 export const isVideoCached = (itemId: string) => !!index[itemId]
 export const isVideoPinned = (itemId: string) => !!index[itemId]?.pinned
 export const pinnedVideoIds = () => Object.keys(index).filter((itemId) => index[itemId]!.pinned)
+/** The audio track a stored copy has (its stream index and language), or undefined when there is none. */
+export function storedAudio(itemId: string) {
+  const entry = index[itemId]
+  if (!entry) return undefined
+  return { index: entry.audioIndex, language: entry.streams.find((stream) => stream.Type === 'Audio' && stream.Index === entry.audioIndex)?.Language ?? undefined }
+}
+
 /** The quality a stored copy is in: a bitrate, null for the original file, undefined when unknown or not stored. */
 export const storedQuality = (itemId: string) => index[itemId]?.bitrate
 
@@ -140,6 +148,8 @@ export interface VideoCacheSettings {
   original?: boolean
   /** Converted in the original quality (at the file's own bitrate): noted as the original, not as a bitrate. */
   originalQuality?: boolean
+  /** The language of the audio track to keep (a file's code, e.g. "ger"); the file's default when unset or missing. */
+  audioLanguage?: string | null
   /** Told the bytes received so far while it downloads (and how many there will be, when the server says). */
   onProgress?: (bytes: number, total?: number) => void
   /** Stops the download (a download removed while it comes in). */
@@ -154,10 +164,17 @@ export interface VideoCacheSettings {
 export function downloadVideo(api: Api, session: { userId: string; accessToken: string }, item: BaseItemDto, settings: VideoCacheSettings): Promise<void> {
   const itemId = item.Id
   if (!videoCacheAvailable || !itemId) return Promise.resolve()
-  // Stored ahead already: a download just keeps that copy.
-  if (index[itemId]) {
-    if (settings.pinned) pinVideo(itemId, true)
-    return Promise.resolve()
+  // Stored ahead already: a download just keeps that copy (when it has the language asked for).
+  const existing = index[itemId]
+  if (existing) {
+    const language = existing.streams.find((stream) => stream.Type === 'Audio' && stream.Index === existing.audioIndex)?.Language
+    const fits = !settings.audioLanguage || languageKey(language) === languageKey(settings.audioLanguage)
+    if (fits || existing.pinned) {
+      if (settings.pinned) pinVideo(itemId, true)
+      return Promise.resolve()
+    }
+    // Another language than wanted, only stored ahead: replaced by the download.
+    return forgetVideo(itemId).then(() => downloadVideo(api, session, item, settings))
   }
   const running = inFlight.get(itemId)
   if (running) return running
@@ -165,11 +182,14 @@ export function downloadVideo(api: Api, session: { userId: string; accessToken: 
     try {
       const source = item.MediaSources?.[0]
       const streams = (source?.MediaStreams ?? item.MediaStreams ?? []).filter((stream) => stream.Type === 'Audio' || stream.Type === 'Subtitle' || stream.Type === 'Video')
-      const asIs = settings.original && playsAsIs(source)
-      // The original file plays its first audio track (browsers can't switch between the tracks of a file).
-      const audioIndex = asIs
-        ? (streams.find((stream) => stream.Type === 'Audio')?.Index ?? undefined)
-        : (source?.DefaultAudioStreamIndex ?? streams.find((stream) => stream.Type === 'Audio')?.Index ?? undefined)
+      // The audio track: the language asked for, else the file's default, else its first.
+      const audios = streams.filter((stream) => stream.Type === 'Audio')
+      const wanted = settings.audioLanguage ? audios.find((stream) => languageKey(stream.Language) === languageKey(settings.audioLanguage)) : undefined
+      const chosen = wanted ?? audios.find((stream) => stream.Index === source?.DefaultAudioStreamIndex) ?? audios[0]
+      // The original file plays its first audio track (browsers can't switch between the tracks of a file): as it is
+      // only when that is the one wanted, else repackaged with that track.
+      const asIs = settings.original && playsAsIs(source) && (!chosen || chosen === audios[0])
+      const audioIndex = chosen?.Index ?? undefined
       const params = new URLSearchParams({
         container: 'mp4',
         videoCodec: 'h264',

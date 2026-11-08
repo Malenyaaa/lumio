@@ -63,7 +63,8 @@ export function SeekBar({ currentTime, duration, buffered, onSeek, frameAt, pict
         event.stopPropagation()
         onSeek(Math.min(Math.max(target, 0), duration))
       }}
-      className="group relative h-6 cursor-pointer touch-none select-none rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+      // Fingers get a taller strip to hit and the knob always shown.
+      className="group relative h-6 cursor-pointer touch-none select-none rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-white/70 pointer-coarse:h-9"
       onPointerDown={(event) => {
         if (!duration) return
         event.currentTarget.setPointerCapture(event.pointerId)
@@ -90,7 +91,7 @@ export function SeekBar({ currentTime, duration, buffered, onSeek, frameAt, pict
       <div
         className={cn(
           'absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow transition-transform group-hover:scale-100',
-          scrub !== null ? 'scale-100' : 'scale-0',
+          scrub !== null ? 'scale-100' : 'scale-0 pointer-coarse:scale-100',
         )}
         style={{ left: `${played * 100}%` }}
       />
