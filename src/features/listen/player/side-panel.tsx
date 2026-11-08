@@ -154,12 +154,12 @@ export function SidePanel() {
           // Big, it spans the window with the same gap on both sides.
           expanded && 'left-2',
         )}
-        style={{ width: expanded ? 'calc(100% - 1rem)' : layout.right - 8 }}
+        style={{ width: expanded ? 'calc(100% - 1rem)' : layout.right - 8, viewTransitionName: 'listen-panel' }}
       >
         <PanelColumn view={view} titles={titles} track={track} expanded={expanded} />
         {/* In the big panel, the queue or the quality sit in a column at the right edge. */}
         {/* In the big panel, the queue or the quality slide in as a column at the right edge (and out again). */}
-        <BesideColumn target={expanded ? beside : null} titles={titles} track={track} />
+        <BesideColumn target={expanded ? beside : null} expanded={expanded} titles={titles} track={track} />
       </div>
       {expanded ? null : open ? (
         <ResizeHandle
@@ -201,10 +201,13 @@ function SlidingViews({ view, titles, track }: { view: ListenPanel; titles: Reco
   const over = view === 'nowPlaying' ? null : view
   const [shown, setShown] = useState<ListenPanel | null>(over)
   const [leaving, setLeaving] = useState(false)
+  // A view already open when the panel appears (back from big) is simply there; one opened meanwhile slides in.
+  const [slideIn, setSlideIn] = useState(false)
   // Follow the panel's view during render: a new view slides in; closing lets the shown one slide out first.
   if (over && over !== shown) {
     setShown(over)
     setLeaving(false)
+    setSlideIn(true)
   } else if (!over && shown && !leaving) setLeaving(true)
   return (
     <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -218,7 +221,7 @@ function SlidingViews({ view, titles, track }: { view: ListenPanel; titles: Reco
             setShown(null)
             setLeaving(false)
           }}
-          className={cn('absolute inset-0 z-10 flex flex-col bg-surface', leaving ? 'panel-slide-out' : 'panel-slide-in')}
+          className={cn('absolute inset-0 z-10 flex flex-col bg-surface', leaving ? 'panel-slide-out' : slideIn && 'panel-slide-in')}
         >
           <PanelLayer view={shown} title={titles[shown]} track={track} expanded={false} />
         </div>
@@ -240,13 +243,32 @@ function PanelLayer({ view, title, track, expanded }: { view: ListenPanel; title
 }
 
 /** The big panel's column at the right edge (queue or quality): it slides in from the right and out again when closed. */
-function BesideColumn({ target, titles, track }: { target: 'queue' | 'quality' | null; titles: Record<ListenPanel, string>; track: BaseItemDto }) {
+function BesideColumn({
+  target,
+  expanded,
+  titles,
+  track,
+}: {
+  target: 'queue' | 'quality' | null
+  expanded: boolean
+  titles: Record<ListenPanel, string>
+  track: BaseItemDto
+}) {
   const t = useMessages(messages)
   const [shown, setShown] = useState(target)
   const [leaving, setLeaving] = useState(false)
-  if (target && target !== shown) {
+  const [slideIn, setSlideIn] = useState(false)
+  const [wasExpanded, setWasExpanded] = useState(expanded)
+  if (expanded !== wasExpanded) {
+    // The panel grew or shrank (the whole panel animates): the column comes or goes with it, without its own slide.
+    setWasExpanded(expanded)
     setShown(target)
     setLeaving(false)
+    setSlideIn(false)
+  } else if (target && target !== shown) {
+    setShown(target)
+    setLeaving(false)
+    setSlideIn(true)
   } else if (!target && shown && !leaving) setLeaving(true)
   if (!shown) return null
   return (
@@ -257,7 +279,7 @@ function BesideColumn({ target, titles, track }: { target: 'queue' | 'quality' |
         setLeaving(false)
       }}
       // The column opens from nothing at the right edge, its content held there, so it slides in from the right.
-      className={cn('flex w-80 shrink-0 justify-end overflow-hidden', leaving ? 'beside-out' : 'beside-in')}
+      className={cn('flex w-80 shrink-0 justify-end overflow-hidden', leaving ? 'beside-out' : slideIn && 'beside-in')}
     >
       <div className="flex w-80 shrink-0 flex-col bg-background/30">
         <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-3">

@@ -328,8 +328,29 @@ html.panel-transition::view-transition-group(listen-cover) {
   animation-duration: 380ms;
   animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-html.panel-transition::view-transition-group(app-header) {
-  animation: none;
+/* The header changes width with the page around it; as a picture of its own it would be stretched, so here it is just
+   part of the page. */
+html.panel-transition [data-app-shell] header {
+  view-transition-name: none !important;
+}
+/* The panel grows from its place to the whole window (and back): its box moves and resizes, the content is not scaled
+   but uncovered (or covered) from the top left, cross-fading between the two. Behind it, the page shows through. */
+html.panel-transition::view-transition-group(listen-panel) {
+  animation-duration: 380ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  overflow: clip;
+  border-radius: 0.875rem;
+}
+html.panel-transition::view-transition-old(listen-panel),
+html.panel-transition::view-transition-new(listen-panel) {
+  height: auto;
+  width: auto;
+  object-fit: none;
+  object-position: top left;
+  animation-duration: 380ms;
+}
+html.panel-transition [data-side-panel] {
+  background: transparent !important;
 }
 /* The new layout is captured at once: the panel and the content must be at their final size then, not halfway
    through their width animation (the cover would be squeezed into the old width, or fly to a stale spot). */
