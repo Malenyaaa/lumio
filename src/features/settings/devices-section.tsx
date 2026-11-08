@@ -89,7 +89,7 @@ export function DevicesSection() {
   const list = devices.data ?? []
   const shown = all ? list : list.slice(0, SHOWN)
   return (
-    <Section title={t.title} description={isAdmin ? t.adminDescription : t.userDescription}>
+    <Section anchor="devices" title={t.title} description={isAdmin ? t.adminDescription : t.userDescription}>
       {devices.isError && <p className="p-4 text-sm text-muted-foreground">{t.failed}</p>}
       {devices.isSuccess && !list.length && <p className="p-4 text-sm text-muted-foreground">{t.none}</p>}
       {shown.length > 0 && (

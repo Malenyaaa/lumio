@@ -146,7 +146,7 @@ export function TasteExclusionsSection() {
   const { exclusions } = useTasteExclusions()
   const entries = (Object.keys(exclusions) as TasteKind[]).flatMap((kind) => exclusions[kind].map((id) => ({ kind, id })))
   return (
-    <Section title={t.title} description={t.description} scope="account">
+    <Section anchor="taste" title={t.title} description={t.description} scope="account">
       {entries.length ? entries.map(({ kind, id }) => <ExcludedRow key={`${kind}:${id}`} kind={kind} id={id} />) : <p className="p-4 text-sm text-muted-foreground">{t.empty}</p>}
     </Section>
   )

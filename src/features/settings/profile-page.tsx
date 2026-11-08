@@ -83,7 +83,7 @@ export function ProfilePage() {
 
   return (
     <SettingsPage title={t.title} description={t.description}>
-      <Section title={t.image}>
+      <Section anchor="profile-image" title={t.image}>
         <div className="flex items-center gap-5 p-4">
           <Avatar className="size-20">
             {imageUrl && <AvatarImage src={imageUrl} alt="" />}
@@ -123,7 +123,7 @@ export function ProfilePage() {
 function ManagedAccountSection() {
   const t = useMessages(profileMessages)
   return (
-    <Section title={t.passwordAndSignIn}>
+    <Section anchor="password" title={t.passwordAndSignIn}>
       <div className="space-y-3 p-4">
         <p className="max-w-prose text-sm text-muted-foreground">
           {t.managedAccount}
@@ -169,7 +169,7 @@ function PasswordSection() {
   }
 
   return (
-    <Section title={t.changePassword} description={t.changePasswordDescription}>
+    <Section anchor="password" title={t.changePassword} description={t.changePasswordDescription}>
       <form onSubmit={onSubmit} className="grid gap-4 p-4 sm:max-w-md">
         <div className="grid gap-1.5">
           <Label htmlFor="pw-current">{t.currentPassword}</Label>

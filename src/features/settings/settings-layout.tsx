@@ -1,12 +1,18 @@
-import { IconChevronLeft, IconChevronRight } from '@tabler/icons-react'
+import { IconChevronLeft, IconChevronRight, IconSearch, IconX } from '@tabler/icons-react'
+import { useEffect, useState } from 'react'
 import { Navigate, NavLink, Outlet, useLocation } from 'react-router'
 import { Link } from '@/components/link'
+import { Input } from '@/components/ui/input'
 import { inMode, useAppMode } from '@/lib/app-mode'
 import { useMessages } from '@/lib/i18n'
 import { usePhone } from '@/lib/use-media-query'
 import { cn } from '@/lib/utils'
 import { fieldMessages } from './messages'
 import { SETTINGS_GROUPS, useGroupNames, useSettingsPages, type SettingsPageLink } from './settings-pages'
+import { useSettingsSearch } from './settings-search'
+
+/** Highlight on the row a search result jumps to. */
+const FLASH = ['bg-primary/10']
 
 /**
  * Settings area. Wide screens: a side navigation in groups next to the active sub-page. Phones: /settings is a list of
@@ -18,6 +24,8 @@ export function SettingsLayout() {
   const mode = useAppMode()
   const t = useMessages(fieldMessages)
   const atIndex = /\/settings\/?$/.test(pathname)
+  const [query, setQuery] = useState('')
+  useJumpToSetting()
 
   if (phone) {
     return (
@@ -25,7 +33,8 @@ export function SettingsLayout() {
         {atIndex ? (
           <div className="animate-page-in space-y-6">
             <h1 className="text-2xl font-semibold tracking-tight">{t.navigation}</h1>
-            <PageList />
+            <SearchBox query={query} onChange={setQuery} />
+            {query.trim() ? <SearchResults query={query} onPick={() => setQuery('')} /> : <PageList />}
           </div>
         ) : (
           <div key={pathname} className="animate-page-in space-y-4">
@@ -43,7 +52,10 @@ export function SettingsLayout() {
   if (atIndex) return <Navigate to="profile" replace />
   return (
     <div className="mx-auto flex max-w-5xl flex-row gap-12 px-8 pb-12 pt-20">
-      <SideNav />
+      <nav aria-label={t.navigation} className="sticky top-20 w-56 shrink-0 space-y-4 self-start">
+        <SearchBox query={query} onChange={setQuery} />
+        {query.trim() ? <SearchResults query={query} onPick={() => setQuery('')} /> : <SideNav />}
+      </nav>
       {/* The navigation stays; only the sub-page fades in (no page-wide View Transition, which would redraw the nav). */}
       <div key={pathname} className="min-w-0 flex-1 animate-page-in">
         <Outlet />
@@ -62,10 +74,9 @@ function useGrouped() {
 }
 
 function SideNav() {
-  const t = useMessages(fieldMessages)
   const groups = useGrouped()
   return (
-    <nav aria-label={t.navigation} className="sticky top-20 w-52 shrink-0 self-start">
+    <div>
       <div className="space-y-4">
         {groups.map(({ group, title, pages }) => (
           <div key={group}>
@@ -80,7 +91,7 @@ function SideNav() {
           </div>
         ))}
       </div>
-    </nav>
+    </div>
   )
 }
 
@@ -124,4 +135,74 @@ function PageList() {
       ))}
     </div>
   )
+}
+
+function SearchBox({ query, onChange }: { query: string; onChange: (query: string) => void }) {
+  const t = useMessages(fieldMessages)
+  return (
+    <div className="relative">
+      <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        type="search"
+        value={query}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => event.key === 'Escape' && onChange('')}
+        placeholder={t.search}
+        aria-label={t.search}
+        className="h-9 pl-9 pr-8 [&::-webkit-search-cancel-button]:hidden"
+      />
+      {query && (
+        <button type="button" aria-label={t.clearSearch} onClick={() => onChange('')} className="absolute right-2 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-full text-muted-foreground hover:text-foreground">
+          <IconX className="size-3.5" />
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** Settings matching the search, each leading to its row. */
+function SearchResults({ query, onPick }: { query: string; onPick: () => void }) {
+  const t = useMessages(fieldMessages)
+  const results = useSettingsSearch(query)
+  if (!results.length) return <p className="px-1 text-sm text-muted-foreground">{t.noResults}</p>
+  return (
+    <ul className="divide-y overflow-hidden rounded-xl border bg-card md:divide-y-0 md:rounded-none md:border-0 md:bg-transparent">
+      {results.slice(0, 30).map((result) => (
+        <li key={result.key}>
+          <Link to={result.to} onClick={onPick} className="block px-4 py-3 outline-none transition-colors hover:bg-muted focus-visible:bg-muted md:rounded-md md:px-3 md:py-2">
+            <span className="block text-sm font-medium">{result.label}</span>
+            <span className="block text-xs text-muted-foreground">{result.page}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/**
+ * A link with #id (from the search) scrolls to that row or section once the page shows it (account settings load
+ * first) and lights it up briefly.
+ */
+function useJumpToSetting() {
+  const { pathname, hash } = useLocation()
+  useEffect(() => {
+    const id = decodeURIComponent(hash.slice(1))
+    if (!id) return
+    let tries = 0
+    let clear: number | undefined
+    const find = window.setInterval(() => {
+      const target = document.getElementById(id)
+      if (!target && ++tries < 40) return
+      window.clearInterval(find)
+      const row = target?.closest<HTMLElement>('[data-setting-row]') ?? target
+      if (!row) return
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      row.classList.add(...FLASH)
+      clear = window.setTimeout(() => row.classList.remove(...FLASH), 1800)
+    }, 100)
+    return () => {
+      window.clearInterval(find)
+      window.clearTimeout(clear)
+    }
+  }, [pathname, hash])
 }

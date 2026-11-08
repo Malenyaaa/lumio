@@ -64,13 +64,15 @@ interface SectionProps {
   description?: string
   /** Where the settings are stored: with the Jellyfin account (all apps) or only on this device. */
   scope?: 'account' | 'device'
+  /** Id the settings search jumps to (rows use their control's id). */
+  anchor?: string
   children: ReactNode
 }
 
-export function Section({ title, description, scope, children }: SectionProps) {
+export function Section({ title, description, scope, anchor, children }: SectionProps) {
   const t = useMessages(fieldMessages)
   return (
-    <section className="space-y-3">
+    <section id={anchor} data-setting-row className="scroll-mt-24 space-y-3 rounded-xl transition-colors duration-500">
       <div className="flex items-baseline justify-between gap-4">
         <div>
           <h2 className="text-base font-semibold">{title}</h2>
@@ -121,7 +123,7 @@ interface RowProps {
 /** Label and explanation on the left, the control on the right (stacked on narrow screens). */
 export function Row({ label, hint, htmlFor, children }: RowProps) {
   return (
-    <div className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+    <div data-setting-row className="flex flex-col gap-2 p-4 transition-colors duration-500 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
       <div className="min-w-0 space-y-0.5">
         <label id={htmlFor && labelId(htmlFor)} htmlFor={htmlFor} className="text-sm font-medium">
           {label}

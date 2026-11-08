@@ -66,7 +66,7 @@ export function HomeSettingsPage() {
         />
       </Section>
 
-      <Section title={t.libraries} description={t.librariesHint} scope="account">
+      <Section anchor="libraries" title={t.libraries} description={t.librariesHint} scope="account">
         <ul className="divide-y">
           {ordered.map((view, index) => {
             const name = view.Name ?? ''

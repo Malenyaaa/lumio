@@ -46,7 +46,7 @@ export function DownloadsPage() {
       }}
     >
       {(audioCacheAvailable || videoCacheAvailable) && (
-        <Section title={t.storage} description={t.storageDescription} scope="device">
+        <Section anchor="storage" title={t.storage} description={t.storageDescription} scope="device">
           <StorageOverview />
         </Section>
       )}
