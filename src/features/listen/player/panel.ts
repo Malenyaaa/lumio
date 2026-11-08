@@ -89,10 +89,14 @@ export function setListenPanelExpanded(expanded: boolean) {
     setPanel({ ...panel, expanded, view: panel.beside && panel.view === 'nowPlaying' ? panel.beside : panel.view, beside: null })
   }
   if (!('startViewTransition' in document) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return apply()
-  // Only the cover moves; the rest of the page changes as it always does (no cross-fade of everything).
-  document.documentElement.classList.add('panel-transition')
+  // The cover flies only when it is what's shown before and after; under the lyrics or the queue it is hidden and
+  // would flash up as a picture of its own.
+  const viewAfter = expanded ? (BESIDE.has(panel.view) ? 'nowPlaying' : panel.view) : panel.beside && panel.view === 'nowPlaying' ? panel.beside : panel.view
+  const classes = ['panel-transition', ...(panel.view === 'nowPlaying' && viewAfter === 'nowPlaying' ? ['panel-transition-cover'] : [])]
+  // The panel grows or shrinks (and the cover flies); the rest of the page changes as it always does.
+  document.documentElement.classList.add(...classes)
   const transition = document.startViewTransition(() => flushSync(apply))
-  void transition.finished.finally(() => document.documentElement.classList.remove('panel-transition'))
+  void transition.finished.finally(() => document.documentElement.classList.remove(...classes))
 }
 
 /** Whether the pointer rests on the folded panel: it then peeks out a little, and the content makes room for it. */

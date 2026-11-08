@@ -333,7 +333,7 @@ html.panel-transition::view-transition-group(listen-cover) {
 html.panel-transition [data-vt='listen-panel'] {
   view-transition-name: listen-panel;
 }
-html.panel-transition [data-vt='listen-cover'] {
+html.panel-transition-cover [data-vt='listen-cover'] {
   view-transition-name: listen-cover;
 }
 /* The header changes width with the page around it; as a picture of its own it would be stretched, so here it is just
