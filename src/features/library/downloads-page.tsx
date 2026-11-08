@@ -1,5 +1,6 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
-import { IconDatabaseExclamation, IconDownload, IconTrash, IconWifiOff } from '@tabler/icons-react'
+import { IconChevronRight, IconDatabaseExclamation, IconDownload, IconTrash, IconWifiOff } from '@tabler/icons-react'
+import { useState } from 'react'
 import { Link } from '@/components/link'
 import { FadeImage } from '@/components/media/fade-image'
 import { Button } from '@/components/ui/button'
@@ -34,11 +35,17 @@ const messages = defineMessages({
     episodes: (count: number) => (count === 1 ? '1 Folge' : `${count} Folgen`),
     season: (number: number) => `Staffel ${number}`,
     removeSeason: 'Staffel entfernen',
+    expand: (name: string) => `${name} ausklappen`,
+    collapse: (name: string) => `${name} einklappen`,
     remove: (name: string) => `Download von „${name}“ entfernen`,
     removeSeries: 'Alle entfernen',
     loading: (percent: number) => `Wird heruntergeladen: ${percent} %`,
     queued: 'Wartet auf den Download',
-    failed: (error: string) => `Fehlgeschlagen (${error}), wird gleich erneut versucht`,
+    failed: (reason: string) => `Fehlgeschlagen: ${reason}. Wird gleich erneut versucht.`,
+    failure_network: 'Verbindung unterbrochen',
+    failure_storage: 'Speicher voll',
+    failure_server: 'Fehler des Servers',
+    failure_other: 'Unbekannter Fehler',
   },
   en: {
     title: 'Downloads',
@@ -53,11 +60,17 @@ const messages = defineMessages({
     episodes: (count: number) => (count === 1 ? '1 episode' : `${count} episodes`),
     season: (number: number) => `Season ${number}`,
     removeSeason: 'Remove season',
+    expand: (name: string) => `Expand ${name}`,
+    collapse: (name: string) => `Collapse ${name}`,
     remove: (name: string) => `Remove the download of “${name}”`,
     removeSeries: 'Remove all',
     loading: (percent: number) => `Downloading: ${percent}%`,
     queued: 'Waiting to download',
-    failed: (error: string) => `Failed (${error}), trying again shortly`,
+    failed: (reason: string) => `Failed: ${reason}. Trying again shortly.`,
+    failure_network: 'connection lost',
+    failure_storage: 'storage full',
+    failure_server: 'server error',
+    failure_other: 'unknown error',
   },
 })
 
@@ -71,7 +84,7 @@ function useSize() {
 /** How far a download is, or its size once it's there. */
 function stateText(t: Messages, entry: DownloadedVideo, size: (bytes: number) => string) {
   if (entry.state.state === 'loading') return t.loading(Math.round(entry.state.share * 100))
-  if (entry.state.state === 'queued') return entry.state.error ? t.failed(entry.state.error) : t.queued
+  if (entry.state.state === 'queued') return entry.state.error ? t.failed(t[`failure_${entry.state.error.kind}`]) : t.queued
   return size(entry.bytes)
 }
 
@@ -191,12 +204,9 @@ function MovieRow({ entry, t, size }: { entry: DownloadedVideo; t: Messages; siz
         className="flex min-w-0 flex-1 items-center gap-4 rounded-lg p-2 outline-none transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="aspect-[2/3] w-14 shrink-0 overflow-hidden rounded-md bg-muted">{poster && <FadeImage src={poster} alt="" loading="lazy" className="size-full object-cover" />}</div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate font-medium">{item?.Name ?? '—'}</p>
-          <p className="flex items-center gap-1.5 truncate text-sm text-muted-foreground">
-            <StateGlyph entry={entry} />
-            {[item?.ProductionYear, stateText(t, entry, size)].filter(Boolean).join(' · ')}
-          </p>
+          <StateLine entry={entry} t={t} size={size} prefix={item?.ProductionYear ? String(item.ProductionYear) : undefined} />
         </div>
       </Link>
       <RemoveButton label={t.remove(item?.Name ?? '')} onClick={() => removeVideoDownload(`movie:${entry.id}`)} />
@@ -204,8 +214,34 @@ function MovieRow({ entry, t, size }: { entry: DownloadedVideo; t: Messages; siz
   )
 }
 
+const COLLAPSED_KEY = 'lumio.downloads.collapsedSeasons'
+
+/** The seasons folded in on the downloads page, kept on this device so a long list stays short. */
+function useCollapsedSeasons() {
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '[]') as string[])
+    } catch {
+      return new Set()
+    }
+  })
+  const toggle = (id: string) =>
+    setCollapsed((current) => {
+      const next = new Set(current)
+      if (!next.delete(id)) next.add(id)
+      try {
+        localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]))
+      } catch {
+        // Kept for this visit only.
+      }
+      return next
+    })
+  return { collapsed, toggle }
+}
+
 function SeriesBlock({ group, t, size }: { group: SeriesGroup; t: Messages; size: (bytes: number) => string }) {
   const { api } = useAuthedSession()
+  const { collapsed, toggle } = useCollapsedSeasons()
   const poster = group.series ? portraitImageUrl(api, group.series, { fillHeight: 300 }) : undefined
   return (
     <div className="space-y-3 rounded-xl border border-border/60 p-3 sm:p-4">
@@ -229,17 +265,30 @@ function SeriesBlock({ group, t, size }: { group: SeriesGroup; t: Messages; size
       </div>
       {group.seasons.map((season) => {
         const seasonKey = season.episodes[0]?.keys.find((key) => key.startsWith('season:'))
+        const name = season.name || t.season(season.number)
+        const open = !collapsed.has(season.id)
+        const seasonBytes = season.episodes.reduce((sum, entry) => sum + entry.bytes, 0)
         return (
           <div key={season.id} className="space-y-1">
-            <div className="flex items-center justify-between gap-2 px-2 pt-2">
-              <h3 className="text-sm font-medium text-muted-foreground">{season.name || t.season(season.number)}</h3>
+            <div className="flex items-center justify-between gap-2 pt-2">
+              <button
+                type="button"
+                aria-expanded={open}
+                aria-label={open ? t.collapse(name) : t.expand(name)}
+                onClick={() => toggle(season.id)}
+                className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <IconChevronRight className={cn('size-4 shrink-0 transition-transform', open && 'rotate-90')} />
+                <span className="truncate">{name}</span>
+                <span className="shrink-0 font-normal">· {[t.episodes(season.episodes.length), size(seasonBytes)].join(' · ')}</span>
+              </button>
               {seasonKey && (
                 <Button variant="ghost" size="xs" onClick={() => removeVideoDownload(seasonKey)}>
                   {t.removeSeason}
                 </Button>
               )}
             </div>
-            <ul className="grid gap-1">
+            <ul className={cn('grid gap-1', !open && 'hidden')}>
               {season.episodes.map((entry) => {
                 const item = entry.item!
                 const thumb = landscapeImageUrl(api, item, { fillWidth: 320 })
@@ -251,15 +300,12 @@ function SeriesBlock({ group, t, size }: { group: SeriesGroup; t: Messages; size
                       className="flex min-w-0 flex-1 items-center gap-4 rounded-lg p-2 outline-none transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <div className="aspect-video w-28 shrink-0 overflow-hidden rounded-md bg-muted sm:w-36">{thumb && <FadeImage src={thumb} alt="" loading="lazy" className="size-full object-cover" />}</div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="truncate font-medium">
                           {item.IndexNumber != null ? `${item.IndexNumber}. ` : ''}
                           {item.Name}
                         </p>
-                        <p className="flex items-center gap-1.5 truncate text-sm text-muted-foreground">
-                          <StateGlyph entry={entry} />
-                          {stateText(t, entry, size)}
-                        </p>
+                        <StateLine entry={entry} t={t} size={size} />
                       </div>
                     </Link>
                     <RemoveButton label={t.remove(item.Name ?? '')} onClick={() => removeEpisodeDownload(entry.id)} />
@@ -274,14 +320,20 @@ function SeriesBlock({ group, t, size }: { group: SeriesGroup; t: Messages; size
   )
 }
 
-function StateGlyph({ entry }: { entry: DownloadedVideo }) {
+/** The state under a title: one line, cut off when long; a failure's full reason in the tooltip. */
+function StateLine({ entry, t, size, prefix }: { entry: DownloadedVideo; t: Messages; size: (bytes: number) => string; prefix?: string }) {
   const state = entry.state
+  const failed = state.state === 'queued' && !!state.error
+  const text = [prefix, stateText(t, entry, size)].filter(Boolean).join(' · ')
   return (
-    <DownloadGlyph
-      state={state.state}
-      share={state.state === 'loading' ? state.share : 0}
-      className={cn('size-4', state.state === 'queued' ? 'text-muted-foreground' : 'text-listen')}
-    />
+    <p className={cn('flex min-w-0 items-center gap-1.5 text-sm', failed ? 'text-amber-500' : 'text-muted-foreground')} title={failed ? state.error!.detail : undefined}>
+      <DownloadGlyph
+        state={state.state}
+        share={state.state === 'loading' ? state.share : 0}
+        className={cn('size-4 shrink-0', state.state === 'queued' ? (failed ? 'text-amber-500' : 'text-muted-foreground') : 'text-listen')}
+      />
+      <span className="truncate">{text}</span>
+    </p>
   )
 }
 

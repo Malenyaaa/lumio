@@ -28,7 +28,11 @@ const messages = defineMessages({
     remove: 'Download entfernen',
     loading: (percent: number) => `Wird heruntergeladen: ${percent} %`,
     queued: 'Wartet auf den Download',
-    failed: (error: string) => `Fehlgeschlagen (${error}), wird gleich erneut versucht`,
+    failed: (reason: string) => `Fehlgeschlagen: ${reason}. Wird gleich erneut versucht.`,
+    failure_network: 'Verbindung unterbrochen',
+    failure_storage: 'Speicher voll',
+    failure_server: 'Fehler des Servers',
+    failure_other: 'Unbekannter Fehler',
     downloadSeason: 'Staffel herunterladen',
     seasonDownloaded: 'Staffel heruntergeladen',
     seasonProgress: (done: number, total: number) => `${done} von ${total} heruntergeladen`,
@@ -42,7 +46,11 @@ const messages = defineMessages({
     remove: 'Remove download',
     loading: (percent: number) => `Downloading: ${percent}%`,
     queued: 'Waiting to download',
-    failed: (error: string) => `Failed (${error}), trying again shortly`,
+    failed: (reason: string) => `Failed: ${reason}. Trying again shortly.`,
+    failure_network: 'connection lost',
+    failure_storage: 'storage full',
+    failure_server: 'server error',
+    failure_other: 'unknown error',
     downloadSeason: 'Download season',
     seasonDownloaded: 'Season downloaded',
     seasonProgress: (done: number, total: number) => `${done} of ${total} downloaded`,
@@ -77,7 +85,7 @@ const shareOf = (download: VideoDownloadState) => (download?.state === 'loading'
 function labelOf(t: (typeof messages)['de'], download: VideoDownloadState) {
   if (!download) return t.download
   if (download.state === 'loading') return t.loading(Math.round(download.share * 100))
-  if (download.state === 'queued') return download.error ? t.failed(download.error) : t.queued
+  if (download.state === 'queued') return download.error ? t.failed(t[`failure_${download.error.kind}`]) : t.queued
   return t.downloaded
 }
 
@@ -155,12 +163,18 @@ export function EpisodeDownloadButton({ episode, context, className }: { episode
         else downloadVideos(`episode:${episode.Id}`, 'episode', episode.Name ?? '', [episode], context)
       }}
       className={cn(
-        'grid size-9 shrink-0 place-items-center rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-        download ? (download.state === 'queued' ? 'text-muted-foreground' : 'text-listen') : 'text-muted-foreground hover:text-foreground',
+        'grid size-11 shrink-0 place-items-center rounded-full outline-none transition-colors hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring',
+        !download
+          ? 'text-muted-foreground hover:text-foreground'
+          : download.state === 'queued'
+            ? download.error
+              ? 'text-amber-500'
+              : 'text-muted-foreground'
+            : 'text-listen',
         className,
       )}
     >
-      <DownloadGlyph state={glyphState(download)} share={shareOf(download)} className="size-6" />
+      <DownloadGlyph state={glyphState(download)} share={shareOf(download)} className="size-7" />
     </button>
   )
 }

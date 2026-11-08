@@ -55,8 +55,19 @@ let current: { id: string; received: number; expected: number } | null = null
 let running = false
 /** Stops the file coming in now (its download was removed meanwhile). */
 let abortCurrent: AbortController | null = null
-/** Why the last try of a file failed (shown while it waits for the next one). */
-const failures: Record<string, string> = {}
+/** Why the last try of a file failed (shown while it waits for the next one): a short kind and the browser's text. */
+const failures: Record<string, { kind: FailureKind; detail: string }> = {}
+
+export type FailureKind = 'network' | 'storage' | 'server' | 'other'
+
+function failureOf(error: unknown): { kind: FailureKind; detail: string } {
+  const detail = error instanceof Error ? error.message : String(error)
+  if (/^HTTP \d+/.test(detail)) return { kind: 'server', detail }
+  if (error instanceof DOMException && error.name === 'QuotaExceededError') return { kind: 'storage', detail }
+  // Fetch failing (offline, the connection dropped) or the stream into the cache breaking off (Firefox: NS_ERROR_FAILURE).
+  if (error instanceof TypeError || /NS_ERROR|network|abort/i.test(detail)) return { kind: 'network', detail }
+  return { kind: 'other', detail }
+}
 let version = 0
 const listeners = new Set<() => void>()
 
@@ -156,7 +167,7 @@ async function run() {
         pending = pending.filter((entry) => entry !== id)
         // Removed meanwhile: nothing to try again.
         if (!wanted().has(id)) continue
-        failures[id] = error instanceof Error ? error.message : String(error)
+        failures[id] = failureOf(error)
         // Offline or the server failed: tried again when the connection is back, or in a moment.
         pending.push(id)
         notify()
@@ -248,7 +259,11 @@ export function clearVideoDownloads() {
 export const downloadedVideoIds = () => wanted()
 
 /** `error`: why the last try failed (it is tried again). */
-export type VideoDownloadState = { state: 'done' } | { state: 'loading'; share: number } | { state: 'queued'; error?: string } | null
+export type VideoDownloadState =
+  | { state: 'done' }
+  | { state: 'loading'; share: number }
+  | { state: 'queued'; error?: { kind: FailureKind; detail: string } }
+  | null
 
 const shareOf = (entry: NonNullable<typeof current>) => (entry.expected ? Math.min(0.99, entry.received / entry.expected) : 0)
 

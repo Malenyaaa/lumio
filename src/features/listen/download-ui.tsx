@@ -165,8 +165,9 @@ export function DownloadButton({
 }
 
 /**
- * The download symbol in its three looks, all on one circle (the size of Tabler's circle icons, so they line up with
- * the buttons beside them): an outlined arrow, a ring filling up while it downloads, a filled circle once done.
+ * The download symbol in its looks, all on one circle (the size of Tabler's circle icons, so they line up with the
+ * buttons beside them): an outlined arrow, a dashed ring while it waits its turn, a ring filling up while it downloads,
+ * a filled circle once done.
  */
 export function DownloadGlyph({ state, share = 0, className }: { state: 'none' | 'queued' | 'loading' | 'done'; share?: number; className?: string }) {
   const length = 2 * Math.PI * 9
@@ -190,6 +191,9 @@ export function DownloadGlyph({ state, share = 0, className }: { state: 'none' |
             className="transition-[stroke-dashoffset] duration-300"
           />
         </>
+      ) : state === 'queued' ? (
+        // Waiting its turn: a dashed ring, unlike the closed one of "not downloaded".
+        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth={2} strokeDasharray="3.5 3.5" />
       ) : (
         <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth={2} />
       )}

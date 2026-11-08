@@ -312,15 +312,23 @@ function EpisodeItem({ episode, highlighted, context, ref }: { episode: BaseItem
   const progress = episode.UserData?.PlayedPercentage
   const overview = plainText(episode.Overview)
   return (
-    <li ref={ref} title={unavailable ? t.unavailable : undefined} className="flex items-center gap-2">
+    // The card is the row; its download button sits inside it, on the right.
+    <li
+      ref={ref}
+      title={unavailable ? t.unavailable : undefined}
+      className={cn(
+        'relative rounded-lg transition hover:bg-muted',
+        highlighted && 'bg-muted ring-1 ring-foreground/30',
+        unavailable && 'opacity-40 hover:bg-transparent',
+      )}
+    >
       <Link
         to={playHref(episode)}
         aria-disabled={unavailable || undefined}
         onClick={(event) => unavailable && event.preventDefault()}
         className={cn(
-          'flex min-w-0 flex-1 gap-4 rounded-lg p-2 outline-none transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring',
-          highlighted && 'bg-muted ring-1 ring-foreground/30',
-          unavailable && 'cursor-default opacity-40 hover:bg-transparent',
+          'flex min-w-0 gap-4 rounded-lg p-2 pr-16 outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          unavailable && 'cursor-default',
         )}
       >
         <div className="relative aspect-video w-40 shrink-0 overflow-hidden rounded-md bg-muted sm:w-52">
@@ -340,7 +348,7 @@ function EpisodeItem({ episode, highlighted, context, ref }: { episode: BaseItem
           <p className="line-clamp-2 whitespace-pre-line text-sm text-muted-foreground">{overview}</p>
         </div>
       </Link>
-      <EpisodeDownloadButton episode={episode} context={context} className="mr-1" />
+      <EpisodeDownloadButton episode={episode} context={context} className="absolute right-2 top-1/2 -translate-y-1/2" />
     </li>
   )
 }
