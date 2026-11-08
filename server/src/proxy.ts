@@ -48,7 +48,10 @@ function forwardedHeaders(request: IncomingMessage, upstream?: ReturnType<typeof
   const headers = { ...request.headers }
   if (upstream?.secure) headers.host = upstream.url.host
   const client = request.socket.remoteAddress ?? ''
-  headers['x-forwarded-for'] = headers['x-forwarded-for'] ? `${headers['x-forwarded-for']}, ${client}` : client
+  // The reverse proxy in front (TLS) already says who the visitor is: passed on as it is, so Jellyfin (which reads the
+  // last address of the chain) sees the visitor rather than the reverse proxy. Lumio must then be reachable only
+  // through that proxy. Reached directly, the caller's own address is given.
+  headers['x-forwarded-for'] ??= client.replace(/^::ffff:/, '')
   headers['x-forwarded-proto'] ??= 'encrypted' in request.socket && request.socket.encrypted ? 'https' : 'http'
   headers['x-forwarded-host'] ??= headers.host
   return headers
@@ -189,4 +192,14 @@ export const ADMIN_SCRIPT = `(function () {
   }
   check();
   window.addEventListener('hashchange', check);
+  // jellyfin-web moves between its pages with history.pushState, which fires no hashchange: watched too.
+  window.addEventListener('popstate', check);
+  ['pushState', 'replaceState'].forEach(function (name) {
+    var original = history[name];
+    history[name] = function () {
+      var result = original.apply(this, arguments);
+      setTimeout(check, 0);
+      return result;
+    };
+  });
 })();`
