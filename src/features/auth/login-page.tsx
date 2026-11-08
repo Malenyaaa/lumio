@@ -104,6 +104,8 @@ export function LoginPage() {
 
   return (
     <main className="flex min-h-svh flex-col items-center justify-center gap-4 px-4">
+      {/* The desktop app's window is moved by its top edge (index.css). */}
+      <div data-titlebar aria-hidden className="fixed inset-x-0 top-0 h-14" />
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle className="text-2xl">

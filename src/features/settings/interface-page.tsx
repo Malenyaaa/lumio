@@ -1,5 +1,6 @@
 import { getLocaleTag, useLanguagePreference, useLocale, useMessages, type LanguagePreference } from '@/lib/i18n'
 import { useThemePreference } from '@/lib/theme'
+import { DesktopSection } from './desktop-section'
 import { Section, SelectField, SettingsPage, SwitchField } from './fields'
 import { useLocalSettings } from './local-settings'
 import { interfaceMessages } from './messages'
@@ -64,6 +65,9 @@ export function InterfacePage() {
           onChange={(apps) => update({ apps })}
         />
       </Section>
+
+      {/* Only in the desktop app (Windows, Linux). */}
+      <DesktopSection />
 
       <Section title={t.previewCards} scope="account">
         <SwitchField

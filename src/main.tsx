@@ -5,12 +5,14 @@ import App from './App.tsx'
 import { persistQueryCache, restoreQueryCache, RESTORE_TIMEOUT_MS } from './lib/query-persist'
 import { queryClient } from './lib/query-client'
 import { initTheme } from './lib/theme'
+import { initDesktop } from './lib/desktop'
 import { loadServices } from './lib/services'
 import { installOfflineLibrary } from './features/listen/offline-library'
 import { initPersistentStorage } from './lib/persistent-storage'
 import { apiBase, BUNDLED } from './lib/platform'
 
 initTheme()
+initDesktop()
 // Downloads and the offline library need the browser to keep the site's storage: checked and asked for at once.
 initPersistentStorage()
 // Without a network, Jellyfin's answers come from the downloads (see offline-library).

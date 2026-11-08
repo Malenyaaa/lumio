@@ -518,3 +518,26 @@ html.panel-transition::view-transition-new(listen-cover) {
     height: 1.25rem;
   }
 }
+
+/*
+ * The desktop app (Electron) has no window frame: the system's minimize/maximize/close buttons are drawn over the top
+ * right of the page (a title bar overlay as high as the header). The headers keep room for them and move the window
+ * when dragged (their buttons and links stay clickable). Without the overlay's measurements, about 140px are kept.
+ */
+html[data-frameless] {
+  --titlebar-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 140px)));
+}
+html[data-frameless] :fullscreen {
+  --titlebar-right: 0px;
+}
+html[data-frameless] [data-titlebar] {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+html[data-frameless] [data-titlebar] :is(a, button, input, select, textarea, label, [role='button'], [role='slider'], [role='radiogroup'], [tabindex]) {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+html[data-frameless] [data-titlebar-inset] {
+  padding-right: max(1rem, calc(var(--titlebar-right) + 0.5rem)) !important;
+}

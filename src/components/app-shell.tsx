@@ -287,7 +287,10 @@ function SignedInShell() {
 
   return (
     <div data-app-shell data-mode="watch" className="min-h-svh">
+      {/* In the desktop app it is also the window's title bar (data-titlebar, index.css). */}
       <header
+        data-titlebar
+        data-titlebar-inset
         className={cn(
           '[view-transition-name:app-header] fixed inset-x-0 top-0 z-40 box-content flex h-14 items-center justify-between gap-4 border-b px-4 pt-(--safe-top) transition-colors duration-300 sm:px-8',
           scrolled ? 'border-border bg-background/80 backdrop-blur' : 'border-transparent',

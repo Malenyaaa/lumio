@@ -10,6 +10,8 @@ directories:
   buildResources: electron/build
 files:
   - main.mjs
+  - preload.cjs
+  - icon.png
   - dist/**/*
   - package.json
   # The app has no packages of its own; never the web app's (pnpm would offer them from the workspace).

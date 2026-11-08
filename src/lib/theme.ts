@@ -45,6 +45,9 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener)
 }
 
+/** Follows theme changes outside React (the desktop app's window buttons). */
+export const subscribeTheme = subscribe
+
 export function setThemePreference(value: ThemePreference) {
   preference = value
   try {

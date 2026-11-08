@@ -14,6 +14,7 @@ import { adoptIntoCache, audioCacheAvailable, cachedAudioUrl, isCached, prefetch
 import { isOffline } from '@/lib/network'
 import { inJellyfinApp, setAppPlaybackManager, updateAppMediaSession } from '@/lib/native-app'
 import { inCapacitor } from '@/lib/capacitor'
+import { desktop } from '@/lib/desktop'
 import { MediaSession as NativeMediaSession } from '@capgo/capacitor-media-session'
 import { flushPlays, logBuffering, logPlay, type EndReason, type PlayContext, type StartReason } from './play-log'
 import { downloadedAudioUrl, downloadId, isDownloaded, setDownloadQuality, setDownloadSource, setReleaseHandler } from './downloads'
@@ -966,6 +967,12 @@ if (typeof navigator !== 'undefined' && inCapacitor()) {
  * the background) goes through the app. It sends the notification's buttons back as jellyfin-web commands.
  */
 function updateAppSession() {
+  // The desktop app's tray: what plays, and whether.
+  if (audio) {
+    const item = currentTrack()
+    const artist = item ? (item.Artists ?? []).join(', ') || item.AlbumArtist || '' : ''
+    desktop()?.setNowPlaying({ title: item ? [item.Name, artist].filter(Boolean).join(' – ') : '', playing: !audio.paused, loaded: !!item })
+  }
   if (inCapacitor() && audio) {
     const playing = !audio.paused
     void NativeMediaSession.setPlaybackState({ playbackState: currentTrack() ? (playing ? 'playing' : 'paused') : 'none' }).catch(() => undefined)
@@ -1010,3 +1017,6 @@ if (inJellyfinApp()) {
     },
   })
 }
+
+// The desktop app's tray menu: play/pause and next.
+desktop()?.onMediaCommand((command) => (command === 'next' ? music.next() : music.toggle()))

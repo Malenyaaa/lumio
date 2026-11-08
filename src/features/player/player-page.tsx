@@ -1009,7 +1009,7 @@ function Player({ id }: { id: string }) {
       )}
 
       <div className={cn('transition-opacity duration-300', (!controlsVisible || appPip) && 'pointer-events-none opacity-0')}>
-        <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 bg-linear-to-b from-black/70 to-transparent pt-[max(1rem,var(--safe-top))] pr-[max(1rem,var(--safe-right))] pb-4 pl-[max(1rem,var(--safe-left))] text-white">
+        <div data-titlebar data-titlebar-inset className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 bg-linear-to-b from-black/70 to-transparent pt-[max(1rem,var(--safe-top))] pr-[max(1rem,var(--safe-right))] pb-4 pl-[max(1rem,var(--safe-left))] text-white">
           <Button variant="ghost" size="icon" aria-label={t.back} onClick={goBack}>
             <IconArrowLeft />
           </Button>

@@ -29,7 +29,8 @@ const LAST_MODE_KEY = 'lumio.mode'
  */
 export function isLaunchAtRoot(pathname: string) {
   const index = (window.history.state as { idx?: number } | null)?.idx ?? 0
-  return pathname === '/' && index === 0
+  // ?app=watch: opened in Watch on purpose (the desktop app's "start in Watch").
+  return pathname === '/' && index === 0 && new URLSearchParams(window.location.search).get('app') !== 'watch'
 }
 
 /** The app used last on this device; Lumio opens in it. */

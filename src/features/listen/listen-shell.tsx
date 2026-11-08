@@ -132,7 +132,7 @@ function SignedInListen() {
           panel.expanded && 'invisible overflow-hidden',
         )}
       >
-        <div className={cn('flex h-11 items-center gap-1', layout.collapsed ? 'justify-center' : 'justify-between px-2')}>
+        <div data-titlebar className={cn('flex h-11 items-center gap-1', layout.collapsed ? 'justify-center' : 'justify-between px-2')}>
           {/* May shrink (the name truncates) so a narrow sidebar never pushes the fold button out. */}
           {!layout.collapsed && <AppBrand mode="listen" className="min-w-0 shrink" collapsibleName />}
           <button
@@ -166,7 +166,11 @@ function SignedInListen() {
         />
       </aside>
 
-      <header className="[view-transition-name:app-header] fixed inset-x-0 top-0 z-30 box-content flex h-14 items-center justify-between gap-4 bg-background/90 px-4 pt-(--safe-top) backdrop-blur transition-[left] duration-300 ease-out sm:px-8 md:left-(--listen-left) [.cursor-col-resize_&]:transition-none">
+      {/* In the desktop app it is also the window's title bar (data-titlebar, index.css). */}
+      <header
+        data-titlebar
+        data-titlebar-inset
+        className="[view-transition-name:app-header] fixed inset-x-0 top-0 z-30 box-content flex h-14 items-center justify-between gap-4 bg-background/90 px-4 pt-(--safe-top) backdrop-blur transition-[left] duration-300 ease-out sm:px-8 md:left-(--listen-left) [.cursor-col-resize_&]:transition-none">
         <div className="flex min-w-0 items-center gap-3">
           {/* Phones have no sidebar: the profile menu (or back) and the brand; the library is a tab. */}
           <div className="contents md:hidden">
