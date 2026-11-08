@@ -1101,6 +1101,51 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
   const user = path.match(/^\/users\/([0-9a-f-]{32,36})$/i)
   if (user && request.method === 'GET') return send(response, 200, profileFor(me.id, user[1]!))
 
+  // POST /me/plays {session, key, title, subtitle, contextId, image, client, startedAt, seconds}: how long the user has
+  // been listening to a podcast episode in this session (sent while it plays; Jellyfin never sees podcasts).
+  // GET /me/plays?limit=&before=: their plays, newest first.
+  if (path === '/me/plays') {
+    if (request.method === 'POST') {
+      const body = await readJson<Record<string, unknown>>(request).catch(() => null)
+      const text = (value: unknown, max = 300) => (typeof value === 'string' && value.trim() ? value.slice(0, max) : undefined)
+      const session = text(body?.session, 64)
+      const key = text(body?.key, 500)
+      const title = text(body?.title)
+      const startedAt = Number(body?.startedAt)
+      const seconds = Math.round(Number(body?.seconds))
+      if (!session || !key || !title || !Number.isFinite(startedAt) || !Number.isFinite(seconds) || seconds < 0 || seconds > 24 * 3600) return send(response, 400, { error: 'Bad play' })
+      store.recordPlay({
+        session,
+        userId: me.id,
+        kind: 'podcast',
+        key,
+        title,
+        subtitle: text(body?.subtitle),
+        contextId: text(body?.contextId, 100),
+        image: text(body?.image, 1000),
+        client: text(body?.client, 100),
+        startedAt: Math.min(startedAt, Date.now()),
+        seconds,
+      })
+      return send(response, 204)
+    }
+    if (request.method === 'GET') {
+      const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit')) || 50))
+      const before = Number(url.searchParams.get('before')) || undefined
+      return send(response, 200, store.plays(me.id, limit, before))
+    }
+  }
+
+  // GET /admin/plays?from=&to=: everyone's plays in a time span (ms), with who played them.
+  if (path === '/admin/plays' && request.method === 'GET') {
+    if (!isAdmin(tokenOf(request, url))) return send(response, 403, { error: 'Administrators only' })
+    const to = Number(url.searchParams.get('to')) || Date.now()
+    const from = Number(url.searchParams.get('from')) || to - 30 * 24 * HOUR
+    const plays = store.playsBetween(from, to)
+    const people = Object.fromEntries(store.people([...new Set(plays.map((play) => play.userId))]).map((person) => [person.id, person.name]))
+    return send(response, 200, plays.map((play) => ({ ...play, userName: people[play.userId] ?? '' })))
+  }
+
   // GET /friends/activity: what friends play (those who share it), newest first.
   if (path === '/friends/activity' && request.method === 'GET') {
     const list = store

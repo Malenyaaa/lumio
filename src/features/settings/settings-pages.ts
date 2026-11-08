@@ -1,4 +1,4 @@
-import { IconBadgeCc, IconCards, IconDownload, IconPlug, IconHome, IconKeyboard, IconLayoutDashboard, IconLock, IconPalette, IconPlayerPlay, IconPuzzle, IconTags, IconUserCircle } from '@tabler/icons-react'
+import { IconBadgeCc, IconCards, IconChartBar, IconDownload, IconPlug, IconHome, IconKeyboard, IconLayoutDashboard, IconLock, IconPalette, IconPlayerPlay, IconPuzzle, IconTags, IconUserCircle } from '@tabler/icons-react'
 import { inMode, useAppMode } from '@/lib/app-mode'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import { useUserConfiguration } from './use-user-configuration'
@@ -18,6 +18,7 @@ const labels = defineMessages({
     branding: 'Branding',
     plugins: 'Plugins',
     metadata: 'Musik-Metadaten',
+    stats: 'Wiedergabe-Statistik',
   },
   en: {
     profile: 'Account',
@@ -32,6 +33,7 @@ const labels = defineMessages({
     branding: 'Branding',
     plugins: 'Plugins',
     metadata: 'Music metadata',
+    stats: 'Playback statistics',
   },
 })
 
@@ -49,6 +51,7 @@ const PAGES = [
   { key: 'branding', to: '/settings/branding', icon: IconPalette, admin: true },
   { key: 'plugins', to: '/settings/plugins', icon: IconPuzzle, admin: true },
   { key: 'metadata', to: '/settings/metadata', icon: IconTags, admin: true },
+  { key: 'stats', to: '/settings/stats', icon: IconChartBar, admin: true },
 ] as const
 
 /** The settings sub-pages, shared by the side navigation and the profile menu so both always list the same entries. */

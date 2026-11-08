@@ -177,11 +177,9 @@ export default function setup(lumio) {
 - Events: `navigate`, `item`, `playback:start`, `playback:stop`.
 - `lumio.jellyfin` gives the signed-in session (`api`, `serverUrl`, `userId`, `accessToken`, `isAdmin`).
 
-Plugins that come with Lumio live in [`public/plugins/`](public/plugins) and are listed in its `catalog.json`; admins add
-them under Settings → Plugins → Available plugins (they are served with the app, so they update with it):
-
-- **Playback Reporting**: an admin page with the statistics of Jellyfin's Playback Reporting plugin (plays and time,
-  per day, per user, by type, playback method, client and device, times of day).
+**Plugin store**: admins add plugins from Settings → Plugins → Available plugins. The list is
+[`plugins/catalog.json`](plugins/catalog.json) in this repository, read at runtime, so new plugins show up on every
+instance without a redeploy. Plugins are proposed by pull request, see [`plugins/README.md`](plugins/README.md).
 
 Branding and plugins are stored in the Jellyfin server's branding configuration (as one comment inside its custom CSS),
 which every client can read (even before signing in) and only admins can write. jellyfin-web only sees a CSS comment.

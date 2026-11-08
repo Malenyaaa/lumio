@@ -95,11 +95,19 @@ const EXAMPLE = `export default function setup(lumio) {
   lumio.on('playback:start', ({ itemId }) => console.log('playing', itemId))
 }`
 
+/**
+ * The plugin store: the catalog in Lumio's repository (plugins/catalog.json), read when the page opens, so plugins
+ * merged there show up on every instance without a redeploy. VITE_PLUGIN_CATALOG_URL points elsewhere.
+ */
+const CATALOG_URL = import.meta.env.VITE_PLUGIN_CATALOG_URL?.trim() || 'https://raw.githubusercontent.com/PalmarHealer/lumio/main/plugins/catalog.json'
+
 interface CatalogEntry {
   id: string
   name: string
   description: Partial<Record<'de' | 'en', string>>
   url: string
+  author?: string
+  homepage?: string
   /** A Jellyfin plugin it needs, by name. */
   requires?: string
 }
@@ -112,8 +120,12 @@ function Catalog({ installed, pending, onAdd }: { installed: PluginEntry[]; pend
     queryKey: ['plugin-catalog'],
     staleTime: 60 * 60_000,
     queryFn: async () => {
-      const response = await fetch(`${import.meta.env.BASE_URL}plugins/catalog.json`)
-      return response.ok ? ((await response.json()) as CatalogEntry[]) : []
+      const response = await fetch(CATALOG_URL, { cache: 'no-cache' }).catch(() => null)
+      const entries = response?.ok ? ((await response.json()) as unknown) : []
+      // Only well-formed entries with an https module.
+      return (Array.isArray(entries) ? entries : []).filter(
+        (entry): entry is CatalogEntry => !!entry && typeof entry.id === 'string' && typeof entry.name === 'string' && typeof entry.url === 'string' && entry.url.startsWith('https://'),
+      )
     },
   })
   if (!catalog.data?.length) return null
@@ -128,6 +140,17 @@ function Catalog({ installed, pending, onAdd }: { installed: PluginEntry[]; pend
               <p className="text-sm font-medium">{entry.name}</p>
               <p className="text-xs text-muted-foreground">{entry.description[locale] ?? entry.description.en}</p>
               {entry.requires && <p className="text-xs text-muted-foreground">{t.requiresJellyfin(entry.requires)}</p>}
+              {(entry.author || entry.homepage) && (
+                <p className="text-xs text-muted-foreground">
+                  {entry.homepage ? (
+                    <a href={entry.homepage} target="_blank" rel="noreferrer noopener" className="hover:underline">
+                      {entry.author ?? entry.homepage}
+                    </a>
+                  ) : (
+                    entry.author
+                  )}
+                </p>
+              )}
             </div>
             <Button size="sm" variant={added ? 'ghost' : 'outline'} disabled={pending || added} onClick={() => onAdd({ id: entry.id, name: entry.name, enabled: true, source: { type: 'url', url: entry.url } })}>
               {added ? t.added : t.addFromCatalog}

@@ -12,6 +12,7 @@ import { flushPlayback, rememberPlayback } from '@/lib/playback-outbox'
 import { recordRecent } from '../recent'
 import { adoptIntoCache, audioCacheAvailable, cachedAudioUrl, isCached, prefetchAudio, recordCachedPlay } from './audio-cache'
 import { isOffline } from '@/lib/network'
+import { flushPodcastPlays, logPodcastPlay } from './play-log'
 import { downloadedAudioUrl, downloadId, isDownloaded, setDownloadQuality, setDownloadSource, setReleaseHandler } from './downloads'
 import { DIRECT_FORMATS } from './quality'
 
@@ -178,6 +179,8 @@ export function connectMusicPlayer(next: typeof connection) {
   if (!next && connection) stop()
   connection = next
   if (next && state.index < 0) restoreSession(next.userId)
+  // Podcast listening time that couldn't be sent before (offline) goes out now.
+  if (next) flushPodcastPlays()
   // Songs that leave the downloads go into the cache, if they are at least as good as what streams (else they'd play
   // worse than streaming would); otherwise they are dropped.
   setReleaseHandler(
@@ -317,6 +320,9 @@ if (audio) {
   audio.addEventListener('play', () => {
     setState({ playing: true })
     shareActivity(true)
+    // A podcast's listening time counts again from here (it stopped at the pause).
+    const item = currentTrack()
+    if (item && externalOf(item)) logPodcastPlay('progress', item, true, playSessionId)
   })
   audio.addEventListener('pause', () => {
     setState({ playing: false })
@@ -354,6 +360,8 @@ function report(kind: 'start' | 'progress' | 'stopped', item = currentTrack()) {
   const external = externalOf(item)
   if (external) {
     if (kind !== 'start') recordPodcastProgress(external.guid, item, audio.currentTime, durationOf(), kind === 'stopped' || audio.paused)
+    // And how long it was listened to, for the statistics (Jellyfin's Playback Reporting never sees podcasts).
+    logPodcastPlay(kind, item, !audio.paused, playSessionId)
     return
   }
   const info = {

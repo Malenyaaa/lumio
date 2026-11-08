@@ -42,6 +42,39 @@ export interface Activity {
   at: number
 }
 
+export interface Play {
+  session: string
+  userId: string
+  kind: 'podcast'
+  /** The episode's feed GUID. */
+  key: string
+  title: string
+  /** The podcast's name. */
+  subtitle?: string
+  /** The podcast's id. */
+  contextId?: string
+  image?: string
+  client?: string
+  startedAt: number
+  seconds: number
+}
+
+function playOf(row: Record<string, string | number | null>): Play {
+  return {
+    session: String(row.session),
+    userId: String(row.user_id),
+    kind: 'podcast',
+    key: String(row.item_key),
+    title: String(row.title),
+    subtitle: row.subtitle === null ? undefined : String(row.subtitle),
+    contextId: row.context_id === null ? undefined : String(row.context_id),
+    image: row.image === null ? undefined : String(row.image),
+    client: row.client === null ? undefined : String(row.client),
+    startedAt: Number(row.started_at),
+    seconds: Number(row.seconds),
+  }
+}
+
 export class Store {
   private db: DatabaseSync
 
@@ -56,6 +89,9 @@ export class Store {
       CREATE TABLE IF NOT EXISTS activity (user_id TEXT PRIMARY KEY, payload TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS settings (user_id TEXT PRIMARY KEY, data TEXT NOT NULL, updated INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS track_credits (item_id TEXT PRIMARY KEY, data TEXT, at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS plays (session TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL, item_key TEXT NOT NULL, title TEXT NOT NULL, subtitle TEXT, context_id TEXT, image TEXT, client TEXT, started_at INTEGER NOT NULL, seconds INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+      CREATE INDEX IF NOT EXISTS plays_user_started ON plays (user_id, started_at);
+      CREATE INDEX IF NOT EXISTS plays_started ON plays (started_at);
       CREATE TABLE IF NOT EXISTS playlist_adds (playlist_id TEXT NOT NULL, item_id TEXT NOT NULL, user_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (playlist_id, item_id));
     `)
     // What the track was (title, artist, album), so a list of misses can name them.
@@ -149,6 +185,34 @@ export class Store {
 
   clearActivity(id: string) {
     this.db.prepare('DELETE FROM activity WHERE user_id = ?').run(id)
+  }
+
+  /**
+   * Records how long something Jellyfin doesn't know was played (podcast episodes, which Lumio plays from their hosts):
+   * one row per listening session, its seconds growing while it plays.
+   */
+  recordPlay(play: Play) {
+    this.db
+      .prepare(
+        `INSERT INTO plays (session, user_id, kind, item_key, title, subtitle, context_id, image, client, started_at, seconds, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(session) DO UPDATE SET seconds = MAX(plays.seconds, excluded.seconds), updated_at = excluded.updated_at
+         WHERE plays.user_id = excluded.user_id`,
+      )
+      .run(play.session, play.userId, play.kind, play.key, play.title, play.subtitle ?? null, play.contextId ?? null, play.image ?? null, play.client ?? null, play.startedAt, play.seconds, Date.now())
+  }
+
+  /** Someone's plays, newest first (for their history). */
+  plays(userId: string, limit: number, before = Number.MAX_SAFE_INTEGER): Play[] {
+    const rows = this.db
+      .prepare('SELECT * FROM plays WHERE user_id = ? AND started_at < ? ORDER BY started_at DESC LIMIT ?')
+      .all(userId, before, limit) as Array<Record<string, string | number | null>>
+    return rows.map(playOf)
+  }
+
+  /** Everyone's plays in a time span (for the administrators' statistics). */
+  playsBetween(from: number, to: number): Play[] {
+    return (this.db.prepare('SELECT * FROM plays WHERE started_at >= ? AND started_at < ? ORDER BY started_at').all(from, to) as Array<Record<string, string | number | null>>).map(playOf)
   }
 
   /** Remembers who added songs to a playlist (Jellyfin doesn't keep it), for shared playlists' "Added by". */
