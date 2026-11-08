@@ -407,7 +407,7 @@ export function useArtistAlbums(artistId: string | undefined) {
           [by]: [artistId!],
           sortBy: [ItemSortBy.PremiereDate, ItemSortBy.ProductionYear, ItemSortBy.SortName],
           sortOrder: [SortOrder.Descending],
-          fields: [ItemFields.PrimaryImageAspectRatio],
+          fields: [ItemFields.PrimaryImageAspectRatio, ItemFields.ChildCount],
         })
       const [own, appearsOn] = await Promise.all([request('albumArtistIds'), request('contributingArtistIds')])
       const albums = own.data.Items ?? []

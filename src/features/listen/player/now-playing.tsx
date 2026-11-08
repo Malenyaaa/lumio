@@ -8,7 +8,7 @@ import { useAuthedSession } from '@/features/auth/session'
 import { useItem, useSetFavorite } from '@/features/items/queries'
 import { useDominantColor } from '@/lib/dominant-color'
 import { externalOf } from '@/lib/external-items'
-import { formatClock, plainText, ticksToSeconds } from '@/lib/format'
+import { formatClock, ticksToSeconds } from '@/lib/format'
 import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
 import { backdropImageUrl, portraitImageUrl } from '@/lib/images'
 import { artistsOf, itemHref, titlePath } from '@/lib/item-links'
@@ -22,7 +22,7 @@ import { toggleListenPanel } from './panel'
 import { ArtistLine } from './player-bar'
 import { useTrackQuality } from './quality'
 import { usePlayerControls, usePlayerTime } from './player-controls'
-import { useArtistPhoto } from '../artist-photo'
+import { useArtistBio, useArtistPhoto } from '../artist-photo'
 
 const messages = defineMessages({
   de: {
@@ -308,7 +308,7 @@ function AboutArtist({ artist }: { artist: BaseItemDto }) {
   const number = new Intl.NumberFormat(getLocaleTag(useLocale()))
   const photo = useArtistPhoto(artist, 400)
   const image = backdropImageUrl(api, artist, { fillWidth: 640 }) ?? photo
-  const bio = lastfm.data?.bio || plainText(artist.Overview)
+  const bio = useArtistBio(artist)
   return (
     <>
       <div

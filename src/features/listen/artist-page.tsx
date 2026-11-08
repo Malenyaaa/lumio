@@ -20,7 +20,6 @@ import { useAuthedSession } from '@/features/auth/session'
 import { useArtistAlbums, useLibraryArtists, useSetFavorite } from '@/features/items/queries'
 import { useCategories } from '@/features/library/categories'
 import { useDominantColor } from '@/lib/dominant-color'
-import { plainText } from '@/lib/format'
 import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
 import { backdropImageUrl, portraitImageUrl } from '@/lib/images'
 import { cn, tintWash } from '@/lib/utils'
@@ -29,11 +28,13 @@ import { ArtistAboutDialog } from './artist-about'
 import { useArtistRadio } from './radio'
 import { ArtistConcerts } from './concert-pages'
 import { sameName, useLastfmArtist, useLastfmTopTracks } from './external'
-import { MusicCard, MusicRow } from './music-card'
+import { CardRow, MusicCard, MusicRow } from './music-card'
+import { useReleaseLine } from './artist-discography'
+import { Link } from '@/components/link'
 import { currentTrack, music, START, useMusic } from './player/music-player'
 import { ShuffleToggle } from './shuffle-toggle'
 import { playCircle } from './play-circle'
-import { useArtistPhoto } from './artist-photo'
+import { useArtistBio, useArtistPhoto } from './artist-photo'
 
 const messages = defineMessages({
   de: {
@@ -54,6 +55,7 @@ const messages = defineMessages({
     showMore: 'Mehr anzeigen',
     showLess: 'Weniger anzeigen',
     discography: 'Diskografie',
+    showAll: 'Alle anzeigen',
     popularReleases: 'Beliebte Veröffentlichungen',
     albums: 'Alben',
     singles: 'Singles und EPs',
@@ -79,6 +81,7 @@ const messages = defineMessages({
     showMore: 'Show more',
     showLess: 'Show less',
     discography: 'Discography',
+    showAll: 'Show all',
     popularReleases: 'Popular releases',
     albums: 'Albums',
     singles: 'Singles and EPs',
@@ -89,7 +92,7 @@ const messages = defineMessages({
 })
 
 /** All of an artist's tracks in the library, with play counts (for "popular" and for playing everything). */
-function useArtistTracks(artistId: string | undefined) {
+export function useArtistTracks(artistId: string | undefined) {
   const { api, session } = useAuthedSession()
   return useQuery({
     queryKey: ['artist-tracks', session.userId, artistId],
@@ -161,7 +164,7 @@ export function ArtistPage({ item }: { item: BaseItemDto }) {
   const follow = useSetFavorite(item.Id!)
 
   const listeners = lastfm.data?.listeners
-  const bio = lastfm.data?.bio || plainText(item.Overview)
+  const bio = useArtistBio(item)
 
   return (
     <div className="pb-12">
@@ -269,7 +272,7 @@ export function ArtistPage({ item }: { item: BaseItemDto }) {
           </section>
         )}
 
-        <Discography albums={albums.data?.albums} tracks={library} loading={albums.isLoading} />
+        <Discography artistId={item.Id!} albums={albums.data?.albums} tracks={library} loading={albums.isLoading} />
 
         <ArtistConcerts name={item.Name ?? undefined} />
 
@@ -290,9 +293,13 @@ export function ArtistPage({ item }: { item: BaseItemDto }) {
 
 type DiscographyFilter = 'popular' | 'albums' | 'singles'
 
-/** Releases with Spotify's three filters; albums have seven or more tracks, singles and EPs up to six. */
-function Discography({ albums, tracks, loading }: { albums?: BaseItemDto[]; tracks: BaseItemDto[]; loading: boolean }) {
+/**
+ * Releases in a row with Spotify's three filters (albums have seven or more tracks, singles and EPs up to six); with
+ * more than a row's worth, "Show all" leads to every release, with search and sorting.
+ */
+function Discography({ artistId, albums, tracks, loading }: { artistId: string; albums?: BaseItemDto[]; tracks: BaseItemDto[]; loading: boolean }) {
   const t = useMessages(messages)
+  const line = useReleaseLine()
   const [filter, setFilter] = useState<DiscographyFilter>('popular')
   if (!loading && !albums?.length) return null
   const count = (album: BaseItemDto) => album.ChildCount ?? tracks.filter((track) => track.AlbumId === album.Id).length
@@ -312,7 +319,14 @@ function Discography({ albums, tracks, loading }: { albums?: BaseItemDto[]; trac
   ]
   return (
     <section className="space-y-3">
-      <h2 className="px-4 text-2xl font-bold tracking-tight sm:px-8">{t.discography}</h2>
+      <div className="flex items-baseline justify-between gap-4 px-4 sm:px-8">
+        <h2 className="text-2xl font-bold tracking-tight">{t.discography}</h2>
+        {list.length > 6 && (
+          <Link to={`/listen/artist/${artistId}/discography`} className="shrink-0 text-sm font-semibold text-muted-foreground hover:text-foreground hover:underline">
+            {t.showAll}
+          </Link>
+        )}
+      </div>
       <div className="flex gap-2 px-4 sm:px-8">
         {filters.map((entry) => (
           <button
@@ -329,12 +343,11 @@ function Discography({ albums, tracks, loading }: { albums?: BaseItemDto[]; trac
           </button>
         ))}
       </div>
-      <div className="flex flex-wrap px-1 sm:px-5">
-        {loading && Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="m-3 size-40 rounded-md" />)}
-        {shown.map((album) => (
-          <MusicCard key={album.Id} item={album} />
+      <CardRow title="" loading={loading}>
+        {shown.slice(0, 12).map((album) => (
+          <MusicCard key={album.Id} item={album} subtitle={line(album, tracks)} />
         ))}
-      </div>
+      </CardRow>
     </section>
   )
 }

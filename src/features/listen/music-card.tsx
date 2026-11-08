@@ -118,7 +118,7 @@ export function CardShell({ href, cover, title, subtitle, round, here, playing, 
 }
 
 /** An album, artist or track as a card. */
-export function MusicCard({ item, className }: { item: BaseItemDto; className?: string }) {
+export function MusicCard({ item, className, subtitle }: { item: BaseItemDto; className?: string; /** In place of the artists (e.g. "2024 • Single"). */ subtitle?: string }) {
   const { api } = useAuthedSession()
   const t = useMessages(messages)
   const play = usePlayCollection()
@@ -131,7 +131,7 @@ export function MusicCard({ item, className }: { item: BaseItemDto; className?: 
       href={itemHref(item)}
       menu={isArtist ? <ArtistMenuItems artist={item} /> : item.Type === 'MusicAlbum' ? <AlbumMenuItems album={item} /> : undefined}
       title={item.Name ?? ''}
-      subtitle={isArtist ? t.artist : artistsOf(item).map((artist) => artist.name).join(', ') || item.ProductionYear}
+      subtitle={subtitle ?? (isArtist ? t.artist : artistsOf(item).map((artist) => artist.name).join(', ') || item.ProductionYear)}
       round={isArtist}
       here={here}
       playing={playing}

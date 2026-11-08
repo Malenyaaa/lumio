@@ -26,12 +26,12 @@ import { Link } from '@/components/link'
 import { FadeImage } from '@/components/media/fade-image'
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useAuthedSession } from '@/features/auth/session'
-import { plainText } from '@/lib/format'
 import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
 import { titlePath } from '@/lib/item-links'
 import { cn } from '@/lib/utils'
 import { useArtistLinks, useArtistRanks, useLastfmArtist, type ArtistLink } from './external'
 import { useArtistAlbums } from '@/features/items/queries'
+import { useArtistBio, useArtistPhoto } from './artist-photo'
 
 const messages = defineMessages({
   de: {
@@ -76,11 +76,10 @@ const messages = defineMessages({
   },
 })
 
-/** All of an artist's pictures: their backdrops (Jellyfin keeps several), then their photo. */
-function artistImages(api: { basePath: string }, artist: BaseItemDto, width = 1600) {
+/** All of an artist's pictures: their backdrops (Jellyfin keeps several), then their photo (the best there is). */
+function artistImages(api: { basePath: string }, artist: BaseItemDto, photo: string | undefined, width = 1600) {
   const backdrops = (artist.BackdropImageTags ?? []).map((tag, index) => `${api.basePath}/Items/${artist.Id}/Images/Backdrop/${index}?tag=${tag}&fillWidth=${width}&quality=90`)
-  const primary = artist.ImageTags?.Primary ? [`${api.basePath}/Items/${artist.Id}/Images/Primary?tag=${artist.ImageTags.Primary}&fillHeight=${width}&quality=90`] : []
-  return [...backdrops, ...primary]
+  return photo ? [...backdrops, photo] : backdrops
 }
 
 /**
@@ -98,10 +97,10 @@ export function ArtistAboutDialog({ artist, open, onOpenChange }: { artist: Base
   const regions = new Intl.DisplayNames([getLocaleTag(useLocale())], { type: 'region' })
   // The badge: the place worldwide, or else the best one in a country.
   const best = ranks.world ? { rank: ranks.world, where: t.worldwide } : ranks.countries[0] ? { rank: ranks.countries[0].rank, where: t.inCountry(regions.of(ranks.countries[0].code) ?? ranks.countries[0].code) } : null
-  const images = artistImages(api, artist)
+  const images = artistImages(api, artist, useArtistPhoto(artist, 1600))
   const [shown, setShown] = useState(0)
   const current = shown % Math.max(1, images.length)
-  const bio = lastfm.data?.bio || plainText(artist.Overview)
+  const bio = useArtistBio(artist)
   const genres = [...new Set([...(artist.Genres ?? []), ...(lastfm.data?.tags ?? []).slice(0, 5)])]
 
   const step = (by: number) => setShown((shown + by + images.length) % images.length)

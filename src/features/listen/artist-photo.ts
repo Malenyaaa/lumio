@@ -1,9 +1,11 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthedSession } from '@/features/auth/session'
-import { relayedImage, relayFetch } from '@/features/social/social'
+import { lumioGet, relayedImage, relayFetch } from '@/features/social/social'
+import { plainText } from '@/lib/format'
+import { getLocale, useLocale } from '@/lib/i18n'
 import { portraitImageUrl } from '@/lib/images'
-import { sameName } from './external'
+import { sameName, useLastfmArtist } from './external'
 
 const MONTH = 30 * 24 * 60 * 60_000
 
@@ -19,21 +21,66 @@ async function deezerPhoto(name: string): Promise<string | null> {
   return relayedImage(picture) ?? null
 }
 
+interface EpidemicProfile {
+  name: string
+  description?: string
+  image?: string
+}
+
+/** The artist's profile on Epidemic Sound (description, photo), for artists who publish there; null otherwise. */
+export function useEpidemicProfile(name: string | undefined) {
+  return useQuery({
+    queryKey: ['epidemic-profile', name],
+    enabled: !!name,
+    staleTime: MONTH,
+    gcTime: MONTH,
+    retry: false,
+    queryFn: async (): Promise<EpidemicProfile | null> => {
+      const response = await lumioGet(`/artist-profile/epidemic?name=${encodeURIComponent(name!)}`)
+      if (!response?.ok) return null
+      const profile = (await response.json()) as EpidemicProfile
+      // Only the same artist (a page for a namesake would be someone else).
+      return sameName(profile.name, name) ? profile : null
+    },
+  })
+}
+
 /**
- * An artist's picture: Jellyfin's own, or else a photo from Deezer (many artists have none in Jellyfin when its
- * metadata providers found nothing). Kept for a month.
+ * An artist's picture, the best there is: their own photo on Epidemic Sound (artists who publish there keep it
+ * current), else Jellyfin's, else a photo from Deezer (many artists have none in Jellyfin). Kept for a month.
  */
 export function useArtistPhoto(artist: BaseItemDto | undefined, size = 360): string | undefined {
   const { api } = useAuthedSession()
+  const isArtist = !!artist && (artist.Type === 'MusicArtist' || !artist.Type)
+  const name = isArtist ? (artist?.Name ?? '') : ''
+  const epidemic = useEpidemicProfile(name || undefined)
   const own = artist ? portraitImageUrl(api, artist, { fillHeight: size }) : undefined
-  const name = artist?.Name ?? ''
   const fallback = useQuery({
     queryKey: ['artist-photo', name],
-    enabled: !own && !!name && (artist?.Type === 'MusicArtist' || !artist?.Type),
+    enabled: isArtist && !own && !!name && epidemic.isFetched && !epidemic.data?.image,
     staleTime: MONTH,
     gcTime: MONTH,
     retry: false,
     queryFn: () => deezerPhoto(name),
   })
-  return own ?? fallback.data ?? undefined
+  const fromEpidemic = epidemic.data?.image ? relayedImage(epidemic.data.image) : undefined
+  return fromEpidemic ?? own ?? fallback.data ?? undefined
+}
+
+/**
+ * The artist's description in the app's language where there is one; else the best one there is, rather than none:
+ * Last.fm in the app's language, then Epidemic Sound (English; written by the artists themselves), then Last.fm in
+ * English, then Jellyfin's.
+ */
+export function useArtistBio(artist: BaseItemDto | undefined, enabled = true): string {
+  useLocale()
+  const name = enabled ? (artist?.Name ?? undefined) : undefined
+  const lastfm = useLastfmArtist(name)
+  const epidemic = useEpidemicProfile(name)
+  const english = getLocale() === 'en'
+  const own = lastfm.data?.bio ?? ''
+  const fromEpidemic = epidemic.data?.description ?? ''
+  const fallback = lastfm.data?.bioEnglish ?? ''
+  const jellyfin = plainText(artist?.Overview)
+  return english ? fromEpidemic || own || jellyfin : own || fromEpidemic || fallback || jellyfin
 }

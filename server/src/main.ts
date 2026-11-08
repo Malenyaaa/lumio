@@ -26,7 +26,7 @@ const TOKEN_TTL_MS = 5 * 60_000
 /** Largest request body accepted (bytes). */
 const BODY_LIMIT = 16 * 1024
 /** Hosts whose pictures the image relay fetches (podcast covers from Apple, artist photos from Deezer); nothing else, so it is no open proxy. */
-const IMAGE_HOSTS = /(^|\.)(mzstatic\.com|dzcdn\.net)$/
+const IMAGE_HOSTS = /(^|\.)(mzstatic\.com|dzcdn\.net|epidemicsound\.com)$/
 /** Largest picture relayed (bytes). */
 const IMAGE_LIMIT = 8 * 1024 * 1024
 const IMAGE_DIR = join(DATA_DIR, 'images')
@@ -75,7 +75,7 @@ const RELAY_SERVICES: Record<string, RelayService> = {
     paths: /^$/,
     key: { param: 'api_key', value: process.env.LASTFM_API_KEY?.trim() },
     // Charts move daily; an artist's biography, top tracks and similar artists hardly do.
-    ttl: (_status, _path, params) => (/^artist\./.test(params.get('method') ?? '') ? 30 * 24 * HOUR : 24 * HOUR),
+    ttl: (_status, _path, params) => (/^artist\./.test(params.get('method') ?? '') ? 90 * 24 * HOUR : 24 * HOUR),
     spacing: 200,
     // Errors come inside a 200: "not found" (6) is an answer, being limited or down (8, 11, 16, 29) is not.
     keep: (status, body) => status < 400 && !/"error":\s*(8|11|16|29)\b/.test(body),
@@ -84,7 +84,7 @@ const RELAY_SERVICES: Record<string, RelayService> = {
   musicbrainz: {
     base: 'https://musicbrainz.org/ws/2/',
     paths: /^artist(\/[0-9a-f-]{36})?$/,
-    ttl: 90 * 24 * HOUR,
+    ttl: 180 * 24 * HOUR,
     spacing: 1100,
     headers: { 'User-Agent': 'Lumio/1.0 (self-hosted Jellyfin client)' },
     keep: (status) => status < 400 || status === 404,
@@ -93,7 +93,7 @@ const RELAY_SERVICES: Record<string, RelayService> = {
   deezer: {
     base: 'https://api.deezer.com/',
     paths: /^search\/artist$/,
-    ttl: 30 * 24 * HOUR,
+    ttl: 180 * 24 * HOUR,
     spacing: 120,
   },
   // lrclib: lyrics. A song's lyrics don't change: kept half a year; "none found" is asked again after a week.
@@ -396,6 +396,73 @@ async function serveFeed(response: ServerResponse, source: string | null) {
   }
 }
 
+interface ArtistProfile {
+  name: string
+  description?: string
+  image?: string
+}
+
+/**
+ * GET /api/artist-profile/epidemic?name=…: an artist's profile on Epidemic Sound (description and photo), for artists
+ * who publish there. Epidemic has no public API; its artist pages carry the profile as structured data (schema.org),
+ * which is read and kept: asked again after 90 days (a miss after 14), and kept when the site fails. Only the artist's
+ * page by name, nothing else.
+ */
+async function serveEpidemicProfile(response: ServerResponse, name: string | null) {
+  const slug = (name ?? '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  if (!slug || slug.length > 80) return send(response, 400, { error: 'Bad name' })
+  const file = join(RELAY_DIR, 'epidemic', `${slug}.json`)
+  let cached: { at: number; profile: ArtistProfile | null } | null = null
+  try {
+    cached = JSON.parse(await readFile(file, 'utf8')) as { at: number; profile: ArtistProfile | null }
+  } catch {
+    // Not asked before.
+  }
+  const answer = (profile: ArtistProfile | null) => send(response, profile ? 200 : 404, profile ?? { error: 'Not on Epidemic Sound' })
+  // Profiles change rarely: asked again after 90 days (a miss after 14); kept for good meanwhile.
+  if (cached && Date.now() - cached.at < (cached.profile ? 90 : 14) * 24 * HOUR) return answer(cached.profile)
+  try {
+    await relaySlot('epidemic', 600)
+    const page = await fetch(`https://www.epidemicsound.com/artists/${slug}/`, {
+      headers: { 'User-Agent': 'Lumio/1.0 (self-hosted Jellyfin client)' },
+      signal: AbortSignal.timeout(15_000),
+    })
+    let profile: ArtistProfile | null = null
+    if (page.ok) {
+      const html = await page.text()
+      // The page's schema.org data names the artist (a MusicGroup) and describes them.
+      for (const match of html.matchAll(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)) {
+        try {
+          const data = JSON.parse(match[1]!) as { mainEntity?: { '@type'?: string; name?: string; description?: string } }
+          const entity = data.mainEntity
+          if (entity?.['@type'] === 'MusicGroup' && entity.name) profile = { name: entity.name, description: entity.description?.trim() || undefined }
+        } catch {
+          // Not this one.
+        }
+      }
+      const image = html.match(/https:\/\/cdn\.epidemicsound\.com\/curation-assets\/artist-profile-images\/[0-9a-f-]+\/original\.jpg/)?.[0]
+      if (profile && image) profile.image = image
+    } else if (page.status !== 404) {
+      // The site is down or blocks us: what was found before beats nothing.
+      return cached ? answer(cached.profile) : send(response, 502, { error: 'Epidemic Sound unavailable' })
+    }
+    // A page that no longer carries a profile (the site changed): keep the one found before.
+    if (!profile && cached?.profile && page.ok) return answer(cached.profile)
+    await mkdir(join(RELAY_DIR, 'epidemic'), { recursive: true })
+    await writeFile(file, JSON.stringify({ at: Date.now(), profile }))
+    send(response, profile ? 200 : 404, profile ?? { error: 'Not on Epidemic Sound' })
+  } catch {
+    if (cached) return answer(cached.profile)
+    send(response, 502, { error: 'Epidemic Sound unavailable' })
+  }
+}
+
 async function handle(request: IncomingMessage, response: ServerResponse) {
   const url = new URL(request.url ?? '/', 'http://localhost')
   // Everything outside /api is the app.
@@ -410,6 +477,9 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
 
   const me = await authenticate(tokenOf(request, url))
   if (!me) return send(response, 401, { error: 'Not signed in' })
+
+  // GET /artist-profile/epidemic?name=…: an artist's description and photo from Epidemic Sound.
+  if (path === '/artist-profile/epidemic' && request.method === 'GET') return serveEpidemicProfile(response, url.searchParams.get('name'))
 
   // GET /feed?url=…: podcast feeds and the files they point to.
   if (path === '/feed' && request.method === 'GET') return serveFeed(response, url.searchParams.get('url'))
