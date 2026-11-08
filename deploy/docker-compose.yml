@@ -16,6 +16,8 @@ services:
       PROXY_JELLYFIN: "true"
       # Optional: buttons on the sign-in page for the Jellyfin SSO plugin's providers ("name:Label", comma-separated).
       # SSO_PROVIDERS: "authentik:Sign in with Authentik"
+      # Optional, with SSO: no Jellyfin password form on the sign-in page (SSO and Quick Connect only).
+      # DISABLE_PASSWORD_LOGIN: "true"
       # Recommended: how MusicBrainz can reach you (it throttles anonymous clients).
       MUSICBRAINZ_CONTACT: "admin@example.org"
       # Optional, your own free keys (the image has none): Last.fm (listeners, bios, similar artists, charts),

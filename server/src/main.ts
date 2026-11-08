@@ -23,10 +23,13 @@ import { DEFAULT_PRIVACY, Store, type Activity, type Person, type Privacy } from
  * through this server; an app built with keys of its own can use those instead), MUSICBRAINZ_CONTACT (optional;
  * how MusicBrainz can reach the operator), PROXY_JELLYFIN (true: Lumio is the public face and passes everything of
  * Jellyfin's through, see proxy.ts), SSO_PROVIDERS (the SSO plugin's providers for the sign-in page, as
- * `name:Button label` separated by commas, e.g. `authentik:Sign in with Nauren`).
+ * `name:Button label` separated by commas, e.g. `authentik:Sign in with Nauren`), DISABLE_PASSWORD_LOGIN (true: the
+ * sign-in page offers SSO and Quick Connect only, no Jellyfin password form; only with SSO providers set).
  */
 const JELLYFIN_URL = (process.env.JELLYFIN_URL ?? '').replace(/\/+$/, '')
 const PROXY_JELLYFIN = /^(1|true|yes)$/i.test(process.env.PROXY_JELLYFIN ?? '')
+/** Signing in with a Jellyfin password is left off Lumio's sign-in page (SSO and Quick Connect only). */
+const DISABLE_PASSWORD_LOGIN = /^(1|true|yes)$/i.test(process.env.DISABLE_PASSWORD_LOGIN ?? '')
 const SSO_PROVIDERS = (process.env.SSO_PROVIDERS ?? '')
   .split(',')
   .map((entry) => entry.trim())
@@ -842,7 +845,7 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
   if (path === '/public' && request.method === 'GET') {
     // Which outside services this server has keys for: the app asks them through it then (it needs no keys of its own).
     const services = Object.fromEntries((['lastfm', 'concerts', 'tmdb'] as const).map((name) => [name, !!RELAY_SERVICES[name]?.key?.value]))
-    return send(response, 200, { sso: SSO_PROVIDERS, proxy: PROXY_JELLYFIN, services })
+    return send(response, 200, { sso: SSO_PROVIDERS, proxy: PROXY_JELLYFIN, services, passwordLogin: !DISABLE_PASSWORD_LOGIN })
   }
   // Pictures load from <img> tags, which carry no token; the host list keeps this to podcast covers.
   if (path === '/image' && request.method === 'GET') return serveImage(response, url.searchParams.get('url'))

@@ -56,6 +56,10 @@ Authentik, Keycloak, Authelia), so accounts stay Jellyfin's:
 The sign-in page then shows the button. The plugin does the sign-in and finishes it in jellyfin-web; Lumio takes it
 over from there (same address, so no second sign-in). Signing out of Lumio signs out of jellyfin-web too.
 
+To offer SSO only, set `DISABLE_PASSWORD_LOGIN: "true"`: the sign-in page then shows the SSO buttons and Quick
+Connect, no password form. (That is Lumio's page; Jellyfin itself still accepts passwords from other apps. To stop
+those, give SSO users no password in Jellyfin, or switch password sign-in off in the SSO plugin's settings.)
+
 With SSO, people change their password at the identity provider: build with `VITE_PASSWORD_CHANGE_DISABLED=true` and
 `VITE_ACCOUNT_URL` (the provider's account page) to send them there from Lumio's profile page.
 
@@ -129,6 +133,9 @@ must allow it (CORS).
 
 - **Everyone shows up with the same IP in Jellyfin**: the proxies aren't in Jellyfin's *Known proxies*.
 - **Remote control or live updates don't work**: WebSockets aren't passed by the reverse proxy.
+- **"Mismatching redirect URI" with `http://` in it**: Jellyfin doesn't trust Lumio's forwarded headers yet. Add
+  the Lumio container (or the Docker network's range) to *Known proxies* and restart Jellyfin, or set the provider's
+  *Scheme override* to `https` in the SSO plugin.
 - **The SSO button does nothing / "provider not found"**: the name in `SSO_PROVIDERS` must match the plugin's provider
   name exactly, and the redirect URI in the identity provider must use the public address.
 - **The dashboard asks to sign in again**: sign in to Lumio first; opening `/web/#/dashboard` then signs you in.

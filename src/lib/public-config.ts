@@ -6,6 +6,8 @@ export interface PublicConfig {
   sso: Array<{ id: string; label: string }>
   /** Whether Lumio is the public face of Jellyfin (it passes Jellyfin's API and administration through). */
   proxy: boolean
+  /** Whether the sign-in page offers a Jellyfin password form (off: SSO and Quick Connect only). */
+  passwordLogin?: boolean
 }
 
 /** What the Lumio server tells before anyone is signed in; nothing when there is no Lumio server. */

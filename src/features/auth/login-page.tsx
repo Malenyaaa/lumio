@@ -68,6 +68,8 @@ export function LoginPage() {
   // SSO goes through Jellyfin's plugin, on this address (Lumio in front of Jellyfin).
   const sso = publicConfig?.proxy && serverUrl === window.location.origin ? publicConfig.sso : []
   const adopting = useAdoptJellyfinSignIn(serverUrl)
+  // The operator can leave the password form off (accounts live in the identity provider); never without SSO to use.
+  const passwordAllowed = publicConfig?.passwordLogin !== false || sso.length === 0
 
   const quickConnectEnabled = useQuery({
     queryKey: ['quick-connect-enabled', serverUrl],
@@ -97,7 +99,8 @@ export function LoginPage() {
       </main>
     )
 
-  const showPassword = mode === 'password' || quickConnectEnabled.data === false
+  const showPassword = passwordAllowed && (mode === 'password' || quickConnectEnabled.data === false)
+  const showQuickConnect = !showPassword && quickConnectEnabled.data !== false
 
   return (
     <main className="flex min-h-svh flex-col items-center justify-center gap-4 px-4">
@@ -123,15 +126,17 @@ export function LoginPage() {
                   <IconLogin2 /> {provider.label}
                 </Button>
               ))}
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <Separator className="flex-1" /> {t.or} <Separator className="flex-1" />
-              </div>
+              {(showPassword || showQuickConnect) && (
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <Separator className="flex-1" /> {t.or} <Separator className="flex-1" />
+                </div>
+              )}
             </div>
           )}
 
-          {showPassword ? <PasswordForm serverUrl={serverUrl} /> : <QuickConnectPanel serverUrl={serverUrl} />}
+          {showPassword ? <PasswordForm serverUrl={serverUrl} /> : showQuickConnect ? <QuickConnectPanel serverUrl={serverUrl} /> : null}
 
-          {quickConnectEnabled.data && (
+          {quickConnectEnabled.data && passwordAllowed && (
             <>
               <Separator />
               <Button variant="ghost" onClick={() => setMode(showPassword ? 'quick-connect' : 'password')}>

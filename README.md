@@ -93,6 +93,7 @@ JELLYFIN_URL=https://jellyfin.example.org PORT=8097 DATA_DIR=/var/lib/lumio node
 | `TMDB_API_KEY`    | no       | TMDb key: TMDb ratings and film series names. The app asks through the server.                 |
 | `PROXY_JELLYFIN`  | no       | `true`: Lumio fronts Jellyfin and passes its API, WebSockets, `/web` and `/sso` through (see [docs/SETUP.md](docs/SETUP.md)). |
 | `SSO_PROVIDERS`   | no       | Sign-in buttons for the Jellyfin SSO plugin's providers, `name:Label` separated by commas.      |
+| `DISABLE_PASSWORD_LOGIN` | no | `true` (with SSO providers): the sign-in page offers SSO and Quick Connect only.               |
 | `MUSICBRAINZ_CONTACT` | no  | A URL or e-mail address MusicBrainz can reach the operator at (it throttles anonymous clients). |
 
 The server relays and caches what the app asks Ticketmaster (6 h), Last.fm (artists 90 days, charts 24 h), MusicBrainz
