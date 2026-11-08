@@ -13,6 +13,7 @@ import type { OfficialPlaylist } from './official'
 import { coverFontsReady, drawCover, type CoverStyle } from './official-covers'
 import { music, START, useMusic } from './player/music-player'
 import { hasCustomCover, mosaicSources, usePlaylistTracks } from './playlists'
+import { RadioCover } from './radio-card'
 
 const messages = defineMessages({
   de: {
@@ -80,6 +81,12 @@ export function PlaylistCover({ playlist, tracks, className }: { playlist: BaseI
  * carries the platform's initial.
  */
 export function OfficialCover({ playlist, className }: { playlist: OfficialPlaylist; className?: string }) {
+  // Radios have their own cover (the artist with similar ones around).
+  if (playlist.kind === 'radio' && playlist.artist) return <RadioCover artist={playlist.artist} className={className} />
+  return <DrawnCover playlist={playlist} className={className} />
+}
+
+function DrawnCover({ playlist, className }: { playlist: OfficialPlaylist; className?: string }) {
   const { api } = useAuthedSession()
   const { appName } = useBranding('listen')
   const t = useMessages(messages)

@@ -103,6 +103,15 @@ export interface LocalSettings {
   videoBitrateMbit: number
   /** Where "concerts near you" are looked for (a city or the device's position); null = not set. */
   concertLocation: { label: string; lat: number; lon: number } | null
+  /** What is left out of the taste profile (mixes, radios, "your artists"), by id. */
+  tasteExclusions: TasteExclusions
+}
+
+export interface TasteExclusions {
+  artists: string[]
+  albums: string[]
+  tracks: string[]
+  playlists: string[]
 }
 
 /**
@@ -136,6 +145,7 @@ export const ACCOUNT_SETTINGS = [
   'syncPlay',
   'musicAutoplay',
   'concertLocation',
+  'tasteExclusions',
 ] as const satisfies ReadonlyArray<keyof LocalSettings>
 
 const ACCOUNT_KEYS = new Set<string>(ACCOUNT_SETTINGS)
@@ -190,6 +200,7 @@ export const DEFAULT_SETTINGS: LocalSettings = {
   videoCacheGb: 5,
   videoBitrateMbit: 8,
   concertLocation: null,
+  tasteExclusions: { artists: [], albums: [], tracks: [], playlists: [] },
 }
 
 const keyFor = (userId: string) => `lumio.settings.${userId}`

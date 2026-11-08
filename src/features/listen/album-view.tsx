@@ -31,6 +31,8 @@ import { endTrackDrag, startTrackDrag } from './track-drag'
 import { LikeToggle, TrackContextMenu, TrackMenu } from './track-menu'
 import { playCircle } from './play-circle'
 import { TrackArtists } from './track-artists'
+import { AddToPlaylist } from './library-menu'
+import { TasteMenuItem } from './taste'
 
 const messages = defineMessages({
   de: {
@@ -47,6 +49,7 @@ const messages = defineMessages({
     saved: 'In deiner Bibliothek',
     more: (name: string) => `Weitere Optionen für ${name}`,
     addToQueue: 'Zur Warteschlange hinzufügen',
+    addToPlaylist: 'Zu Playlist hinzufügen',
     playNext: 'Als Nächstes abspielen',
     goToArtist: 'Zum Künstler',
     title: 'Titel',
@@ -69,6 +72,7 @@ const messages = defineMessages({
     saved: 'In your library',
     more: (name: string) => `More options for ${name}`,
     addToQueue: 'Add to queue',
+    addToPlaylist: 'Add to playlist',
     playNext: 'Play next',
     goToArtist: 'Go to artist',
     title: 'Title',
@@ -193,6 +197,8 @@ export function AlbumView({ item }: { item: BaseItemDto }) {
             <DropdownMenuItem onClick={() => music.playNext(list)}>
               <IconTextPlus /> {t.playNext}
             </DropdownMenuItem>
+            <AddToPlaylist tracks={async () => list} label={t.addToPlaylist} />
+            <TasteMenuItem kind="albums" id={item.Id} />
             {mainArtist?.id && (
               <DropdownMenuItem render={<Link to={titlePath('MusicArtist', mainArtist.id)} />}>
                 <IconUser /> {t.goToArtist}

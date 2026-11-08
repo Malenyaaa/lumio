@@ -5,6 +5,8 @@ import { useAuthedSession } from '@/features/auth/session'
 import { useCategories } from '@/features/library/categories'
 import { defineMessages, getLocale, getLocaleTag, messagesFor } from '@/lib/i18n'
 import { fetchChartTracks, homeChartCountry, sameName } from './external'
+import { useRadioPlaylist } from './radio'
+import { tasteWeight, useTasteFilter } from './taste'
 
 /**
  * Official playlists: made by the platform (shown under the instance's name and logo, like Spotify's own playlists),
@@ -17,7 +19,7 @@ export interface OfficialPlaylist {
   tracks: BaseItemDto[]
   /** "This is …" playlists show the artist's photo on their cover. */
   artist?: BaseItemDto
-  kind: 'new' | 'top' | 'month' | 'rediscover' | 'genre' | 'artist' | 'chart'
+  kind: 'new' | 'top' | 'month' | 'rediscover' | 'genre' | 'artist' | 'chart' | 'radio'
   /**
    * Made for whoever opens it: the same address shows everyone their own songs (their top songs), as Spotify's "Your
    * top songs" do. Shown as "For <name>".
@@ -79,7 +81,7 @@ export const officialMessages = defineMessages({
   },
 })
 
-function seeded(seed: string) {
+export function seeded(seed: string) {
   let state = 0
   for (const char of seed) state = (Math.imul(state, 31) + char.charCodeAt(0)) | 0
   return () => {
@@ -100,6 +102,18 @@ function weeklyShuffle<T>(items: T[], key: string, week: number) {
   return copy
 }
 
+/**
+ * A shuffle that leans towards what weighs more (the user's taste), yet stays a mix: each entry draws a random key
+ * scaled by its weight (Efraimidis–Spirakis), the same for the same seed.
+ */
+export function weightedShuffle<T>(items: T[], weight: (item: T) => number, seed: string) {
+  const random = seeded(seed)
+  return items
+    .map((item) => ({ item, key: random() ** (1 / (1 + weight(item))) }))
+    .sort((a, b) => b.key - a.key)
+    .map((entry) => entry.item)
+}
+
 const slugify = (value: string) =>
   value
     .toLowerCase()
@@ -116,9 +130,11 @@ export function useOfficialPlaylists() {
   const { api, session } = useAuthedSession()
   const { categories, isLoading: categoriesLoading } = useCategories('listen')
   const views = categories.find((category) => category.id === 'music')?.views ?? []
+  // The personal mixes follow the taste profile (what is left out of it doesn't count).
+  const taste = useTasteFilter()
   const query = useQuery({
-    queryKey: ['official-playlists', session.userId, views.map((view) => view.Id), getLocale()],
-    enabled: views.length > 0,
+    queryKey: ['official-playlists', session.userId, views.map((view) => view.Id), getLocale(), taste.key],
+    enabled: views.length > 0 && taste.ready,
     staleTime: 30 * 60_000,
     queryFn: async (): Promise<OfficialPlaylist[]> => {
       const lists = await Promise.all(
@@ -138,7 +154,7 @@ export function useOfficialPlaylists() {
       )
       const tracks = lists.flat()
       const t = messagesFor(officialMessages)
-      const playlists = buildPlaylists(tracks, t, Date.now())
+      const playlists = buildPlaylists(tracks, t, Date.now(), taste.counts, session.userId)
       // The charts come from Last.fm; a failure just leaves them out.
       const [code, country] = homeChartCountry()
       const charts: Array<OfficialPlaylist | null> = await Promise.all([
@@ -150,6 +166,15 @@ export function useOfficialPlaylists() {
   })
   // Still loading while the libraries aren't known yet (the query waits for them), not only while it runs.
   return { playlists: query.data ?? [], isLoading: categoriesLoading || (views.length > 0 && query.isPending) }
+}
+
+/** One official playlist by its address: from the built list, or an artist's radio (built on its own). */
+export function useOfficialPlaylist(slug: string): { playlist: OfficialPlaylist | undefined; isLoading: boolean } {
+  const all = useOfficialPlaylists()
+  const radioId = slug.startsWith('radio-') ? slug.slice('radio-'.length) : undefined
+  const radio = useRadioPlaylist(radioId)
+  if (radioId) return radio
+  return { playlist: all.playlists.find((entry) => entry.slug === slug), isLoading: all.isLoading }
 }
 
 /** How long the personal top list gets. */
@@ -179,15 +204,19 @@ async function chartPlaylist(tracks: BaseItemDto[], t: (typeof officialMessages)
   return { slug, kind: 'chart', title: t.chartTitle(place), description: t.chartDescription(place), tracks: matched, extras, extraLabel: t.listenersLabel }
 }
 
-/** Builds the playlists from the library's tracks. `now` fixes "this week" and "a month ago" for the whole build. */
-function buildPlaylists(tracks: BaseItemDto[], t: (typeof officialMessages)['de'], now: number): OfficialPlaylist[] {
+/**
+ * Builds the playlists from the library's tracks. `now` fixes "this week" and "a month ago" for the whole build;
+ * `counts` says which tracks count for the user's taste (the personal lists are made of those, the rotations lean
+ * towards them).
+ */
+function buildPlaylists(tracks: BaseItemDto[], t: (typeof officialMessages)['de'], now: number, counts: (track: BaseItemDto) => boolean, userId: string): OfficialPlaylist[] {
   const playlists: OfficialPlaylist[] = []
   if (!tracks.length) return playlists
   const week = Math.floor(now / WEEK)
   const newest = [...tracks].sort((a, b) => Date.parse(b.DateCreated ?? '') - Date.parse(a.DateCreated ?? '')).slice(0, SIZE)
   playlists.push({ slug: 'new', kind: 'new', title: t.newTitle, description: t.newDescription, tracks: newest })
 
-  const played = tracks.filter((track) => (track.UserData?.PlayCount ?? 0) > 0)
+  const played = tracks.filter((track) => (track.UserData?.PlayCount ?? 0) > 0 && counts(track))
   const number = new Intl.NumberFormat(getLocaleTag())
   const playsOf = (list: BaseItemDto[]) => Object.fromEntries(list.map((track) => [track.Id!, t.plays(number.format(track.UserData?.PlayCount ?? 0))]))
   if (played.length >= MIN_ARTIST) {
@@ -217,7 +246,8 @@ function buildPlaylists(tracks: BaseItemDto[], t: (typeof officialMessages)['de'
       kind: 'genre',
       title: t.genreTitle(genre),
       description: t.genreDescription(genre),
-      tracks: weeklyShuffle(list, genre, week).slice(0, SIZE),
+      // Each listener's own mix of the genre, leaning towards what they like.
+      tracks: weightedShuffle(list, (track) => tasteWeight(track, counts), `${userId}:${genre}:${week}`).slice(0, SIZE),
     })
   }
 

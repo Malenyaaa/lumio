@@ -27,7 +27,7 @@ import { formatRuntime } from '@/lib/format'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import { cn, tintWash } from '@/lib/utils'
 import { TRACK_GRID, TrackTableRow } from './album-view'
-import { useOfficialPlaylists } from './official'
+import { useOfficialPlaylist } from './official'
 import { playCircle } from './play-circle'
 import { music, START, useMusic } from './player/music-player'
 import { ShuffleToggle } from './shuffle-toggle'
@@ -36,6 +36,8 @@ import { LikedCover, OfficialCover, PlaylistCover } from './playlist-cards'
 import { useLikedSongs, useListenLibrary, usePlaylistAccess, usePlaylistActions, usePlaylistTracks } from './playlists'
 import { ProfileAvatar } from './profile-page'
 import { usePlaylistOwner, useProfile } from './profiles'
+import { AddToPlaylist } from './library-menu'
+import { TasteMenuItem } from './taste'
 
 const messages = defineMessages({
   de: {
@@ -52,6 +54,7 @@ const messages = defineMessages({
     saved: 'In deiner Bibliothek',
     more: 'Weitere Optionen',
     addToQueue: 'Zur Warteschlange hinzufügen',
+    addToOtherPlaylist: 'Zu einer anderen Playlist hinzufügen',
     rename: 'Umbenennen',
     editDetails: 'Details bearbeiten',
     makePublic: 'Öffentlich machen',
@@ -82,6 +85,7 @@ const messages = defineMessages({
     saved: 'In your library',
     more: 'More options',
     addToQueue: 'Add to queue',
+    addToOtherPlaylist: 'Add to other playlist',
     rename: 'Rename',
     editDetails: 'Edit details',
     makePublic: 'Make public',
@@ -348,6 +352,8 @@ export function PlaylistPage() {
                 <DropdownMenuItem onClick={() => music.addToQueue(list)}>
                   <IconPlaylistAdd /> {t.addToQueue}
                 </DropdownMenuItem>
+                <AddToPlaylist tracks={async () => list} label={t.addToOtherPlaylist} exclude={id} />
+                <TasteMenuItem kind="playlists" id={id} />
                 {mine && (
                   <>
                     <DropdownMenuSeparator />
@@ -413,12 +419,12 @@ export function OfficialPlaylistPage() {
   const { slug = '' } = useParams()
   const t = useMessages(messages)
   const { session } = useAuthedSession()
-  const { playlists, isLoading } = useOfficialPlaylists()
-  const playlist = playlists.find((entry) => entry.slug === slug)
+  const { playlist, isLoading } = useOfficialPlaylist(slug)
   if (!isLoading && !playlist) return <Navigate to="/listen" replace />
   return (
     <Collection
-      kind={t.playlist}
+      // A radio is public: its address shows everyone their own radio of the artist.
+      kind={playlist?.kind === 'radio' ? t.publicPlaylist : t.playlist}
       title={playlist?.title ?? ''}
       description={playlist?.description}
       cover={playlist ? <OfficialCover playlist={playlist} /> : <Skeleton className="size-full" />}

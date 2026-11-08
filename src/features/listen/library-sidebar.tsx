@@ -29,7 +29,7 @@ import { itemHref } from '@/lib/item-links'
 import { useSocialMe } from '@/features/social/social'
 import { externalOf } from '@/lib/external-items'
 import { cn } from '@/lib/utils'
-import { useOfficialPlaylists } from './official'
+import { useOfficialPlaylist, useOfficialPlaylists } from './official'
 import { useMusic } from './player/music-player'
 import { LikedCover, OfficialCover, PlaylistCover, SavedEpisodesCover } from './playlist-cards'
 import { ProfileAvatar } from './profile-page'
@@ -133,10 +133,11 @@ export function LibrarySidebar({ compact }: { compact: boolean }) {
   const [openFolders, setOpenFolders] = useOpenFolders()
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null)
 
+  // Saved official playlists; radios are built on their own (see useOfficialPlaylist), so they are kept by address.
   const savedOfficial = library.saved
     .filter((id) => id.startsWith('official:'))
-    .map((id) => official.playlists.find((entry) => `official:${entry.slug}` === id))
-    .filter((entry) => !!entry)
+    .map((id) => id.slice('official:'.length))
+    .filter((slug) => slug.startsWith('radio-') || official.playlists.some((entry) => entry.slug === slug))
 
   // People the user follows (kept on the Lumio server).
   const followedProfiles = (useSocialMe().data?.following ?? []).map((person) => person.id)
@@ -197,22 +198,10 @@ export function LibrarySidebar({ compact }: { compact: boolean }) {
       kinds: ['playlists'] as Filter[],
       render: (props: EntryExtra) => <PlaylistEntry key={playlist.Id} playlist={playlist} compact={compact} label={t.playlist} {...props} {...createActions} />,
     })),
-    ...savedOfficial.map((entry) => ({
-      key: `official:${entry.slug}`,
+    ...savedOfficial.map((slug) => ({
+      key: `official:${slug}`,
       kinds: ['playlists'] as Filter[],
-      render: (props: EntryExtra) => (
-        <Entry
-          key={entry.slug}
-          compact={compact}
-          to={`/listen/official/${entry.slug}`}
-          source={`official:${entry.slug}`}
-          title={entry.title}
-          subtitle={t.playlist}
-          cover={<OfficialCover playlist={entry} />}
-          menu={<OfficialMenuItems playlist={entry} />}
-          {...props}
-        />
-      ),
+      render: (props: EntryExtra) => <OfficialEntry key={slug} slug={slug} compact={compact} label={t.playlist} {...props} />,
     })),
     ...podcasts.podcasts.map((podcast) => ({
       key: `podcast:${podcast.id}`,
@@ -756,6 +745,22 @@ function useLikeTracks() {
     for (const track of tracks) void queryClient.invalidateQueries({ queryKey: ['item', session.userId, track.Id] })
     toast.success(done)
   }
+}
+
+function OfficialEntry({ slug, compact, label, ...extra }: { slug: string; compact: boolean; label: string } & EntryExtra) {
+  const { playlist } = useOfficialPlaylist(slug)
+  return (
+    <Entry
+      {...extra}
+      compact={compact}
+      to={`/listen/official/${slug}`}
+      source={`official:${slug}`}
+      title={playlist?.title ?? ''}
+      subtitle={label}
+      cover={playlist ? <OfficialCover playlist={playlist} /> : null}
+      menu={playlist ? <OfficialMenuItems playlist={playlist} /> : undefined}
+    />
+  )
 }
 
 function PodcastEntry({ podcast, compact, label, ...extra }: { podcast: Podcast; compact: boolean; label: string } & EntryExtra) {

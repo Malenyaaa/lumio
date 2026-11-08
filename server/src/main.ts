@@ -736,6 +736,23 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
     return send(response, 200, Object.fromEntries(Object.entries(known).map(([id, entry]) => [id, entry.data])))
   }
 
+  // GET /credits/by-artist?name=…: the tracks someone is on (as an artist) or credited on (wrote, produced …), for
+  // artists the library has no page for (guests the file tags leave out).
+  if (path === '/credits/by-artist' && request.method === 'GET') {
+    const name = (url.searchParams.get('name') ?? '').trim().slice(0, 200)
+    if (!name) return send(response, 400, { error: 'Bad name' })
+    const performed: string[] = []
+    const credited: string[] = []
+    for (const { id, data } of store.creditsMentioning(name)) {
+      const credits = data as TrackCredits
+      if (credits.artists?.some((entry) => sameName(entry, name))) performed.push(id)
+      else if ([credits.writers, credits.composers, credits.lyricists, credits.producers, credits.mixers, credits.engineers].some((list) => list?.some((entry) => sameName(entry, name)))) {
+        credited.push(id)
+      }
+    }
+    return send(response, 200, { performed, credited })
+  }
+
   // POST /credits/lookup {id, title, artist, album, seconds}: one track's credits, looked up now if they weren't.
   if (path === '/credits/lookup' && request.method === 'POST') {
     const body = await readJson<Partial<TrackMeta> & { id?: string }>(request).catch(() => null)

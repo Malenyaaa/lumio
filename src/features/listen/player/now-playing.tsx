@@ -23,7 +23,7 @@ import { ArtistLine } from './player-bar'
 import { useTrackQuality } from './quality'
 import { usePlayerControls, usePlayerTime } from './player-controls'
 import { useArtistBio, useArtistPhoto } from '../artist-photo'
-import { useArtistLookup, useTrackArtists, useTrackCredits } from '../credits'
+import { artistHref, useArtistLookup, useTrackArtists, useTrackCredits } from '../credits'
 import { TrackContextMenu } from '../track-menu'
 import { TrackArtists } from '../track-artists'
 
@@ -206,13 +206,9 @@ function SongInfoDialog({ track, onClose }: { track: BaseItemDto | null; onClose
                   <ul className="space-y-2">
                     {credits.map((credit) => (
                       <li key={`${credit.role}-${credit.name}`} className="text-sm">
-                        {credit.id ? (
-                          <Link to={titlePath('MusicArtist', credit.id)} onClick={onClose} className="font-medium hover:underline">
-                            {credit.name}
-                          </Link>
-                        ) : (
-                          <span className="font-medium">{credit.name}</span>
-                        )}
+                        <Link to={artistHref(credit)} onClick={onClose} className="font-medium hover:underline">
+                          {credit.name}
+                        </Link>
                         <span className="block text-xs text-muted-foreground">{credit.role}</span>
                       </li>
                     ))}
@@ -439,13 +435,9 @@ function SongInfoCard({ track }: { track: BaseItemDto }) {
         {credits.slice(0, 3).map((credit, index) => (
           <li key={`${credit.role}-${credit.name}`} className="flex items-center justify-between gap-3">
             <span className="min-w-0">
-              {credit.id ? (
-                <Link to={titlePath('MusicArtist', credit.id)} className="block truncate text-sm font-semibold hover:underline">
-                  {credit.name}
-                </Link>
-              ) : (
-                <span className="block truncate text-sm font-semibold">{credit.name}</span>
-              )}
+              <Link to={artistHref(credit)} className="block truncate text-sm font-semibold hover:underline">
+                {credit.name}
+              </Link>
               <span className="block truncate text-xs text-muted-foreground">{credit.role}</span>
             </span>
             {index === 0 && credit.id && <FollowArtist id={credit.id} />}

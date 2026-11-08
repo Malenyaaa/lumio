@@ -185,6 +185,13 @@ export class Store {
     }
   }
 
+  /** Tracks whose credits mention a text anywhere (a name), with their credits, for a closer look by the caller. */
+  creditsMentioning(text: string): Array<{ id: string; data: unknown }> {
+    const pattern = `%${text.replace(/[\\%_]/g, (char) => `\\${char}`)}%`
+    const rows = this.db.prepare("SELECT item_id, data FROM track_credits WHERE data LIKE ? ESCAPE '\\'").all(pattern) as Array<{ item_id: string; data: string }>
+    return rows.map((row) => ({ id: row.item_id, data: JSON.parse(row.data) as unknown }))
+  }
+
   /** The tracks looked up without a result, most recent first. */
   tracksWithoutCredits(): Array<{ id: string; at: number; meta: unknown }> {
     const rows = this.db.prepare('SELECT item_id, at, meta FROM track_credits WHERE data IS NULL ORDER BY at DESC').all() as Array<{ item_id: string; at: number; meta: string | null }>

@@ -40,7 +40,7 @@ export interface TrackCredits {
 const UNKNOWN = 'unknown'
 type Stored = TrackCredits | null | typeof UNKNOWN
 
-let waiting = new Map<string, Array<(value: Stored) => void>>()
+let waiting = new Map<string, Array<{ resolve: (value: Stored) => void; reject: (error: Error) => void }>>()
 let timer: number | undefined
 
 function flush() {
@@ -51,17 +51,25 @@ function flush() {
   for (let start = 0; start < ids.length; start += 300) {
     const chunk = ids.slice(start, start + 300)
     void lumioSend('POST', '/credits', { ids: chunk })
-      .then(async (response) => (response?.ok ? ((await response.json()) as Record<string, TrackCredits | null>) : {}))
-      .catch(() => ({}) as Record<string, TrackCredits | null>)
-      .then((known) => {
-        for (const id of chunk) for (const resolve of batch.get(id) ?? []) resolve(id in known ? known[id]! : UNKNOWN)
+      .then(async (response) => {
+        // No connection yet (right after loading) or the server failed: the queries ask again shortly.
+        if (!response?.ok) throw new Error('Lumio server unavailable')
+        return (await response.json()) as Record<string, TrackCredits | null>
       })
+      .then(
+        (known) => {
+          for (const id of chunk) for (const { resolve } of batch.get(id) ?? []) resolve(id in known ? known[id]! : UNKNOWN)
+        },
+        (error: Error) => {
+          for (const id of chunk) for (const { reject } of batch.get(id) ?? []) reject(error)
+        },
+      )
   }
 }
 
 function storedCredits(id: string): Promise<Stored> {
-  return new Promise((resolve) => {
-    waiting.set(id, [...(waiting.get(id) ?? []), resolve])
+  return new Promise((resolve, reject) => {
+    waiting.set(id, [...(waiting.get(id) ?? []), { resolve, reject }])
     timer ??= window.setTimeout(flush, 20)
   })
 }
@@ -78,7 +86,8 @@ export function useTrackCredits(track: BaseItemDto | undefined, lookup = false):
   const stored = useQuery({
     queryKey: ['track-credits', id],
     enabled: !!id,
-    staleTime: 6 * HOUR,
+    // Found (or not found) is kept; "not looked up yet" is asked again soon (a run may be filling it in).
+    staleTime: (query) => (query.state.data === UNKNOWN ? 60_000 : 6 * HOUR),
     gcTime: 6 * HOUR,
     queryFn: () => storedCredits(id!),
   })
@@ -109,6 +118,9 @@ export function useTrackCredits(track: BaseItemDto | undefined, lookup = false):
 }
 
 // ---- names to the library's artists ----
+
+/** Where an artist's name leads: their page in the library, or the guest page for those it has none for. */
+export const artistHref = (artist: CreditedArtist) => (artist.id ? `/listen/artist/${artist.id}` : `/listen/guest/${encodeURIComponent(artist.name)}`)
 
 const normalize = (name: string) =>
   name

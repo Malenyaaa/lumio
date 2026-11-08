@@ -5,6 +5,7 @@ import { getUserApi } from '@jellyfin/sdk/lib/utils/api/user-api'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthedSession } from '@/features/auth/session'
 import { usePlaylists } from './playlists'
+import { useTasteFilter } from './taste'
 
 /**
  * Profiles in Listen: the people on this server and the public playlists they made. Jellyfin only lets admins list
@@ -106,8 +107,11 @@ const MONTH_MS = 30 * 24 * 60 * 60_000
  */
 export function useListeningStats() {
   const { api, session } = useAuthedSession()
+  // What is left out of the taste profile doesn't make anyone a top artist.
+  const taste = useTasteFilter()
   return useQuery({
-    queryKey: ['listening-stats', session.userId],
+    queryKey: ['listening-stats', session.userId, taste.key],
+    enabled: taste.ready,
     staleTime: 10 * 60_000,
     queryFn: async () => {
       const library = getLibraryApi(api)
@@ -129,6 +133,7 @@ export function useListeningStats() {
       const scores = new Map<string, number>()
       const recent: string[] = []
       for (const track of played) {
+        if (!taste.counts(track)) continue
         const artist = artistOf(track)?.Id
         if (!artist) continue
         if (!recent.includes(artist)) recent.push(artist)

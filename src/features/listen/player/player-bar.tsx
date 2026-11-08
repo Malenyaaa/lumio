@@ -31,7 +31,7 @@ import { formatClock } from '@/lib/format'
 import { useMessages } from '@/lib/i18n'
 import { portraitImageUrl } from '@/lib/images'
 import { externalOf } from '@/lib/external-items'
-import { artistsOf, itemHref, titlePath } from '@/lib/item-links'
+import { artistsOf, itemHref } from '@/lib/item-links'
 import { cn } from '@/lib/utils'
 import { playerBarMessages } from './messages'
 import { currentTrack, music, useMusic } from './music-player'
@@ -43,7 +43,7 @@ import { endTrackDrag, startTrackDrag, useTrackDrop } from '../track-drag'
 import { TrackContextMenu } from '../track-menu'
 import { usePlayerControls, usePlayerTime } from './player-controls'
 import { lengthLabel, toggleRemainingTime, useRemainingTime } from '@/lib/remaining-time'
-import { useTrackArtists } from '../credits'
+import { artistHref, useTrackArtists } from '../credits'
 import { TrackArtists } from '../track-artists'
 
 /** Listen's player bar along the bottom: the track, the transport with its progress, and queue, lyrics and volume. */
@@ -160,13 +160,9 @@ export function ArtistLine({ item, className }: { item: BaseItemDto; className?:
       {artists.map((artist, index) => (
         <Fragment key={artist.id ?? artist.name}>
           {index > 0 && ', '}
-          {artist.id ? (
-            <Link to={titlePath('MusicArtist', artist.id)} className="hover:text-foreground hover:underline">
-              {artist.name}
-            </Link>
-          ) : (
-            artist.name
-          )}
+          <Link to={artistHref(artist)} className="hover:text-foreground hover:underline">
+            {artist.name}
+          </Link>
         </Fragment>
       ))}
     </p>

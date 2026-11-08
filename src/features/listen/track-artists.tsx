@@ -1,8 +1,7 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
 import { Fragment } from 'react'
 import { Link } from '@/components/link'
-import { titlePath } from '@/lib/item-links'
-import { useTrackArtists } from './credits'
+import { artistHref, useTrackArtists } from './credits'
 
 /**
  * A track's artists, each linking to their page where the library has them: the file's artists plus the featured ones
@@ -29,8 +28,9 @@ export function TrackArtists({
   return artists.map((artist, index) => (
     <Fragment key={artist.id ?? artist.name}>
       {index > 0 && ', '}
-      {linked && artist.id ? (
-        <Link to={titlePath('MusicArtist', artist.id)} onClick={stopPropagation ? (event) => event.stopPropagation() : undefined} className="hover:text-foreground hover:underline">
+      {/* Guests the library has no page for lead to their guest page. */}
+      {linked ? (
+        <Link to={artistHref(artist)} onClick={stopPropagation ? (event) => event.stopPropagation() : undefined} className="hover:text-foreground hover:underline">
           {artist.name}
         </Link>
       ) : (

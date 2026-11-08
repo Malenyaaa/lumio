@@ -13,7 +13,7 @@ import { itemHref } from '@/lib/item-links'
 import { cn } from '@/lib/utils'
 import { CardRow, MusicRow, usePlayCollection } from './music-card'
 import { FollowedPodcastsRow } from './podcast-pages'
-import { useOfficialPlaylists } from './official'
+import { useOfficialPlaylist, useOfficialPlaylists } from './official'
 import { playCircle } from './play-circle'
 import { music, START, useMusic } from './player/music-player'
 import { LikedCover, OfficialCard, OfficialCover, PlaylistCard, PlaylistCover } from './playlist-cards'
@@ -214,7 +214,7 @@ function PlaylistTile({ id, source }: { id: string; source: string }) {
 }
 
 function OfficialTile({ slug, source }: { slug: string; source: string }) {
-  const playlist = useOfficialPlaylists().playlists.find((entry) => entry.slug === slug)
+  const { playlist } = useOfficialPlaylist(slug)
   if (!playlist) return null
   return (
     <TileShell

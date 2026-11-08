@@ -1,5 +1,6 @@
 import { useSetPrivacy, useSocialMe, type SocialPrivacy } from '@/features/social/social'
 import { defineMessages, useMessages } from '@/lib/i18n'
+import { TasteExclusionsSection } from '@/features/listen/taste'
 import { Section, SettingsPage, SettingsPending, SwitchField } from './fields'
 
 const messages = defineMessages({
@@ -57,6 +58,7 @@ export function PrivacyPage() {
       <Section title={t.activity} scope="account">
         <SwitchField id="privacy-activity" label={t.shareActivity} hint={t.shareActivityHint} checked={privacy.shareActivity} onChange={toggle('shareActivity')} />
       </Section>
+      <TasteExclusionsSection />
     </SettingsPage>
   )
 }

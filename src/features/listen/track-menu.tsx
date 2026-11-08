@@ -38,6 +38,7 @@ import { music } from './player/music-player'
 import { LikedCover } from './playlist-cards'
 import { useLikedSongs } from './playlists'
 import { usePlaylistActions, usePlaylists } from './playlists'
+import { TasteMenuItem } from './taste'
 
 const messages = defineMessages({
   de: {
@@ -198,6 +199,7 @@ function TrackMenuItems({ track, onRemove, removeLabel }: { track: BaseItemDto; 
         {/* The Favorites' own cover as the icon. */}
         <LikedCover className="size-4 shrink-0 rounded-[3px] [&_svg]:size-2.5!" /> {isLiked ? t.unlike : t.like}
       </DropdownMenuItem>
+      <TasteMenuItem kind="tracks" id={track.Id} />
       <DropdownMenuSeparator />
       {queueItems}
       <DropdownMenuSeparator />

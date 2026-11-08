@@ -2,12 +2,13 @@ import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
 import { ModeTile } from '@/components/app-switcher'
 import { FadeImage } from '@/components/media/fade-image'
 import { defineMessages, useMessages } from '@/lib/i18n'
+import { cn } from '@/lib/utils'
 import { useArtistPhoto } from './artist-photo'
 import { ArtistMenuItems } from './library-menu'
 import { CardShell } from './music-card'
 import { useFollowedArtists } from './playlists'
 import { useListeningStats } from './profiles'
-import { useMusic } from './player/music-player'
+import { music, useMusic } from './player/music-player'
 import { useArtistRadio, useSimilarLibraryArtists } from './radio'
 
 const messages = defineMessages({
@@ -23,55 +24,57 @@ function hue(seed: string) {
 }
 
 /**
- * An artist's radio as a card, as on Spotify: on a soft colour, the artist's round photo in the middle with two
- * similar artists half behind it, "RADIO" in the corner and the name at the bottom. Playing it starts the radio.
+ * An artist's radio cover, as on Spotify: on a soft colour, the artist's round photo in the middle with two similar
+ * artists half behind it, "RADIO" in the corner and the name at the bottom. Always three faces: when too few similar
+ * artists are found, the ones listened to most (or followed) fill in.
  */
-export function RadioCard({ artist }: { artist: BaseItemDto }) {
-  const t = useMessages(messages)
-  const radio = useArtistRadio()
+export function RadioCover({ artist, className }: { artist: BaseItemDto; className?: string }) {
   const similarFound = useSimilarLibraryArtists(artist).data ?? []
-  // Always three faces: when too few similar artists are found, the ones listened to most (or followed) fill in.
   const stats = useListeningStats()
   const followed = useFollowedArtists()
   const similar = [...similarFound, ...(stats.data?.topArtists ?? []), ...(followed.data ?? [])]
     .filter((other, position, list) => other.Id !== artist.Id && list.findIndex((entry) => entry.Id === other.Id) === position)
     .slice(0, 3)
-  const state = useMusic()
-  const source = `radio:${artist.Id}`
-  const here = state.source === source && state.index >= 0
   const h = hue(artist.Id ?? '')
   const [left, right] = similar
   return (
+    <div className={cn('relative size-full overflow-hidden @container', className)} style={{ background: `oklch(0.78 0.1 ${h})` }}>
+      <ModeTile mode="listen" className="absolute left-[6%] top-[6%] size-[clamp(14px,11cqw,26px)] rounded-full" />
+      <span className="absolute right-[6%] top-[6%] text-[clamp(9px,7cqw,14px)] font-black tracking-widest text-black/80">RADIO</span>
+      {[left, right].map(
+        (side, index) =>
+          side && (
+            <span key={side.Id} className="absolute top-[24%] size-[42%] overflow-hidden rounded-full bg-black/10 shadow-lg" style={index === 0 ? { left: '6%' } : { right: '6%' }}>
+              <ArtistFace artist={side} />
+            </span>
+          ),
+      )}
+      <span className="absolute left-1/2 top-[18%] size-[54%] -translate-x-1/2 overflow-hidden rounded-full bg-black/10 shadow-xl ring-4" style={{ ['--tw-ring-color' as string]: `oklch(0.78 0.1 ${h})` }}>
+        <ArtistFace artist={artist} />
+      </span>
+      <span className="absolute inset-x-[6%] bottom-[5%] truncate text-[clamp(12px,11cqw,24px)] font-black leading-tight text-black/85">{artist.Name}</span>
+    </div>
+  )
+}
+
+/** An artist's radio as a card: opens the radio's page (today's mix for this listener); playing starts it. */
+export function RadioCard({ artist }: { artist: BaseItemDto }) {
+  const t = useMessages(messages)
+  const radio = useArtistRadio()
+  const similarFound = useSimilarLibraryArtists(artist).data ?? []
+  const state = useMusic()
+  const source = `official:radio-${artist.Id}`
+  const here = state.source === source && state.index >= 0
+  return (
     <CardShell
-      href={`/listen/artist/${artist.Id}`}
+      href={`/listen/official/radio-${artist.Id}`}
       menu={<ArtistMenuItems artist={artist} />}
       title={t.radio + ': ' + (artist.Name ?? '')}
       subtitle={similarFound.length ? t.subtitle(similarFound.slice(0, 3).map((entry) => entry.Name).join(', ')) : undefined}
       here={here}
       playing={here && state.playing}
-      onPlay={() => void radio(artist)}
-      cover={
-        <div className="relative size-full overflow-hidden @container" style={{ background: `oklch(0.78 0.1 ${h})` }}>
-          <ModeTile mode="listen" className="absolute left-[6%] top-[6%] size-[clamp(14px,11cqw,26px)] rounded-full" />
-          <span className="absolute right-[6%] top-[6%] text-[clamp(9px,7cqw,14px)] font-black tracking-widest text-black/80">RADIO</span>
-          {[left, right].map(
-            (side, index) =>
-              side && (
-                <span
-                  key={side.Id}
-                  className="absolute top-[24%] size-[42%] overflow-hidden rounded-full bg-black/10 shadow-lg"
-                  style={index === 0 ? { left: '6%' } : { right: '6%' }}
-                >
-                  <ArtistFace artist={side} />
-                </span>
-              ),
-          )}
-          <span className="absolute left-1/2 top-[18%] size-[54%] -translate-x-1/2 overflow-hidden rounded-full bg-black/10 shadow-xl ring-4" style={{ ['--tw-ring-color' as string]: `oklch(0.78 0.1 ${h})` }}>
-            <ArtistFace artist={artist} />
-          </span>
-          <span className="absolute inset-x-[6%] bottom-[5%] truncate text-[clamp(12px,11cqw,24px)] font-black leading-tight text-black/85">{artist.Name}</span>
-        </div>
-      }
+      onPlay={() => (here ? music.toggle() : void radio(artist))}
+      cover={<RadioCover artist={artist} />}
     />
   )
 }

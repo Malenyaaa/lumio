@@ -34,10 +34,13 @@ export function useEpidemicProfile(name: string | undefined) {
     enabled: !!name,
     staleTime: MONTH,
     gcTime: MONTH,
-    retry: false,
+    // A few more tries while the connection to the Lumio server comes up.
+    retry: 3,
     queryFn: async (): Promise<EpidemicProfile | null> => {
       const response = await lumioGet(`/artist-profile/epidemic?name=${encodeURIComponent(name!)}`)
-      if (!response?.ok) return null
+      // Not on Epidemic Sound: kept as such. No connection yet or a failure: asked again later rather than kept.
+      if (response?.status === 404) return null
+      if (!response?.ok) throw new Error('Lumio server unavailable')
       const profile = (await response.json()) as EpidemicProfile
       // Only the same artist (a page for a namesake would be someone else).
       return sameName(profile.name, name) ? profile : null

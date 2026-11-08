@@ -27,6 +27,7 @@ import type { OfficialPlaylist } from './official'
 import { music } from './player/music-player'
 import { useFollowedArtists, useListenLibrary, usePlaylistActions, usePlaylists, usePlaylistTracks, useSavedAlbums } from './playlists'
 import { useArtistRadio } from './radio'
+import { TasteMenuItem } from './taste'
 
 const messages = defineMessages({
   de: {
@@ -140,7 +141,8 @@ function CommonItems({ entry, path, inLibrary = true }: { entry: string; path: s
 }
 
 /** "Add to playlist ▸": the user's playlists and a new one, for a list of tracks. */
-function AddToPlaylist({ tracks, label, exclude }: { tracks: () => Promise<BaseItemDto[]>; label: string; exclude?: string }) {
+/** "Add to playlist" as a submenu: a new playlist with these songs, or one of the user's own. */
+export function AddToPlaylist({ tracks, label, exclude }: { tracks: () => Promise<BaseItemDto[]>; label: string; exclude?: string }) {
   const t = useMessages(messages)
   const navigate = useNavigate()
   const playlists = usePlaylists()
@@ -188,6 +190,7 @@ export function ArtistMenuItems({ artist }: { artist: BaseItemDto }) {
       <DropdownMenuItem onClick={() => void radio(artist)}>
         <IconRadio /> {t.radio}
       </DropdownMenuItem>
+      <TasteMenuItem kind="artists" id={artist.Id} />
       <DropdownMenuSeparator />
       <CommonItems entry={`artist:${artist.Id}`} path={`/listen/artist/${artist.Id}`} inLibrary={followed} />
     </>
@@ -214,6 +217,7 @@ export function AlbumMenuItems({ album }: { album: BaseItemDto }) {
         <IconPlaylistAdd /> {t.addToQueue}
       </DropdownMenuItem>
       <AddToPlaylist tracks={tracks} label={t.addToPlaylist} />
+      <TasteMenuItem kind="albums" id={album.Id} />
       <DropdownMenuSeparator />
       <CommonItems entry={`album:${album.Id}`} path={`/listen/album/${album.Id}`} inLibrary={saved} />
     </>
@@ -244,6 +248,7 @@ export function PlaylistMenuItems({ playlist, onCreatePlaylist, onCreateFolder }
         </>
       )}
       <AddToPlaylist tracks={tracks} label={t.addToOtherPlaylist} exclude={playlist.Id ?? undefined} />
+      <TasteMenuItem kind="playlists" id={playlist.Id} />
       <DropdownMenuSeparator />
       <CommonItems entry={`playlist:${playlist.Id}`} path={`/listen/playlist/${playlist.Id}`} />
     </>
