@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { IconDeviceMobile, IconKey, IconLoader2 } from '@tabler/icons-react'
+import { IconCheck, IconCopy, IconDeviceMobile, IconKey, IconLoader2 } from '@tabler/icons-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router'
 import { Button } from '@/components/ui/button'
@@ -113,6 +113,41 @@ function LanguageSwitch() {
   )
 }
 
+/** The Quick Connect code; a click copies all of it (and selects it, where copying isn't allowed). */
+function CopyCode({ code }: { code: string }) {
+  const t = useMessages(loginMessages)
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!copied) return
+    const timer = window.setTimeout(() => setCopied(false), 1800)
+    return () => window.clearTimeout(timer)
+  }, [copied])
+  return (
+    <div className="grid justify-items-center gap-1">
+      <button
+        type="button"
+        title={t.copyCode}
+        aria-label={`${t.copyCode}: ${code}`}
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(code)
+            setCopied(true)
+          } catch {
+            // No clipboard here: the code is selected for copying by hand.
+          }
+        }}
+        className="group relative rounded-lg px-4 py-1 font-mono text-4xl font-semibold tracking-[0.3em] outline-none transition-colors select-all hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+        aria-live="polite"
+      >
+        {code}
+      </button>
+      <span className={cn('flex items-center gap-1 text-xs text-muted-foreground', copied && 'text-foreground')}>
+        {copied ? <IconCheck className="size-3.5" /> : <IconCopy className="size-3.5" />} {copied ? t.codeCopied : t.copyCode}
+      </span>
+    </div>
+  )
+}
+
 function QuickConnectPanel({ serverUrl }: { serverUrl: string }) {
   const { status, start, cancel } = useQuickConnect(serverUrl)
   const t = useMessages(loginMessages)
@@ -123,9 +158,7 @@ function QuickConnectPanel({ serverUrl }: { serverUrl: string }) {
         <p className="text-sm text-muted-foreground">
           {t.quickConnectBefore} <span className="text-foreground">{t.quickConnectPath}</span> {t.quickConnectAfter}
         </p>
-        <p className="font-mono text-4xl font-semibold tracking-[0.3em]" aria-live="polite">
-          {status.code}
-        </p>
+        <CopyCode code={status.code} />
         <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
           <IconLoader2 className="size-4 animate-spin" /> {t.waiting}
         </p>
