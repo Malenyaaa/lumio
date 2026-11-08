@@ -4,10 +4,11 @@ import {
   IconArrowsDiagonalMinimize2,
   IconChevronLeft,
   IconLayoutSidebarRightCollapse,
+  IconPlayerPlayFilled,
   IconSettings,
   IconX,
 } from '@tabler/icons-react'
-import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type PointerEvent, type ReactNode } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type PointerEvent, type ReactNode } from 'react'
 import { Link } from '@/components/link'
 import { FadeImage } from '@/components/media/fade-image'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -16,7 +17,7 @@ import { useDominantColor } from '@/lib/dominant-color'
 import { externalOf } from '@/lib/external-items'
 import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
 import { portraitImageUrl } from '@/lib/images'
-import { artistsOf } from '@/lib/item-links'
+import { artistsOf, titlePath } from '@/lib/item-links'
 import { cn } from '@/lib/utils'
 import { useLyrics } from './lyrics'
 import { playerBarMessages } from './messages'
@@ -42,6 +43,7 @@ const messages = defineMessages({
     nextInQueue: 'Nächster Titel in der Warteschlange',
     clearQueue: 'Warteschlange löschen',
     removeFromQueue: 'Aus Warteschlange entfernen',
+    playThis: (name: string) => `${name} abspielen`,
     nextFrom: 'Nächster Titel von:',
     autoplayFrom: 'Ähnliche Titel, basierend auf',
     nowPlaying: 'Läuft gerade',
@@ -79,6 +81,7 @@ const messages = defineMessages({
     nextInQueue: 'Next in queue',
     clearQueue: 'Clear queue',
     removeFromQueue: 'Remove from queue',
+    playThis: (name: string) => `Play ${name}`,
     nextFrom: 'Next from:',
     autoplayFrom: 'Similar songs, based on',
     nowPlaying: 'Now playing',
@@ -695,13 +698,42 @@ function QueueRow({ uid, item, index, kind, current }: { uid: string; item: Base
           mark === 'before' ? 'after:-top-px' : mark === 'after' ? 'after:-bottom-px' : '',
         )}
       >
-        <button type="button" onClick={() => !current && music.jump(index)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-          <span className="size-10 shrink-0 overflow-hidden rounded bg-muted">{cover && <FadeImage src={cover} alt="" className="size-full object-cover" />}</span>
-          <span className="min-w-0">
-            <span className={cn('block truncate text-sm', current && 'text-listen')}>{item.Name}</span>
-            <span className="block truncate text-xs text-muted-foreground">{artistsOf(item).map((artist) => artist.name).join(', ')}</span>
-          </span>
+        {/* The cover turns into a play button on hover (as in Spotify); the title plays too, the artists lead to them. */}
+        <button
+          type="button"
+          aria-label={current ? item.Name ?? '' : t.playThis(item.Name ?? '')}
+          onClick={() => !current && music.jump(index)}
+          className="group/cover relative size-10 shrink-0 overflow-hidden rounded bg-muted"
+        >
+          {cover && <FadeImage src={cover} alt="" className="size-full object-cover" />}
+          {!current && (
+            <span className="absolute inset-0 grid place-items-center bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100">
+              <IconPlayerPlayFilled className="size-4" />
+            </span>
+          )}
         </button>
+        <span className="min-w-0 flex-1">
+          <button type="button" onClick={() => !current && music.jump(index)} className={cn('block max-w-full truncate text-left text-sm', current && 'text-listen')}>
+            {item.Name}
+          </button>
+          <span className="block truncate text-xs text-muted-foreground">
+            {artistsOf(item).map((artist, position) => (
+              <Fragment key={artist.id ?? artist.name}>
+                {position > 0 && ', '}
+                {artist.id ? (
+                  <Link to={titlePath('MusicArtist', artist.id)} className="hover:text-foreground hover:underline">
+                    {artist.name}
+                  </Link>
+                ) : (
+                  artist.name
+                )}
+              </Fragment>
+            ))}
+          </span>
+        </span>
+        <span className="opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-data-popup-open:opacity-100">
+          <TrackMenu track={item} visible onRemove={current ? undefined : () => music.remove(index)} removeLabel={t.removeFromQueue} />
+        </span>
       </div>
     </TrackContextMenu>
   )

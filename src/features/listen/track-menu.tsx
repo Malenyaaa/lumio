@@ -233,7 +233,17 @@ async function copyLink(track: BaseItemDto, done: string) {
 }
 
 /** The "…" of a track. */
-export function TrackMenu({ track, onRemove, visible }: { track: BaseItemDto; onRemove?: () => void; visible?: boolean }) {
+export function TrackMenu({
+  track,
+  onRemove,
+  removeLabel,
+  visible,
+}: {
+  track: BaseItemDto
+  onRemove?: () => void
+  removeLabel?: string
+  visible?: boolean
+}) {
   const t = useMessages(messages)
   return (
     <DropdownMenu>
@@ -248,7 +258,7 @@ export function TrackMenu({ track, onRemove, visible }: { track: BaseItemDto; on
         <IconDots className="size-5" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64" onClick={(event) => event.stopPropagation()}>
-        <TrackMenuItems track={track} onRemove={onRemove} />
+        <TrackMenuItems track={track} onRemove={onRemove} removeLabel={removeLabel} />
       </DropdownMenuContent>
     </DropdownMenu>
   )
