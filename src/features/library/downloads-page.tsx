@@ -198,10 +198,10 @@ function MovieRow({ entry, t, size }: { entry: DownloadedVideo; t: Messages; siz
   const poster = item ? portraitImageUrl(api, item, { fillHeight: 300 }) : undefined
   const done = entry.state.state === 'done'
   return (
-    <li className="flex items-center gap-2">
+    <li className="relative rounded-lg transition hover:bg-muted">
       <Link
         to={item ? (done ? playHref(item) : `/movie/${item.Id}`) : '#'}
-        className="flex min-w-0 flex-1 items-center gap-4 rounded-lg p-2 outline-none transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex min-w-0 items-center gap-4 rounded-lg p-2 pr-16 outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="aspect-[2/3] w-14 shrink-0 overflow-hidden rounded-md bg-muted">{poster && <FadeImage src={poster} alt="" loading="lazy" className="size-full object-cover" />}</div>
         <div className="min-w-0 flex-1">
@@ -294,10 +294,10 @@ function SeriesBlock({ group, t, size }: { group: SeriesGroup; t: Messages; size
                 const thumb = landscapeImageUrl(api, item, { fillWidth: 320 })
                 const done = entry.state.state === 'done'
                 return (
-                  <li key={entry.id} className="flex items-center gap-2">
+                  <li key={entry.id} className="relative rounded-lg transition hover:bg-muted">
                     <Link
                       to={done ? playHref(item) : `/show/${group.id}?episode=${item.Id}`}
-                      className="flex min-w-0 flex-1 items-center gap-4 rounded-lg p-2 outline-none transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                      className="flex min-w-0 items-center gap-4 rounded-lg p-2 pr-16 outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <div className="aspect-video w-28 shrink-0 overflow-hidden rounded-md bg-muted sm:w-36">{thumb && <FadeImage src={thumb} alt="" loading="lazy" className="size-full object-cover" />}</div>
                       <div className="min-w-0 flex-1">
@@ -330,17 +330,24 @@ function StateLine({ entry, t, size, prefix }: { entry: DownloadedVideo; t: Mess
       <DownloadGlyph
         state={state.state}
         share={state.state === 'loading' ? state.share : 0}
-        className={cn('size-4 shrink-0', state.state === 'queued' ? (failed ? 'text-amber-500' : 'text-muted-foreground') : 'text-listen')}
+        className={cn('size-5 shrink-0', state.state === 'queued' ? (failed ? 'text-amber-500' : 'text-muted-foreground') : 'text-listen')}
       />
       <span className="truncate">{text}</span>
     </p>
   )
 }
 
+/** Removing a download: inside its card on the right (as on the series page), big enough to hit easily. */
 function RemoveButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <Button variant="ghost" size="icon" aria-label={label} title={label} onClick={onClick} className="shrink-0 text-muted-foreground hover:text-foreground">
-      <IconTrash />
-    </Button>
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className="absolute right-2 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-foreground/10 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <IconTrash className="size-6" />
+    </button>
   )
 }
