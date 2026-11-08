@@ -166,6 +166,7 @@ function AdminMenuItems({ pages }: { pages: ReturnType<typeof useSettingsPages> 
   const user = useUserConfiguration()
   const t = useMessages(shellMessages)
   if (!user.data?.Policy?.IsAdministrator) return null
+  const sameOrigin = session.serverUrl.replace(/\/+$/, '') === window.location.origin
 
   return (
     <>
@@ -179,12 +180,19 @@ function AdminMenuItems({ pages }: { pages: ReturnType<typeof useSettingsPages> 
           <Icon /> {label}
         </DropdownMenuItem>
       ))}
-      {ADMIN_PAGES.map(({ path, labelKey, icon: Icon }) => (
-        <DropdownMenuItem key={path} render={<a href={`${session.serverUrl}/web/#${path}`} target="_blank" rel="noreferrer noopener" />}>
-          <Icon /> {t[labelKey]}
-          <IconExternalLink className="ml-auto size-3.5 text-muted-foreground" />
-        </DropdownMenuItem>
-      ))}
+      {/* Behind Lumio (same address) they open in place, and leaving them comes back here; elsewhere in a new tab. */}
+      {ADMIN_PAGES.map(({ path, labelKey, icon: Icon }) =>
+        sameOrigin ? (
+          <DropdownMenuItem key={path} render={<a href={`/web/#${path}`} />}>
+            <Icon /> {t[labelKey]}
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem key={path} render={<a href={`${session.serverUrl}/web/#${path}`} target="_blank" rel="noreferrer noopener" />}>
+            <Icon /> {t[labelKey]}
+            <IconExternalLink className="ml-auto size-3.5 text-muted-foreground" />
+          </DropdownMenuItem>
+        ),
+      )}
     </>
   )
 }
