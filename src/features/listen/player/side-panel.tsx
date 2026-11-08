@@ -7,7 +7,7 @@ import {
   IconSettings,
   IconX,
 } from '@tabler/icons-react'
-import { useEffect, useLayoutEffect, useRef, type PointerEvent, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type PointerEvent, type ReactNode } from 'react'
 import { Link } from '@/components/link'
 import { FadeImage } from '@/components/media/fade-image'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -20,11 +20,11 @@ import { artistsOf } from '@/lib/item-links'
 import { cn } from '@/lib/utils'
 import { useLyrics } from './lyrics'
 import { playerBarMessages } from './messages'
-import { currentTrack, music, useMusic, useMusicTime } from './music-player'
+import { currentTrack, music, useMusic, useMusicTime, type QueueKind } from './music-player'
 import { closeListenPanel, openListenPanel, RIGHT_LIMITS, setListenLayout, setListenPanelExpanded, setListenPanelPeek, toggleListenPanel, type ListenPanel, useListenLayout, useListenPanel } from './panel'
 import { useTrackQuality } from './quality'
 import { ResizeHandle } from '../resize-handle'
-import { endTrackDrag, startTrackDrag } from '../track-drag'
+import { endTrackDrag, QUEUE_MOVE_TYPE, startTrackDrag } from '../track-drag'
 import { TrackContextMenu, TrackMenu } from '../track-menu'
 import { NowPlaying } from './now-playing'
 import { SourceLink } from './queue-source'
@@ -41,6 +41,7 @@ const messages = defineMessages({
     currentTrack: 'Aktueller Titel',
     nextInQueue: 'Nächster Titel in der Warteschlange',
     clearQueue: 'Warteschlange löschen',
+    removeFromQueue: 'Aus Warteschlange entfernen',
     nextFrom: 'Nächster Titel von:',
     autoplayFrom: 'Ähnliche Titel, basierend auf',
     nowPlaying: 'Läuft gerade',
@@ -77,6 +78,7 @@ const messages = defineMessages({
     currentTrack: 'Now playing',
     nextInQueue: 'Next in queue',
     clearQueue: 'Clear queue',
+    removeFromQueue: 'Remove from queue',
     nextFrom: 'Next from:',
     autoplayFrom: 'Similar songs, based on',
     nowPlaying: 'Now playing',
@@ -479,8 +481,8 @@ function Queue() {
     positions.current = next
   })
 
-  const row = ({ entry, position, item }: { entry: { uid: string }; position: number; item: BaseItemDto }) => (
-    <QueueRow key={entry.uid} uid={entry.uid} item={item} index={position} removable />
+  const row = ({ entry, position, item }: { entry: { uid: string; kind: QueueKind }; position: number; item: BaseItemDto }) => (
+    <QueueRow key={entry.uid} uid={entry.uid} item={item} index={position} kind={entry.kind} />
   )
 
   return (
@@ -488,7 +490,8 @@ function Queue() {
       {track && state.entries[state.index] && (
         <section className="space-y-1">
           <h3 className="text-sm font-semibold">{t.currentTrack}</h3>
-          <QueueRow uid={state.entries[state.index]!.uid} item={track} index={state.index} current />
+          {/* Songs dropped on (below) the current one go to the front of the user's queue. */}
+          <QueueRow uid={state.entries[state.index]!.uid} item={track} index={state.index} kind="user" current />
         </section>
       )}
       {user.length > 0 && (
@@ -523,18 +526,66 @@ function Queue() {
   )
 }
 
-function QueueRow({ uid, item, index, current, removable }: { uid: string; item: BaseItemDto; index: number; current?: boolean; removable?: boolean }) {
+/** The queue entry being dragged within the queue (the browser's drag data can't be read until the drop). */
+const QUEUE_TYPE = QUEUE_MOVE_TYPE
+let draggedQueueIndex: number | null = null
+
+/**
+ * One row of the queue: a click plays it; it can be dragged to another place in the queue (between the user's queue
+ * and the collection too) or onto a playlist; right-clicking offers the track's menu, with removing it from the queue.
+ */
+function QueueRow({ uid, item, index, kind, current }: { uid: string; item: BaseItemDto; index: number; kind: QueueKind; current?: boolean }) {
   const { api } = useAuthedSession()
   const t = useMessages(messages)
   const cover = portraitImageUrl(api, item, { fillHeight: 96 })
+  const [mark, setMark] = useState<'before' | 'after' | null>(null)
+  const takes = (event: DragEvent) => event.dataTransfer.types.includes(QUEUE_TYPE)
+  // On the current track only "after" makes sense (nothing goes before what is playing).
+  const partAt = (event: DragEvent) => {
+    if (current) return 'after'
+    const rect = event.currentTarget.getBoundingClientRect()
+    return event.clientY - rect.top < rect.height / 2 ? 'before' : 'after'
+  }
   return (
-    <TrackContextMenu track={item}>
+    <TrackContextMenu track={item} onRemove={current ? undefined : () => music.remove(index)} removeLabel={t.removeFromQueue}>
       <div
         data-uid={uid}
-        draggable
-        onDragStart={(event) => startTrackDrag(event, [item])}
-        onDragEnd={endTrackDrag}
-        className="group flex items-center gap-3 rounded-md p-1.5 hover:bg-muted data-popup-open:bg-muted"
+        draggable={!current}
+        onDragStart={(event) => {
+          startTrackDrag(event, [item])
+          event.dataTransfer.setData(QUEUE_TYPE, uid)
+          event.dataTransfer.effectAllowed = 'copyMove'
+          draggedQueueIndex = index
+        }}
+        onDragEnd={() => {
+          endTrackDrag()
+          draggedQueueIndex = null
+        }}
+        onDragOver={(event) => {
+          if (!takes(event) || draggedQueueIndex === index) return
+          event.preventDefault()
+          event.dataTransfer.dropEffect = 'move'
+          const next = partAt(event)
+          if (next !== mark) setMark(next)
+        }}
+        onDragLeave={(event) => {
+          if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+          setMark(null)
+        }}
+        onDrop={(event) => {
+          setMark(null)
+          if (!takes(event) || draggedQueueIndex === null) return
+          event.preventDefault()
+          event.stopPropagation()
+          music.reorder(draggedQueueIndex, partAt(event) === 'after' ? index + 1 : index, kind)
+          draggedQueueIndex = null
+        }}
+        className={cn(
+          'group relative flex items-center gap-3 rounded-md p-1.5 hover:bg-muted data-popup-open:bg-muted',
+          // Where the dragged song would land: a line between the rows.
+          mark && 'after:pointer-events-none after:absolute after:inset-x-1 after:h-0.5 after:rounded-full after:bg-listen',
+          mark === 'before' ? 'after:-top-px' : mark === 'after' ? 'after:-bottom-px' : '',
+        )}
       >
         <button type="button" onClick={() => !current && music.jump(index)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
           <span className="size-10 shrink-0 overflow-hidden rounded bg-muted">{cover && <FadeImage src={cover} alt="" className="size-full object-cover" />}</span>
@@ -543,17 +594,6 @@ function QueueRow({ uid, item, index, current, removable }: { uid: string; item:
             <span className="block truncate text-xs text-muted-foreground">{artistsOf(item).map((artist) => artist.name).join(', ')}</span>
           </span>
         </button>
-        {removable && (
-          <button
-            type="button"
-            aria-label={t.remove}
-            title={t.remove}
-            onClick={() => music.remove(index)}
-            className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground opacity-0 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
-          >
-            <IconX className="size-4" />
-          </button>
-        )}
       </div>
     </TrackContextMenu>
   )

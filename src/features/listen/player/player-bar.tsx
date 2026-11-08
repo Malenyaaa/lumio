@@ -312,7 +312,8 @@ function Extras() {
 
 /** Songs dropped here are added to the end of the queue (the queue button, and the open queue panel). */
 export function QueueDrop({ className, children }: { className?: string; children: ReactNode }) {
-  const drop = useTrackDrop((tracks) => music.addToQueue(tracks))
+  // Songs moved within the queue are placed by their rows, not added again.
+  const drop = useTrackDrop((tracks) => music.addToQueue(tracks), true, { queueMoves: false })
   return (
     <div
       {...drop.handlers}

@@ -7,6 +7,8 @@ import { useState, type DragEvent } from 'react'
  * browser's drag data only carries text); the target under the pointer is outlined.
  */
 const TYPE = 'application/x-lumio-tracks'
+/** Marks a drag that moves a song within the queue (it is no new song for the queue). */
+export const QUEUE_MOVE_TYPE = 'application/x-lumio-queue'
 
 let dragged: BaseItemDto[] | null = null
 
@@ -53,9 +55,9 @@ export function endTrackDrag() {
  * Makes an element take dropped songs. `over` is true while songs hover it; spread `handlers` on the element.
  * `accept` can turn the target off (e.g. playlists the user may not change).
  */
-export function useTrackDrop(onDrop: (tracks: BaseItemDto[]) => void, accept = true) {
+export function useTrackDrop(onDrop: (tracks: BaseItemDto[]) => void, accept = true, { queueMoves = true }: { queueMoves?: boolean } = {}) {
   const [over, setOver] = useState(false)
-  const takes = (event: DragEvent) => accept && event.dataTransfer.types.includes(TYPE)
+  const takes = (event: DragEvent) => accept && event.dataTransfer.types.includes(TYPE) && (queueMoves || !event.dataTransfer.types.includes(QUEUE_MOVE_TYPE))
   return {
     over,
     handlers: {

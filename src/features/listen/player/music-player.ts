@@ -580,6 +580,21 @@ export const music = {
     insertAt(userQueueEnd(), items, 'user')
     announceQueued('queue', items)
   },
+  /**
+   * Moves an upcoming entry to `to` (its position counted before the move), into the user's queue or the collection's
+   * order as `kind` says; only this play order changes, not the collection itself.
+   */
+  reorder(from: number, to: number, kind: QueueKind) {
+    if (from <= state.index || from === to) return
+    const queue = [...state.queue]
+    const entries = [...state.entries]
+    const [item] = queue.splice(from, 1)
+    const [moved] = entries.splice(from, 1)
+    const at = Math.max(state.index + 1, to > from ? to - 1 : to)
+    queue.splice(at, 0, item!)
+    entries.splice(at, 0, { ...moved!, kind })
+    setState({ queue, entries })
+  },
   /** Empties the user's queue; the collection (and autoplay) go on as before. */
   clearQueue() {
     const keep = state.entries.map((item, position) => position <= state.index || item.kind !== 'user')

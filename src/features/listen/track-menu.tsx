@@ -120,7 +120,7 @@ export function LikeToggle({ track, className }: { track: BaseItemDto; className
  * What can be done with a track, shared by its "…" button and its right-click menu (as in Spotify): playlists, liked
  * songs, the queue, and the way to its album and artist. Podcast episodes only offer the queue and their show.
  */
-function TrackMenuItems({ track, onRemove }: { track: BaseItemDto; onRemove?: () => void }) {
+function TrackMenuItems({ track, onRemove, removeLabel }: { track: BaseItemDto; onRemove?: () => void; removeLabel?: string }) {
   const t = useMessages(messages)
   const navigate = useNavigate()
   const playlists = usePlaylists()
@@ -186,7 +186,7 @@ function TrackMenuItems({ track, onRemove }: { track: BaseItemDto; onRemove?: ()
       </DropdownMenuSub>
       {onRemove && (
         <DropdownMenuItem onClick={onRemove}>
-          <IconTrash /> {t.removeFromPlaylist}
+          <IconTrash /> {removeLabel ?? t.removeFromPlaylist}
         </DropdownMenuItem>
       )}
       <DropdownMenuItem
@@ -258,12 +258,23 @@ export function TrackMenu({ track, onRemove, visible }: { track: BaseItemDto; on
  * Right-clicking `children` (a track row, rendered as the trigger itself) opens the track's menu at the pointer.
  * Long-pressing does the same on touch screens.
  */
-export function TrackContextMenu({ track, onRemove, children }: { track: BaseItemDto; onRemove?: () => void; children: ReactElement }) {
+export function TrackContextMenu({
+  track,
+  onRemove,
+  removeLabel,
+  children,
+}: {
+  track: BaseItemDto
+  onRemove?: () => void
+  /** What removing means here ("Remove from queue"); a playlist's own entries by default. */
+  removeLabel?: string
+  children: ReactElement
+}) {
   return (
     <ContextMenu.Root>
       <ContextMenu.Trigger render={children} />
       <DropdownMenuContent className="w-64" onClick={(event) => event.stopPropagation()}>
-        <TrackMenuItems track={track} onRemove={onRemove} />
+        <TrackMenuItems track={track} onRemove={onRemove} removeLabel={removeLabel} />
       </DropdownMenuContent>
     </ContextMenu.Root>
   )
