@@ -11,6 +11,8 @@ interface ScrollRowProps {
   className?: string
   /** Identifies the row on its page, so coming back to that page (history entry) restores how far it was scrolled. */
   restoreKey?: string
+  /** The page dashes above the row's right end; off for rows without a heading of their own (they would sit on another one). */
+  dashes?: boolean
 }
 
 /** Horizontal scroll positions per history entry and row; lives as long as the tab. */
@@ -117,7 +119,7 @@ function useDragScroll(track: RefObject<HTMLDivElement | null>) {
  * Horizontally scrolling row. When content overflows, arrow buttons appear on hover (pointer devices; touch just
  * swipes) and page through it by about one screen width.
  */
-export function ScrollRow({ children, className, restoreKey }: ScrollRowProps) {
+export function ScrollRow({ children, className, restoreKey, dashes = true }: ScrollRowProps) {
   const t = useMessages(scrollRowMessages)
   const track = useRef<HTMLDivElement>(null)
   const { key: historyKey } = useLocation()
@@ -197,7 +199,7 @@ export function ScrollRow({ children, className, restoreKey }: ScrollRowProps) {
       </div>
       {/* Netflix-style: thin dashes above the row's right end, only while hovering it. Deliberately quieter than the
           hero's pills, which are meant to draw the eye. */}
-      {pages > 1 && (
+      {dashes && pages > 1 && (
         <div className="absolute bottom-full right-4 mb-[1.125rem] hidden opacity-0 transition-opacity duration-200 group-hover/row:opacity-100 sm:right-8 [@media(hover:hover)]:flex">
           {Array.from({ length: pages }, (_, index) => (
             <button

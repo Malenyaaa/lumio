@@ -161,7 +161,7 @@ export function CardRow({
           {action}
         </div>
       )}
-      <ScrollRow className="px-1 sm:px-5" restoreKey={loading ? undefined : title}>
+      <ScrollRow className="px-1 sm:px-5" restoreKey={loading ? undefined : title} dashes={!!title || !!action}>
         {loading
           ? Array.from({ length: 6 }, (_, i) => (
               <div key={i} className="w-44 shrink-0 p-3">
