@@ -361,6 +361,8 @@ function BigNowPlaying({ track }: { track: BaseItemDto }) {
     <div onPointerMove={tilt} onPointerLeave={reset} className="flex h-full items-center justify-center py-6 [perspective:1200px]">
       <div
         ref={card}
+        // Flies in from the small cover (see setListenPanelExpanded).
+        style={{ viewTransitionName: 'listen-cover' }}
         className="relative aspect-square h-[min(72svh,50rem)] max-w-full overflow-hidden rounded-xl bg-muted shadow-2xl shadow-black/50 transition-transform duration-300 ease-out [transform-style:preserve-3d] motion-reduce:transition-none motion-reduce:[transform:none]"
       >
         {/* Not draggable: the cover is for looking at (and the drag would fight the tilt). */}

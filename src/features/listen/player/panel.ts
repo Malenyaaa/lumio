@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { flushSync } from 'react-dom'
 
 /**
  * Listen's right-hand panel (as Spotify's): what's playing, the queue, or the lyrics. While music is loaded it never
@@ -74,13 +75,24 @@ export function openListenPanel() {
   setPanel({ ...panel, view: 'nowPlaying', open: true, before: null })
 }
 
-/** Makes the panel big (or normal again). An open queue or quality moves beside the cover while big, and back after. */
+/**
+ * Makes the panel big (or normal again). An open queue or quality moves beside the cover while big, and back after.
+ * The cover flies from where it was to where it ends up (a View Transition between the two, named `listen-cover`).
+ */
 export function setListenPanelExpanded(expanded: boolean) {
-  if (expanded) {
-    const beside = BESIDE.has(panel.view) ? (panel.view as ListenPanelState['beside']) : null
-    return setPanel({ ...panel, open: true, expanded, view: beside ? 'nowPlaying' : panel.view, beside })
+  if (expanded === panel.expanded) return
+  const apply = () => {
+    if (expanded) {
+      const beside = BESIDE.has(panel.view) ? (panel.view as ListenPanelState['beside']) : null
+      return setPanel({ ...panel, open: true, expanded, view: beside ? 'nowPlaying' : panel.view, beside })
+    }
+    setPanel({ ...panel, expanded, view: panel.beside && panel.view === 'nowPlaying' ? panel.beside : panel.view, beside: null })
   }
-  setPanel({ ...panel, expanded, view: panel.beside && panel.view === 'nowPlaying' ? panel.beside : panel.view, beside: null })
+  if (!('startViewTransition' in document) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return apply()
+  // Only the cover moves; the rest of the page changes as it always does (no cross-fade of everything).
+  document.documentElement.classList.add('panel-transition')
+  const transition = document.startViewTransition(() => flushSync(apply))
+  void transition.finished.finally(() => document.documentElement.classList.remove('panel-transition'))
 }
 
 export function useListenPanel() {

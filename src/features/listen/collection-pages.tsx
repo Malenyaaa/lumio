@@ -428,7 +428,10 @@ export function OfficialPlaylistPage() {
           {/* Made for whoever opens it: the same link shows everyone their own. */}
           {playlist?.personal && (
             <span>
-              • {t.madeForPrefix} <span className="font-bold text-foreground">{session.userName}</span>
+              • {t.madeForPrefix}{' '}
+              <Link to={`/listen/user/${session.userId}`} className="font-bold text-foreground hover:underline">
+                {session.userName}
+              </Link>
             </span>
           )}
         </>

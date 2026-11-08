@@ -316,3 +316,16 @@ html.no-page-animations::view-transition-new(*) {
 html:has([data-app-shell][data-mode='listen']) [data-sonner-toaster][data-y-position='bottom'] {
   bottom: 6rem !important;
 }
+
+/* The side panel growing or shrinking (setListenPanelExpanded): only the cover flies; the page itself doesn't fade. */
+html.panel-transition::view-transition-old(root),
+html.panel-transition::view-transition-new(root) {
+  animation: none;
+}
+html.panel-transition::view-transition-group(listen-cover) {
+  animation-duration: 380ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+html.panel-transition::view-transition-group(app-header) {
+  animation: none;
+}
