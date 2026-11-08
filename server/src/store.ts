@@ -46,7 +46,7 @@ export interface Play {
   session: string
   userId: string
   /** A podcast episode (Jellyfin never sees those), or a song (Jellyfin counts it; Lumio keeps how the play went). */
-  kind: 'podcast' | 'audio'
+  kind: 'podcast' | 'audio' | 'video'
   /** The episode's feed GUID, or the song's Jellyfin id. */
   key: string
   title: string
@@ -75,7 +75,7 @@ function playOf(row: Record<string, string | number | null>): Play {
   return {
     session: String(row.session),
     userId: String(row.user_id),
-    kind: row.kind === 'audio' ? 'audio' : 'podcast',
+    kind: row.kind === 'audio' ? 'audio' : row.kind === 'video' ? 'video' : 'podcast',
     key: String(row.item_key),
     title: String(row.title),
     subtitle: row.subtitle === null ? undefined : String(row.subtitle),

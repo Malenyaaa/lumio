@@ -1,3 +1,4 @@
+import { PlayMethod } from '@jellyfin/sdk/lib/generated-client/models'
 import { getSessionApi } from '@jellyfin/sdk/lib/utils/api/session-api'
 import { IconArrowLeft } from '@tabler/icons-react'
 import Hls from 'hls.js'
@@ -21,6 +22,7 @@ import { useUserConfiguration } from '@/features/settings/use-user-configuration
 import { secondsToTicks, ticksToSeconds } from '@/lib/format'
 import { backdropImageUrl, landscapeImageUrl, portraitImageUrl } from '@/lib/images'
 import { rememberPlayback } from '@/lib/playback-outbox'
+import { logOfflineWatch } from '@/features/listen/player/play-log'
 import { useMessages } from '@/lib/i18n'
 import { music } from '@/features/listen/player/music-player'
 import { markAppReady } from '@/lib/boot'
@@ -221,10 +223,12 @@ function Player({ id }: { id: string }) {
     el.playbackRate = effectiveRate
   }, [effectiveRate, data])
 
-  // A stop that couldn't be reported (offline): kept for later, as watched when it got near the end.
-  const keepStop = useEffectEvent((ticks: number, elementTicks: number) => {
+  // A stop that couldn't be reported (offline): kept for later, as watched when it got near the end, and how long it
+  // was watched for the statistics (Playback Reporting never saw it).
+  const keepStop = useEffectEvent((ticks: number, elementTicks: number, watch: { startedAt: number; seconds: number; sessionId: string }) => {
     const runtime = item.data?.RunTimeTicks ?? elementTicks
     rememberPlayback(session.userId, { itemId: id, at: new Date().toISOString(), played: !!runtime && ticks >= runtime * 0.9, positionTicks: ticks })
+    if (item.data && !isAudio) logOfflineWatch(item.data, watch.startedAt, watch.seconds, watch.sessionId)
   })
 
   const handleEnded = useEffectEvent(() => {
@@ -260,12 +264,32 @@ function Player({ id }: { id: string }) {
       PositionTicks: positionTicks.current(),
       IsPaused: element.paused,
       CanSeek: true,
+      // Without it Jellyfin assumes a transcode (and Playback Reporting files it so): a copy from the device or the
+      // file itself is direct play.
+      PlayMethod: data.transcoded ? PlayMethod.Transcode : PlayMethod.DirectPlay,
     })
+    // How long it is really watched (seeks don't count), for a stop that has to be handed in later.
+    const watch = { startedAt: Date.now(), seconds: 0, sessionId: data.playSessionId }
+    let lastTime: number | null = null
+    const onTime = () => {
+      if (!element.paused && lastTime !== null) {
+        const step = element.currentTime - lastTime
+        if (step > 0 && step < 3) watch.seconds += step
+      }
+      lastTime = element.currentTime
+    }
+    const onSeeking = () => (lastTime = null)
+    element.addEventListener('timeupdate', onTime)
+    element.addEventListener('seeking', onSeeking)
+    const removeWatchListeners = () => {
+      element.removeEventListener('timeupdate', onTime)
+      element.removeEventListener('seeking', onSeeking)
+    }
     const report = (kind: 'progress' | 'stopped') => {
       if (kind === 'progress' && !startReached) return
       // When the stop can't be reported (offline, e.g. a stored episode), it is kept and handed in later: watched to
       // the end counts as watched, otherwise where it was left.
-      const keep = () => kind === 'stopped' && keepStop(positionTicks.current(), Number.isFinite(element.duration) ? secondsToTicks(element.duration) : 0)
+      const keep = () => kind === 'stopped' && keepStop(positionTicks.current(), Number.isFinite(element.duration) ? secondsToTicks(element.duration) : 0, watch)
       if (!navigator.onLine) return keep()
       const call =
         kind === 'progress'
@@ -367,6 +391,7 @@ function Player({ id }: { id: string }) {
 
     return () => {
       removeSyncListeners()
+      removeWatchListeners()
       window.clearInterval(timer)
       window.clearTimeout(startFallback)
       element.removeEventListener('loadedmetadata', seekToStart)

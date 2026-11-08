@@ -1106,7 +1106,8 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
 
   // POST /me/plays {session, kind, key, title, subtitle, contextId, image, client, startedAt, seconds, source,
   // reasonStart, reasonEnd, shuffle, offline, bufferingMs}: a listening session, sent while it plays. Podcasts (which
-  // Jellyfin never sees) are counted here; for songs Jellyfin counts the play and Lumio keeps how it went.
+  // Jellyfin never sees) are counted here; for songs Jellyfin counts the play and Lumio keeps how it went; videos
+  // (kind "video") are films and episodes watched offline, which Jellyfin's Playback Reporting never saw.
   // GET /me/plays?limit=&before=: their plays, newest first.
   if (path === '/me/plays') {
     if (request.method === 'POST') {
@@ -1122,7 +1123,7 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
       store.recordPlay({
         session,
         userId: me.id,
-        kind: body?.kind === 'audio' ? 'audio' : 'podcast',
+        kind: body?.kind === 'audio' || body?.kind === 'video' ? body.kind : 'podcast',
         key,
         title,
         subtitle: text(body?.subtitle),

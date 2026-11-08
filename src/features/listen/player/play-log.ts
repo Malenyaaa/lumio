@@ -26,7 +26,7 @@ export interface PlayContext {
 
 interface Session {
   session: string
-  kind: 'podcast' | 'audio'
+  kind: 'podcast' | 'audio' | 'video'
   key: string
   title: string
   subtitle?: string
@@ -163,8 +163,35 @@ export function logBuffering(waiting: boolean) {
   }
 }
 
+/**
+ * A film or episode watched without a connection (its stop couldn't be reported to Jellyfin, so Playback Reporting
+ * never saw it): kept and handed in to the Lumio server once back, where the statistics count it. Named as Playback
+ * Reporting names it ("Series - s01e02 - Title").
+ */
+export function logOfflineWatch(item: BaseItemDto, startedAt: number, seconds: number, sessionId: string) {
+  if (!item.Id || seconds < 1) return
+  const pad = (value?: number | null) => String(value ?? 0).padStart(2, '0')
+  const title = item.Type === 'Episode' ? `${item.SeriesName ?? ''} - s${pad(item.ParentIndexNumber)}e${pad(item.IndexNumber)} - ${item.Name ?? ''}` : (item.Name ?? '')
+  void send({
+    session: sessionId,
+    kind: 'video',
+    key: item.Id,
+    title,
+    subtitle: item.Type ?? undefined,
+    contextId: item.SeriesId ?? undefined,
+    client: `Lumio · ${browserName()}`,
+    startedAt,
+    seconds: Math.round(seconds),
+    offline: true,
+    bufferingMs: 0,
+  })
+}
+
 /** Sends what was kept while offline (called when the connection to the Lumio server is there). */
 export function flushPlays() {
   const pending = Object.values(readPending())
   if (pending[0]) void send(pending[0])
 }
+
+// Back online: what was kept goes out.
+if (typeof window !== 'undefined') window.addEventListener('online', () => flushPlays())

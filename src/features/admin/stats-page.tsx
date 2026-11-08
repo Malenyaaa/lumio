@@ -33,6 +33,7 @@ const messages = defineMessages({
     podcastPart: (time: string) => `davon ${time} Podcasts`,
     playsCount: (count: string) => `${count} Wiedergaben`,
     byType: 'Nach Typ',
+    offlineMethod: 'Offline vom Gerät',
     byMethod: 'Wiedergabe-Methode',
     byClient: 'Nach Client',
     byDevice: 'Nach Gerät',
@@ -94,6 +95,7 @@ const messages = defineMessages({
     podcastPart: (time: string) => `${time} of it podcasts`,
     playsCount: (count: string) => `${count} plays`,
     byType: 'By type',
+    offlineMethod: 'Offline from the device',
     byMethod: 'Playback method',
     byClient: 'By client',
     byDevice: 'By device',
@@ -165,7 +167,7 @@ interface Reporting {
 }
 
 interface PodcastPlay {
-  kind?: 'podcast' | 'audio'
+  kind?: 'podcast' | 'audio' | 'video'
   source?: string
   reasonStart?: string
   reasonEnd?: string
@@ -275,10 +277,19 @@ export function StatsPage() {
   const report = reporting.data
   // Lumio's log holds podcasts (counted here) and songs (counted by Jellyfin; Lumio adds how they played).
   const songPlays = (podcasts.data ?? []).filter((play) => play.kind === 'audio')
-  const plays = showPodcasts ? (podcasts.data ?? []).filter((play) => play.kind !== 'audio') : []
+  const plays = showPodcasts ? (podcasts.data ?? []).filter((play) => !play.kind || play.kind === 'podcast') : []
+  // Films and episodes watched offline (handed in later): Playback Reporting never saw them, so they're added to its
+  // numbers as their type (subtitle).
+  const offlineVideos = (podcasts.data ?? []).filter((play) => play.kind === 'video' && jellyfinKinds.includes(play.subtitle as Kind))
   const counted = plays.filter((play) => play.seconds >= MIN_PLAY_SECONDS)
   const podcastSeconds = plays.reduce((sum, play) => sum + play.seconds, 0)
-  const typed = (report?.byType ?? []).filter((entry) => jellyfinKinds.includes(entry.label as Kind))
+  const typed = (report?.byType ?? []).filter((entry) => jellyfinKinds.includes(entry.label as Kind)).map((entry) => ({ ...entry }))
+  for (const play of offlineVideos) {
+    let entry = typed.find((other) => other.label === play.subtitle)
+    if (!entry) typed.push((entry = { label: play.subtitle!, count: 0, time: 0 }))
+    if (play.seconds >= MIN_PLAY_SECONDS) entry.count++
+    entry.time += play.seconds
+  }
   const byType: Breakdown[] = [...typed, ...(showPodcasts ? [{ label: 'Podcast', count: counted.length, time: podcastSeconds }] : [])]
   const totalPlays = byType.reduce((sum, entry) => sum + entry.count, 0)
   const totalSeconds = byType.reduce((sum, entry) => sum + entry.time, 0)
@@ -328,6 +339,19 @@ export function StatsPage() {
     }
     users.set(id, row)
   }
+  for (const play of offlineVideos) {
+    const id = play.userId.replace(/-/g, '')
+    const row = users.get(id) ?? { id, name: play.userName, count: 0, seconds: 0, podcastCount: 0, podcastSeconds: 0 }
+    if (play.seconds >= MIN_PLAY_SECONDS) row.count++
+    row.seconds += play.seconds
+    const end = play.startedAt + play.seconds * 1000
+    if (!row.latest || end > row.latest) {
+      row.latest = end
+      row.lastItem = play.title
+      row.client = `${play.client ?? 'Lumio'} (offline)`
+    }
+    users.set(id, row)
+  }
   const userRows = [...users.values()].sort((a, b) => (measure === 'time' ? b.seconds - a.seconds : b.count - a.count))
 
   // Per day: Jellyfin's (all users together) and the podcasts, side by side in each bar.
@@ -353,11 +377,17 @@ export function StatsPage() {
     if (measure === 'time') dayList[index]!.podcasts += play.seconds
     else if (play.seconds >= MIN_PLAY_SECONDS) dayList[index]!.podcasts++
   }
+  for (const play of offlineVideos) {
+    const index = dayIndex.get(dayKey(new Date(play.startedAt)))
+    if (index === undefined) continue
+    if (measure === 'time') dayList[index]!.jellyfin += play.seconds
+    else if (play.seconds >= MIN_PLAY_SECONDS) dayList[index]!.jellyfin++
+  }
   const dayMax = Math.max(1, ...dayList.map((entry) => entry.jellyfin + entry.podcasts))
 
   // Times of day: seconds by weekday and hour, both sources.
   const hourly: Record<string, number> = jellyfinKinds.length ? { ...(report?.hourly ?? {}) } : {}
-  for (const play of plays) {
+  for (const play of [...plays, ...offlineVideos]) {
     const start = new Date(play.startedAt)
     const key = `${start.getDay()}-${pad(start.getHours())}`
     hourly[key] = (hourly[key] ?? 0) + play.seconds
@@ -365,14 +395,23 @@ export function StatsPage() {
   const hourMax = Math.max(1, ...Object.values(hourly))
 
   const podcastClients = new Map<string, Breakdown>()
-  for (const play of plays) {
-    const label = play.client ?? 'Lumio'
+  for (const play of [...plays, ...offlineVideos]) {
+    const label = play.kind === 'video' ? `${play.client ?? 'Lumio'} (offline)` : (play.client ?? 'Lumio')
     const entry = podcastClients.get(label) ?? { label, count: 0, time: 0 }
     if (play.seconds >= MIN_PLAY_SECONDS) entry.count++
     entry.time += play.seconds
     podcastClients.set(label, entry)
   }
   const clients = jellyfinKinds.length ? [...(report?.byClient ?? []), ...podcastClients.values()] : [...podcastClients.values()]
+
+  // Watched offline: from the device, as a method of its own.
+  const methods: Breakdown[] = [...(report?.byMethod ?? [])]
+  if (offlineVideos.length)
+    methods.push({
+      label: t.offlineMethod,
+      count: offlineVideos.filter((play) => play.seconds >= MIN_PLAY_SECONDS).length,
+      time: offlineVideos.reduce((sum, play) => sum + play.seconds, 0),
+    })
 
   const weekdays = t.weekdays.split(',')
 
@@ -548,7 +587,7 @@ export function StatsPage() {
 
           <div className="grid gap-4 lg:grid-cols-2">
             <BarList title={t.byType} entries={byType} measure={measure} name={kindName} duration={duration} number={number} />
-            {jellyfinKinds.length > 0 && <BarList title={t.byMethod} entries={report?.byMethod ?? []} measure={measure} duration={duration} number={number} />}
+            {jellyfinKinds.length > 0 && <BarList title={t.byMethod} entries={methods} measure={measure} duration={duration} number={number} />}
             <BarList title={t.byClient} entries={clients} measure={measure} duration={duration} number={number} />
             {jellyfinKinds.length > 0 && <BarList title={t.byDevice} entries={report?.byDevice ?? []} measure={measure} duration={duration} number={number} />}
           </div>
