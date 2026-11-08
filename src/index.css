@@ -314,9 +314,25 @@ html.no-page-animations::view-transition-new(*) {
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-listen) 25%, transparent), 0 4px 12px rgb(0 0 0 / 0.6);
 }
 
-/* In Listen, messages rise above the player bar instead of covering it. */
-html:has([data-app-shell][data-mode='listen']) [data-sonner-toaster][data-y-position='bottom'] {
-  bottom: 6rem !important;
+/*
+ * The edges the system keeps for itself (notch, rounded corners, home indicator) once the page is drawn edge to edge
+ * (viewport-fit=cover); 0 elsewhere. Capacitor sets --safe-area-inset-* where the WebView's env() is wrong.
+ */
+:root {
+  --safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  /* What the fixed bars at the bottom cover (Listen's player bar): messages, the remote bar and save bars sit above. */
+  --bottom-inset: var(--safe-bottom);
+}
+
+html:has([data-app-shell][data-mode='listen']) {
+  --bottom-inset: calc(5rem + var(--safe-bottom));
+}
+
+[data-sonner-toaster][data-y-position='bottom'] {
+  bottom: calc(var(--bottom-inset) + 1.5rem) !important;
 }
 
 /* The side panel growing or shrinking (setListenPanelExpanded): only the cover flies; the page itself doesn't fade. */
@@ -426,7 +442,7 @@ html.panel-transition::view-transition-new(listen-cover) {
   }
 }
 
-/* The remote-control bar ("play on") floats above Listen's player bar instead of covering it. */
-html:has([data-app-shell][data-mode='listen']) [data-remote-bar] {
-  bottom: 6rem;
+/* The remote-control bar ("play on") floats above the bottom bars instead of covering them. */
+[data-remote-bar] {
+  bottom: calc(var(--bottom-inset) + 0.75rem);
 }
