@@ -50,6 +50,7 @@ import { ProfilePage } from '@/features/settings/profile-page'
 import { SettingsLayout } from '@/features/settings/settings-layout'
 import { SubtitlesPage } from '@/features/settings/subtitles-page'
 
+import { setBackNavigator } from '@/lib/back'
 import { queryClient } from '@/lib/query-client'
 
 // A data router (instead of <BrowserRouter>) is what enables View Transitions between pages.
@@ -161,6 +162,9 @@ const router = createBrowserRouter(
     </Route>,
   ),
 )
+
+// The back button's last step before leaving the app: the start page, in place of the page the visit began on.
+setBackNavigator((to) => void router.navigate(to, { replace: true }))
 
 /** The notices, unless the user turned them off (Settings → Interface). */
 function WantedToaster() {

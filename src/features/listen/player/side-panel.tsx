@@ -13,6 +13,7 @@ import { Link } from '@/components/link'
 import { FadeImage } from '@/components/media/fade-image'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuthedSession } from '@/features/auth/session'
+import { useBackLayer } from '@/lib/back'
 import { useDominantColor } from '@/lib/dominant-color'
 import { externalOf } from '@/lib/external-items'
 import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
@@ -136,6 +137,8 @@ export function SidePanel() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [expanded])
+  // So does the system back button.
+  useBackLayer(expanded, () => setListenPanelExpanded(false))
 
   if (!track) return <EmptySidePanel open={open} />
   const titles: Record<ListenPanel, string> = { nowPlaying: track.Album ?? bar.nowPlaying, queue: bar.queue, lyrics: bar.lyrics, quality: t.quality }

@@ -37,6 +37,8 @@ import { usePreloadNext } from './preload-next'
 import { useVideoPrefetch } from './use-video-prefetch'
 import { forgetVideo, isVideoCached, isVideoPinned, storedQuality, useVideoStored } from './video-cache'
 import { useOffline } from '@/lib/network'
+import { useBackLayer } from '@/lib/back'
+import { inJellyfinApp, setAppFullscreen } from '@/lib/native-app'
 import { startAfterIntro, useMediaSegments } from './segments'
 import { fitLabels } from './labels'
 import { SettingsPanel } from './settings-panel'
@@ -121,6 +123,11 @@ function Player({ id }: { id: string }) {
   const [localSubtitle, setLocalSubtitle] = useState<number | undefined>(undefined)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [episodesOpen, setEpisodesOpen] = useState(false)
+  // The system back button closes an open panel before it leaves the player.
+  useBackLayer(settingsOpen || episodesOpen, () => {
+    setSettingsOpen(false)
+    setEpisodesOpen(false)
+  })
   // Loading progress: the furthest real milestone reached so far, and whether the stream has played yet.
   const [loadStage, setLoadStage] = useState(0)
   const [started, setStarted] = useState(false)
@@ -492,6 +499,14 @@ function Player({ id }: { id: string }) {
     if (document.fullscreenElement) void document.exitFullscreen()
     else void container.current?.requestFullscreen().catch(() => undefined)
   }, [])
+  // Inside Jellyfin's Android app the player is always fullscreen (no system bars, turned to landscape); there is no
+  // fullscreen to toggle.
+  const inApp = inJellyfinApp()
+  useEffect(() => {
+    if (!inApp) return
+    setAppFullscreen(true)
+    return () => void setAppFullscreen(false)
+  }, [inApp])
 
   // Picture-in-picture, where the browser offers it (Chromium, Safari; Firefox only has its own overlay button).
   const pipSupported = typeof document !== 'undefined' && document.pictureInPictureEnabled === true
@@ -624,7 +639,7 @@ function Player({ id }: { id: string }) {
         ArrowUp: () => el && setVolume(Math.min(1, el.volume + 0.1)),
         ArrowDown: () => el && setVolume(Math.max(0, el.volume - 0.1)),
         m: toggleMute,
-        f: toggleFullscreen,
+        f: inApp ? () => undefined : toggleFullscreen,
         n: playNext,
       }
       const handler = handlers[event.key]
@@ -635,7 +650,7 @@ function Player({ id }: { id: string }) {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [settingsOpen, episodesOpen, settings.skipBackSeconds, settings.skipForwardSeconds, settings.keyboardShortcuts, togglePlay, seekBy, setVolume, toggleMute, toggleFullscreen, playNext, wake])
+  }, [settingsOpen, episodesOpen, settings.skipBackSeconds, settings.skipForwardSeconds, settings.keyboardShortcuts, togglePlay, seekBy, setVolume, toggleMute, toggleFullscreen, inApp, playNext, wake])
 
   // Subtitle position: every cue that becomes active is moved to the line chosen on the settings page. When the
   // picture format pushes part of the frame off screen, lines are counted from the visible edge instead of the frame's,
@@ -852,7 +867,7 @@ function Player({ id }: { id: string }) {
           }
           else togglePlay()
         }}
-        onDoubleClick={toggleFullscreen}
+        onDoubleClick={inApp ? undefined : toggleFullscreen}
       />
 
       {!isAudio && <PauseSpotlight item={item.data} visible={spotlightVisible} />}
@@ -946,7 +961,7 @@ function Player({ id }: { id: string }) {
           skipForwardSeconds={settings.skipForwardSeconds}
           onVolume={setVolume}
           onToggleMute={toggleMute}
-          onToggleFullscreen={toggleFullscreen}
+          onToggleFullscreen={inApp ? undefined : toggleFullscreen}
           settingsOpen={settingsOpen}
           episodesOpen={episodesOpen}
           onToggleEpisodes={

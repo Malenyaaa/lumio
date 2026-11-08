@@ -47,7 +47,8 @@ interface PlayerControlsProps {
   skipForwardSeconds: number
   onVolume: (volume: number) => void
   onToggleMute: () => void
-  onToggleFullscreen: () => void
+  /** Omitted where the player is always fullscreen (inside an app). */
+  onToggleFullscreen?: () => void
   settingsOpen: boolean
   episodesOpen: boolean
   /** Omitted when there is no list to show (movies). */
@@ -178,9 +179,11 @@ export function PlayerControls({
             <IconSettings className={settingsOpen ? 'rotate-45 transition-transform' : 'transition-transform'} />
           </Button>
         )}
-        <Button variant="ghost" size="icon" aria-label={fullscreen ? t.exitFullscreen : t.fullscreen} onClick={onToggleFullscreen}>
-          {fullscreen ? <IconMinimize /> : <IconMaximize />}
-        </Button>
+        {onToggleFullscreen && (
+          <Button variant="ghost" size="icon" aria-label={fullscreen ? t.exitFullscreen : t.fullscreen} onClick={onToggleFullscreen}>
+            {fullscreen ? <IconMinimize /> : <IconMaximize />}
+          </Button>
+        )}
       </div>
     </div>
   )

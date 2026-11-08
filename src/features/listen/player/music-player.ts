@@ -12,6 +12,7 @@ import { flushPlayback, rememberPlayback } from '@/lib/playback-outbox'
 import { recordRecent } from '../recent'
 import { adoptIntoCache, audioCacheAvailable, cachedAudioUrl, isCached, prefetchAudio, recordCachedPlay } from './audio-cache'
 import { isOffline } from '@/lib/network'
+import { inJellyfinApp, setAppPlaybackManager, updateAppMediaSession } from '@/lib/native-app'
 import { flushPlays, logBuffering, logPlay, type EndReason, type PlayContext, type StartReason } from './play-log'
 import { downloadedAudioUrl, downloadId, isDownloaded, setDownloadQuality, setDownloadSource, setReleaseHandler } from './downloads'
 import { DIRECT_FORMATS } from './quality'
@@ -319,6 +320,7 @@ if (audio) {
   audio.volume = state.volume
   audio.addEventListener('play', () => {
     setState({ playing: true })
+    updateAppSession()
     shareActivity(true)
     // Listening time counts again from here (it stopped at the pause).
     const item = currentTrack()
@@ -326,6 +328,7 @@ if (audio) {
   })
   audio.addEventListener('pause', () => {
     setState({ playing: false })
+    updateAppSession()
     shareActivity(false)
     report('progress')
     writeSession()
@@ -343,7 +346,11 @@ if (audio) {
     setTime({ position: audio.currentTime, duration: durationOf() })
     if (Date.now() - positionSavedAt > SAVE_POSITION_MS) writeSession()
   })
-  audio.addEventListener('durationchange', () => setTime({ position: audio.currentTime, duration: durationOf() }))
+  audio.addEventListener('durationchange', () => {
+    setTime({ position: audio.currentTime, duration: durationOf() })
+    updateAppSession()
+  })
+  audio.addEventListener('seeked', updateAppSession)
   audio.addEventListener('ended', onEnded)
   audio.addEventListener('error', () => {
     setState({ buffering: false })
@@ -904,6 +911,7 @@ function stop(reason: EndReason = 'endplay') {
   window.clearInterval(progressTimer)
   setState({ queue: [], entries: [], index: -1, playing: false, buffering: false, unshuffled: null, source: null })
   setTime({ position: 0, duration: 0 })
+  updateAppSession()
 }
 
 // ---- OS integration: media keys, lock screen, notification ----
@@ -915,6 +923,7 @@ export function setArtworkResolver(resolve: typeof artwork) {
 }
 
 function updateMediaSession() {
+  updateAppSession()
   if (!('mediaSession' in navigator)) return
   const item = currentTrack()
   if (!item) return
@@ -942,4 +951,47 @@ if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
       // Not supported by this browser.
     }
   }
+}
+
+/**
+ * Jellyfin's Android app: its WebView has no `navigator.mediaSession`, so the notification (and with it playing on in
+ * the background) goes through the app. It sends the notification's buttons back as jellyfin-web commands.
+ */
+function updateAppSession() {
+  if (!inJellyfinApp() || !audio) return
+  const item = currentTrack()
+  if (!item?.Id) return updateAppMediaSession(null)
+  const position = pendingStart ?? audio.currentTime
+  updateAppMediaSession({
+    itemId: item.Id,
+    title: item.Name ?? '',
+    artist: (item.Artists ?? []).join(', ') || item.AlbumArtist || '',
+    album: item.Album ?? '',
+    imageUrl: artwork(item) ?? '',
+    position: Math.round(position * 1000),
+    duration: Math.round(durationOf() * 1000),
+    canSeek: true,
+    isPaused: audio.paused,
+  })
+}
+
+if (inJellyfinApp()) {
+  const SKIP_S = 10
+  setAppPlaybackManager({
+    unpause: () => music.resume(),
+    pause: () => music.pause(),
+    playPause: () => music.toggle(),
+    previousTrack: () => music.previous(),
+    nextTrack: () => music.next(),
+    rewind: () => music.seekBy(-SKIP_S),
+    fastForward: () => music.seekBy(SKIP_S),
+    stop: () => music.stop(),
+    seekMs: (ms) => music.seek(ms / 1000),
+    volumeUp: () => music.setVolume(state.volume + 0.1),
+    volumeDown: () => music.setVolume(state.volume - 0.1),
+    sendCommand: (command) => {
+      const volume = command.Arguments?.Volume
+      if (command.Name === 'SetVolume' && typeof volume === 'number') music.setVolume(volume / 100)
+    },
+  })
 }
