@@ -328,6 +328,14 @@ html.panel-transition::view-transition-group(listen-cover) {
   animation-duration: 380ms;
   animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+/* The panel and its cover take part only in this transition (named just for it): in page changes they would be
+   captured on their own, even while the folded panel hides them, and flash up. */
+html.panel-transition [data-vt='listen-panel'] {
+  view-transition-name: listen-panel;
+}
+html.panel-transition [data-vt='listen-cover'] {
+  view-transition-name: listen-cover;
+}
 /* The header changes width with the page around it; as a picture of its own it would be stretched, so here it is just
    part of the page. */
 html.panel-transition [data-app-shell] header {

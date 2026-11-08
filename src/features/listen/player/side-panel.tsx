@@ -154,7 +154,8 @@ export function SidePanel() {
           // Big, it spans the window with the same gap on both sides.
           expanded && 'left-2',
         )}
-        style={{ width: expanded ? 'calc(100% - 1rem)' : layout.right - 8, viewTransitionName: 'listen-panel' }}
+        data-vt="listen-panel"
+        style={{ width: expanded ? 'calc(100% - 1rem)' : layout.right - 8 }}
       >
         <PanelColumn view={view} titles={titles} track={track} expanded={expanded} />
         {/* In the big panel, the queue or the quality sit in a column at the right edge. */}
@@ -458,7 +459,7 @@ function BigNowPlaying({ track }: { track: BaseItemDto }) {
       <div
         ref={card}
         // Flies in from the small cover (see setListenPanelExpanded).
-        style={{ viewTransitionName: 'listen-cover' }}
+        data-vt="listen-cover"
         className="relative aspect-square h-[min(72svh,50rem)] max-w-full overflow-hidden rounded-xl bg-muted shadow-2xl shadow-black/50 transition-transform duration-300 ease-out [transform-style:preserve-3d] motion-reduce:transition-none motion-reduce:[transform:none]"
       >
         {/* Not draggable: the cover is for looking at (and the drag would fight the tilt). */}
@@ -700,9 +701,13 @@ function LyricsView({ track, big }: { track: BaseItemDto; big: boolean }) {
   let current = -1
   if (synced) for (let i = 0; i < lines.length; i++) if ((lines[i]!.time ?? Infinity) <= position + 0.2) current = i
 
-  useEffect(() => {
+  // The first time (the view just opened, or grew or shrank) the current line is simply there, before anything is
+  // drawn; after that the lyrics glide along with the music.
+  const placed = useRef(false)
+  useLayoutEffect(() => {
     if (current < 0) return
-    list.current?.querySelector<HTMLElement>(`[data-line="${current}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    list.current?.querySelector<HTMLElement>(`[data-line="${current}"]`)?.scrollIntoView({ block: 'center', behavior: placed.current ? 'smooth' : 'instant' })
+    placed.current = true
   }, [current])
 
   const frame = cn('text-white', big ? 'mx-auto max-w-4xl px-10 py-12' : 'px-5 py-5')

@@ -214,7 +214,7 @@ export function NowPlaying({ track }: { track: BaseItemDto }) {
   const external = !!externalOf(track)
   return (
     <div className="space-y-4">
-      <Link to={itemHref(track)} style={{ viewTransitionName: 'listen-cover' }} className="block aspect-square overflow-hidden rounded-lg bg-muted shadow-lg">
+      <Link to={itemHref(track)} data-vt="listen-cover" className="block aspect-square overflow-hidden rounded-lg bg-muted shadow-lg">
         {cover && <FadeImage key={cover} src={cover} alt="" className="size-full object-cover" />}
       </Link>
       <div className="min-w-0">
