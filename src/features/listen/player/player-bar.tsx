@@ -291,13 +291,15 @@ function Extras() {
       <div className="w-24">
         <Slider
           aria-label={t.volume}
-          // As in music apps: a quiet light bar (rounded at its end), the accent and the knob only while pointing at it,
-          // dragging, or focused by keyboard; a click doesn't leave the knob showing.
+          // Looks and behaves like the progress bar beside it: a light bar (rounded at its end), its knob centred on the
+          // level; the accent and the knob only while pointing at it, dragging, or focused by keyboard.
+          thumbAlignment="center"
           className={cn(
-            '[&_[data-slot=slider-track]]:bg-foreground/20 [&_[data-slot=slider-range]]:rounded-full [&_[data-slot=slider-range]]:bg-foreground/80',
-            '[&_[data-slot=slider-thumb]]:border-0 [&_[data-slot=slider-thumb]]:opacity-0 [&_[data-slot=slider-thumb]]:transition-opacity',
-            'hover:[&_[data-slot=slider-range]]:bg-listen hover:[&_[data-slot=slider-thumb]]:opacity-100',
-            'data-dragging:[&_[data-slot=slider-range]]:bg-listen data-dragging:[&_[data-slot=slider-thumb]]:opacity-100',
+            '[&_[data-slot=slider-track]]:bg-foreground/20 [&_[data-slot=slider-range]]:rounded-full [&_[data-slot=slider-range]]:bg-foreground',
+            '[&_[data-slot=slider-thumb]]:size-3 [&_[data-slot=slider-thumb]]:border-0 [&_[data-slot=slider-thumb]]:bg-foreground [&_[data-slot=slider-thumb]]:shadow [&_[data-slot=slider-thumb]]:ring-0!',
+            '[&_[data-slot=slider-thumb]]:opacity-0 [&_[data-slot=slider-thumb]]:transition-opacity',
+            'hover:[&_[data-slot=slider-range]]:bg-listen-hover hover:[&_[data-slot=slider-thumb]]:opacity-100',
+            'data-dragging:[&_[data-slot=slider-range]]:bg-listen-hover data-dragging:[&_[data-slot=slider-thumb]]:opacity-100',
             '[&:has(:focus-visible)_[data-slot=slider-thumb]]:opacity-100',
           )}
           min={0}
