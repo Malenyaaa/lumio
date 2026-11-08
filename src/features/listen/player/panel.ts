@@ -95,6 +95,31 @@ export function setListenPanelExpanded(expanded: boolean) {
   void transition.finished.finally(() => document.documentElement.classList.remove('panel-transition'))
 }
 
+/** Whether the pointer rests on the folded panel: it then peeks out a little, and the content makes room for it. */
+let peek = false
+const peekListeners = new Set<() => void>()
+
+export function setListenPanelPeek(next: boolean) {
+  if (next === peek) return
+  peek = next
+  for (const listener of peekListeners) listener()
+}
+
+export function useListenPanelPeek() {
+  return useSyncExternalStore(
+    (listener) => {
+      peekListeners.add(listener)
+      return () => {
+        peekListeners.delete(listener)
+      }
+    },
+    () => peek,
+  )
+}
+
+/** How far the folded panel peeks out while pointed at. */
+export const PEEK_WIDTH = 56
+
 export function useListenPanel() {
   return useSyncExternalStore(
     (listener) => {

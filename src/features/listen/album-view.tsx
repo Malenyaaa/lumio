@@ -23,7 +23,7 @@ import { formatClock, formatRuntime, ticksToSeconds } from '@/lib/format'
 import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
 import { portraitImageUrl } from '@/lib/images'
 import { artistsOf, titlePath } from '@/lib/item-links'
-import { cn } from '@/lib/utils'
+import { cn, tintWash } from '@/lib/utils'
 import { MusicRow } from './music-card'
 import { currentTrack, music, START, useMusic } from './player/music-player'
 import { ShuffleToggle } from './shuffle-toggle'
@@ -122,7 +122,7 @@ export function AlbumView({ item }: { item: BaseItemDto }) {
   return (
     <div className="pb-12">
       {/* Header: tinted with the cover's color, fading into the page. */}
-      <div className="relative pt-14" style={{ background: `linear-gradient(to bottom, ${tint ?? 'rgb(64 64 64)'} 0%, transparent 100%)` }}>
+      <div className="relative pt-14" style={{ background: tintWash(tint ?? 'rgb(64 64 64)') }}>
         <div className="flex flex-col gap-6 px-4 pb-6 pt-10 sm:flex-row sm:items-end sm:px-8">
           <ImageLightbox
             src={portraitImageUrl(api, item, { fillHeight: 1600 })}

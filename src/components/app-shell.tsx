@@ -273,7 +273,7 @@ function SignedInShell() {
         <div
           aria-hidden
           className={cn(
-            'pointer-events-none absolute inset-x-0 top-0 -z-10 h-28 bg-linear-to-b from-black/70 to-transparent transition-opacity duration-300',
+            'pointer-events-none absolute inset-x-0 top-0 -z-10 h-28 bg-linear-to-b from-background/80 to-transparent transition-opacity duration-300',
             scrolled && 'opacity-0',
           )}
         />

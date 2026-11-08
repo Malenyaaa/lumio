@@ -89,6 +89,13 @@ export async function relayFetch(service: 'concerts' | 'lastfm' | 'musicbrainz' 
   return fetch(`${direct}${path}?${query}`)
 }
 
+/** A podcast feed (or a chapter list or transcript) through the Lumio server; straight from its host otherwise. */
+export async function fetchFeed(url: string): Promise<Response> {
+  const relayed = await lumioGet(`/feed?url=${encodeURIComponent(url)}`).catch(() => null)
+  if (relayed?.ok) return relayed
+  return fetch(url)
+}
+
 /** Whether the user shares what they play (the players only report when they do). */
 export function setSocialSharing(next: boolean) {
   sharing = next

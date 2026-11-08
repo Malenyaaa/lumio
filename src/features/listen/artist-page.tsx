@@ -23,7 +23,7 @@ import { useDominantColor } from '@/lib/dominant-color'
 import { plainText } from '@/lib/format'
 import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
 import { backdropImageUrl, portraitImageUrl } from '@/lib/images'
-import { cn } from '@/lib/utils'
+import { cn, tintWash } from '@/lib/utils'
 import { TrackTableRow } from './album-view'
 import { ArtistAboutDialog } from './artist-about'
 import { useArtistRadio } from './radio'
@@ -165,7 +165,7 @@ export function ArtistPage({ item }: { item: BaseItemDto }) {
       {/* Banner: the artist's backdrop where there is one, else their color with the round photo, as Spotify does. */}
       <div
         className="relative flex h-[22rem] items-end overflow-hidden pt-14 sm:h-[26rem]"
-        style={banner ? undefined : { background: `linear-gradient(to bottom, ${tint ?? 'rgb(64 64 64)'}, transparent)` }}
+        style={banner ? undefined : { background: tintWash(tint ?? 'rgb(64 64 64)') }}
       >
         {banner && (
           <>

@@ -21,17 +21,7 @@ import { cn } from '@/lib/utils'
 import { useLyrics } from './lyrics'
 import { playerBarMessages } from './messages'
 import { currentTrack, music, useMusic, useMusicTime } from './music-player'
-import {
-  closeListenPanel,
-  openListenPanel,
-  RIGHT_LIMITS,
-  setListenLayout,
-  setListenPanelExpanded,
-  toggleListenPanel,
-  useListenLayout,
-  useListenPanel,
-  type ListenPanel,
-} from './panel'
+import { closeListenPanel, openListenPanel, RIGHT_LIMITS, setListenLayout, setListenPanelExpanded, setListenPanelPeek, toggleListenPanel, type ListenPanel, useListenLayout, useListenPanel } from './panel'
 import { useTrackQuality } from './quality'
 import { ResizeHandle } from '../resize-handle'
 import { endTrackDrag, startTrackDrag } from '../track-drag'
@@ -134,16 +124,19 @@ export function SidePanel() {
   return (
     <aside
       aria-label={title}
+      onPointerEnter={() => !open && !expanded && setListenPanelPeek(true)}
+      onPointerLeave={() => setListenPanelPeek(false)}
       className={cn(
         'group/panel fixed bottom-20 right-0 top-14 hidden overflow-hidden bg-background pb-2 pr-2 transition-[width] duration-300 ease-out lg:block [.cursor-col-resize_&]:transition-none',
-        expanded ? 'z-40 w-screen' : open ? 'z-30 w-(--listen-right)' : 'z-30 w-(--listen-right) hover:w-14',
+        expanded ? 'z-40 w-screen' : 'z-30 w-(--listen-right)',
       )}
     >
       <div
         // Its own tone with a gap around it, rather than a border against the page.
         className={cn(
           'absolute bottom-2 left-0 top-0 flex overflow-hidden rounded-xl bg-surface [--background:var(--surface)] transition-opacity duration-300',
-          !open && 'pointer-events-none opacity-0 group-hover/panel:opacity-20',
+          // Folded, it peeks over the grey strip while pointed at (clicks still reach the strip below).
+          !open && 'pointer-events-none z-10 opacity-0 group-hover/panel:opacity-70',
           // Big, it spans the window with the same gap on both sides.
           expanded && 'left-2',
         )}
@@ -184,7 +177,7 @@ export function SidePanel() {
           aria-label={t.open}
           title={t.open}
           onClick={openListenPanel}
-          className="absolute bottom-2 left-0 right-2 top-0 flex items-center justify-start rounded-xl bg-surface pl-2 text-muted-foreground outline-none transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          className="absolute bottom-2 left-0 right-0 top-0 flex items-center justify-start rounded-l-xl bg-surface pl-2 text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
           <IconChevronLeft className="size-5" />
         </button>
@@ -216,9 +209,11 @@ function EmptySidePanel({ open }: { open: boolean }) {
   return (
     <aside
       aria-label={bar.nowPlaying}
+      onPointerEnter={() => !open && setListenPanelPeek(true)}
+      onPointerLeave={() => setListenPanelPeek(false)}
       className={cn(
         'group/panel fixed bottom-20 right-0 top-14 z-30 hidden overflow-hidden bg-background pb-2 pr-2 transition-[width] duration-300 ease-out lg:block',
-        open ? 'w-(--listen-right)' : 'w-(--listen-right) hover:w-14',
+        'w-(--listen-right)',
       )}
     >
       {open ? (
@@ -245,7 +240,7 @@ function EmptySidePanel({ open }: { open: boolean }) {
           aria-label={t.open}
           title={t.open}
           onClick={openListenPanel}
-          className="absolute bottom-2 left-0 right-2 top-0 flex items-center justify-start rounded-xl bg-surface pl-2 text-muted-foreground outline-none transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          className="absolute bottom-2 left-0 right-0 top-0 flex items-center justify-start rounded-l-xl bg-surface pl-2 text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
           <IconChevronLeft className="size-5" />
         </button>

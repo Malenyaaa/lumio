@@ -4,6 +4,7 @@ import { defineMessages, useMessages } from '@/lib/i18n'
 import { CardRow } from './music-card'
 import { useOfficialPlaylists, type OfficialPlaylist } from './official'
 import { OfficialCard } from './playlist-cards'
+import { tintWash } from '@/lib/utils'
 
 const messages = defineMessages({
   de: {
@@ -42,7 +43,7 @@ export function PlatformPage() {
   ]
   return (
     <div className="pb-12">
-      <div className="pt-14" style={{ background: 'linear-gradient(to bottom, color-mix(in srgb, var(--color-listen) 45%, black), transparent)' }}>
+      <div className="pt-14" style={{ background: tintWash('color-mix(in srgb, var(--color-listen) 45%, black)') }}>
         <div className="flex flex-col gap-6 px-4 pb-6 pt-10 sm:flex-row sm:items-end sm:px-8">
           <div className="grid size-48 shrink-0 place-items-center overflow-hidden rounded-full bg-background shadow-2xl shadow-black/50 sm:size-56">
             {logo ? <img src={logo} alt="" className="size-2/3 object-contain" /> : <ModeTile mode="listen" className="size-full rounded-full [&_svg]:size-1/2" />}

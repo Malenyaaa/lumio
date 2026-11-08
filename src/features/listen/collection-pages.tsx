@@ -25,7 +25,7 @@ import { useAuthedSession } from '@/features/auth/session'
 import { useItem } from '@/features/items/queries'
 import { formatRuntime } from '@/lib/format'
 import { defineMessages, useMessages } from '@/lib/i18n'
-import { cn } from '@/lib/utils'
+import { cn, tintWash } from '@/lib/utils'
 import { TRACK_GRID, TrackTableRow } from './album-view'
 import { useOfficialPlaylists } from './official'
 import { playCircle } from './play-circle'
@@ -149,7 +149,7 @@ function Collection({ kind, title, cover, byline, description, tracks: loaded, l
   const playAll = () => (here ? music.toggle() : music.play(tracks, START, { source }))
   return (
     <div className="pb-12">
-      <div className="relative pt-14" style={{ background: `linear-gradient(to bottom, ${tint ?? 'rgb(72 72 80)'} 0%, transparent 100%)` }}>
+      <div className="relative pt-14" style={{ background: tintWash(tint ?? 'rgb(72 72 80)') }}>
         <div className="flex flex-col gap-6 px-4 pb-6 pt-10 sm:flex-row sm:items-end sm:px-8">
           {onEdit ? (
             <button

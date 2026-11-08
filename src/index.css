@@ -63,6 +63,7 @@
     --listen-default: #0f8f6e;
     --listen-default-foreground: #ffffff;
     --surface: oklch(0.965 0 0);
+    --tint-strength: 45%;
     --surface-hover: oklch(0.93 0 0);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
@@ -103,6 +104,7 @@
     --listen-default: #2dd4a7;
     --listen-default-foreground: #04221a;
     --surface: oklch(0.195 0 0);
+    --tint-strength: 100%;
     --surface-hover: oklch(0.24 0 0);
     --foreground: oklch(0.985 0 0);
     --card: oklch(0.205 0 0);

@@ -6,7 +6,7 @@ import { AppBrand } from '@/components/app-switcher'
 import { PageTransition } from '@/components/page-transition'
 import { useSession } from '@/features/auth/session'
 import { HeaderSearch } from '@/features/search/header-search'
-import { LEFT_LIMITS, RIGHT_LIMITS, setListenLayout, setListenPanelExpanded, useListenLayout, useListenPanel } from './player/panel'
+import { LEFT_LIMITS, PEEK_WIDTH, RIGHT_LIMITS, setListenLayout, setListenPanelExpanded, useListenLayout, useListenPanel, useListenPanelPeek } from './player/panel'
 import { SongInfoHost } from './player/now-playing'
 import { PlayerBar } from './player/player-bar'
 import { SidePanel } from './player/side-panel'
@@ -71,7 +71,9 @@ function SignedInListen() {
   const panel = useListenPanel()
   const layout = useListenLayout()
   const leftWidth = panel.expanded ? 0 : layout.collapsed ? LEFT_LIMITS.collapsed : layout.left
-  const rightWidth = panel.open ? layout.right : RIGHT_LIMITS.collapsed
+  const peek = useListenPanelPeek()
+  // Folded, the panel peeks out a little while pointed at; the content moves over for it (corners and all).
+  const rightWidth = panel.open ? layout.right : peek ? PEEK_WIDTH : RIGHT_LIMITS.collapsed
   // Width at the start of a drag; the handle reports how far it moved since.
   const dragFrom = useRef(0)
 

@@ -2,6 +2,7 @@ import {
   IconCircleCheck,
   IconCircleCheckFilled,
   IconCirclePlus,
+  IconChevronDown,
   IconDots,
   IconExternalLink,
   IconMicrophone,
@@ -9,14 +10,26 @@ import {
   IconPlayerPlayFilled,
   IconPlaylistAdd,
   IconSearch,
+  IconSortAscending,
+  IconSortDescending,
   IconTextPlus,
+  IconWorld,
+  IconX,
 } from '@tabler/icons-react'
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { Link } from '@/components/link'
 import { FadeImage } from '@/components/media/fade-image'
 import { ImageLightbox } from '@/components/media/image-lightbox'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuthedSession } from '@/features/auth/session'
@@ -24,11 +37,12 @@ import { useDominantColor } from '@/lib/dominant-color'
 import { externalOf } from '@/lib/external-items'
 import { formatClock, formatRuntime, plainText } from '@/lib/format'
 import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
-import { cn } from '@/lib/utils'
+import { cn, tintWash } from '@/lib/utils'
 import { CardRow } from './music-card'
 import { currentTrack, music, useMusic, useMusicTime } from './player/music-player'
 import { playCircle } from './play-circle'
 import {
+  artworkSize,
   episodeFromItem,
   episodePath,
   PODCAST_GENRES,
@@ -39,6 +53,7 @@ import {
   useEpisodeSaved,
   useFollowedPodcasts,
   usePodcast,
+  usePodcastInfo,
   usePodcastProgress,
   usePodcastSearch,
   useSavedEpisodes,
@@ -80,6 +95,19 @@ const messages = defineMessages({
     apple: 'In Apple Podcasts öffnen',
     showMore: 'Mehr anzeigen',
     showLess: 'Weniger anzeigen',
+    filterAll: 'Alle Folgen',
+    filterUnplayed: 'Nicht gehört',
+    filterStarted: 'Angefangen',
+    filterSaved: 'Gespeichert',
+    newestFirst: 'Neueste zuerst',
+    oldestFirst: 'Älteste zuerst',
+    searchEpisodes: 'In Folgen suchen',
+    clearSearch: 'Suche leeren',
+    noMatch: 'Keine passenden Folgen.',
+    about: 'Informationen',
+    website: 'Website',
+    explicit: 'Explizit',
+    languageLabel: (language: string) => `Sprache: ${language}`,
     notFound: 'Dieser Podcast wurde nicht gefunden.',
     source: 'Podcasts aus dem Apple-Podcast-Verzeichnis.',
     episode: 'Podcast-Folge',
@@ -122,6 +150,19 @@ const messages = defineMessages({
     apple: 'Open in Apple Podcasts',
     showMore: 'Show more',
     showLess: 'Show less',
+    filterAll: 'All episodes',
+    filterUnplayed: 'Not played',
+    filterStarted: 'In progress',
+    filterSaved: 'Saved',
+    newestFirst: 'Newest first',
+    oldestFirst: 'Oldest first',
+    searchEpisodes: 'Search episodes',
+    clearSearch: 'Clear search',
+    noMatch: 'No matching episodes.',
+    about: 'About',
+    website: 'Website',
+    explicit: 'Explicit',
+    languageLabel: (language: string) => `Language: ${language}`,
     notFound: "This podcast couldn't be found.",
     source: 'Podcasts from the Apple Podcasts directory.',
     episode: 'Podcast episode',
@@ -419,7 +460,8 @@ export function PodcastPage() {
   const podcast = usePodcast(id)
   const library = useListenLibrary()
   const state = useMusic()
-  const tint = useDominantColor(podcast.data?.podcast.image?.replace(/\/\d+x\d+bb\.jpg$/, '/64x64bb.jpg')).data
+  const tint = useDominantColor(artworkSize(podcast.data?.podcast.image, 64)).data
+  const info = usePodcastInfo(podcast.data?.podcast.feedUrl)
   const followKey = `podcast:${id}`
   const following = library.isSaved(followKey)
 
@@ -441,11 +483,11 @@ export function PodcastPage() {
 
   return (
     <div className="pb-12">
-      <div className="relative pt-14" style={{ background: `linear-gradient(to bottom, ${tint ?? 'rgb(64 64 64)'} 0%, transparent 100%)` }}>
+      <div className="relative pt-14" style={{ background: tintWash(tint ?? 'rgb(64 64 64)') }}>
         <div className="flex flex-col gap-6 px-4 pb-6 pt-10 sm:flex-row sm:items-end sm:px-8">
           <ImageLightbox
             // Apple serves the artwork in any size; the large view asks for a big one.
-            src={show.image?.replace(/\/\d+x\d+bb\.jpg$/, '/1400x1400bb.jpg')}
+            src={artworkSize(show.image, 1400)}
             label={show.name}
             className="size-48 shrink-0 overflow-hidden rounded-md bg-muted shadow-2xl shadow-black/50 sm:size-56"
           >
@@ -494,8 +536,180 @@ export function PodcastPage() {
         )}
       </div>
 
-      <EpisodeSection title={t.episodes} episodes={episodes} limit={30} />
+      {/* As in podcast apps: the episodes (filter, search, order) beside what the show is about. */}
+      <div className="grid gap-10 px-4 sm:px-8 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <EpisodeBrowser episodes={episodes} />
+        <PodcastAbout show={show} info={info.data} />
+      </div>
     </div>
+  )
+}
+
+type EpisodeFilter = 'all' | 'unplayed' | 'started' | 'saved'
+
+/** A show's episodes, narrowed to the unplayed, started or saved ones, searched by title and notes, newest or oldest first. */
+function EpisodeBrowser({ episodes }: { episodes: Episode[] }) {
+  const t = useMessages(messages)
+  const progress = usePodcastProgress()
+  const saved = useSavedEpisodes()
+  const [filter, setFilter] = useState<EpisodeFilter>('all')
+  const [oldestFirst, setOldestFirst] = useState(false)
+  const [searching, setSearching] = useState(false)
+  const [query, setQuery] = useState('')
+  const [all, setAll] = useState(false)
+  const savedGuids = new Set(saved.map((item) => externalOf(item)?.guid))
+  const term = query.trim().toLocaleLowerCase()
+
+  const shown = episodes
+    .filter((episode) => {
+      const at = progress[episode.guid]
+      const started = !!at && !at.done && at.position > 30
+      if (filter === 'unplayed' && (at?.done || started)) return false
+      if (filter === 'started' && !started) return false
+      if (filter === 'saved' && !savedGuids.has(episode.guid)) return false
+      return !term || episode.title.toLocaleLowerCase().includes(term) || plainText(episode.description).toLocaleLowerCase().includes(term)
+    })
+    .sort((a, b) => (Date.parse(a.published ?? '') - Date.parse(b.published ?? '')) * (oldestFirst ? 1 : -1))
+  const limit = 30
+  const labels: Record<EpisodeFilter, string> = { all: t.filterAll, unplayed: t.filterUnplayed, started: t.filterStarted, saved: t.filterSaved }
+
+  return (
+    <section className="min-w-0">
+      <div className="mb-2 flex items-center gap-2 border-b border-border/60 pb-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger className="-ml-2 flex items-center gap-1.5 rounded-md px-2 py-1 text-base font-bold outline-none hover:bg-foreground/[0.07] focus-visible:ring-2 focus-visible:ring-ring">
+            {labels[filter]} <IconChevronDown className="size-4 text-muted-foreground" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-52">
+            <DropdownMenuRadioGroup value={filter} onValueChange={(value) => setFilter(value as EpisodeFilter)}>
+              {(Object.keys(labels) as EpisodeFilter[]).map((value) => (
+                <DropdownMenuRadioItem key={value} value={value}>
+                  {labels[value]}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <div className="ml-auto flex items-center gap-1">
+          {searching ? (
+            <div className="relative">
+              <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                autoFocus
+                aria-label={t.searchEpisodes}
+                placeholder={t.searchEpisodes}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => event.key === 'Escape' && (setQuery(''), setSearching(false))}
+                className="h-8 w-44 pl-8 pr-8 sm:w-60"
+              />
+              <button
+                type="button"
+                aria-label={t.clearSearch}
+                onClick={() => {
+                  setQuery('')
+                  setSearching(false)
+                }}
+                className="absolute right-1.5 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:text-foreground"
+              >
+                <IconX className="size-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              aria-label={t.searchEpisodes}
+              title={t.searchEpisodes}
+              onClick={() => setSearching(true)}
+              className="grid size-8 place-items-center rounded-full text-muted-foreground outline-none hover:bg-foreground/[0.07] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <IconSearch className="size-4" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setOldestFirst(!oldestFirst)}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-muted-foreground outline-none hover:bg-foreground/[0.07] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {oldestFirst ? <IconSortAscending className="size-4" /> : <IconSortDescending className="size-4" />}
+            {oldestFirst ? t.oldestFirst : t.newestFirst}
+          </button>
+        </div>
+      </div>
+      <div className="divide-y divide-border/60">
+        {shown.slice(0, all ? undefined : limit).map((episode) => (
+          <EpisodeRow key={episode.guid} episode={episode} />
+        ))}
+      </div>
+      {shown.length === 0 && <p className="py-6 text-sm text-muted-foreground">{t.noMatch}</p>}
+      {shown.length > limit && (
+        <button type="button" onClick={() => setAll(!all)} className="mt-3 text-sm font-bold text-muted-foreground hover:text-foreground">
+          {all ? t.showLess : t.showMore}
+        </button>
+      )}
+    </section>
+  )
+}
+
+/** What the show is about (from its feed): the description (folded after a few lines), its categories and facts. */
+function PodcastAbout({ show, info }: { show: Podcast; info: ReturnType<typeof usePodcastInfo>['data'] }) {
+  const t = useMessages(messages)
+  const locale = useLocale()
+  const [open, setOpen] = useState(false)
+  const description = info?.description ?? ''
+  const categories = info?.categories.length ? info.categories : show.genre ? [show.genre] : []
+  const language = info?.language ? (() => {
+    try {
+      return new Intl.DisplayNames([getLocaleTag(locale)], { type: 'language' }).of(info.language!.split('-')[0]!) ?? info.language
+    } catch {
+      return info.language
+    }
+  })() : undefined
+  return (
+    <aside className="min-w-0 space-y-4 lg:pt-1">
+      <h2 className="text-2xl font-bold tracking-tight">{t.about}</h2>
+      {description && (
+        <div>
+          <p className={cn('whitespace-pre-line text-sm leading-relaxed text-foreground/85', !open && 'line-clamp-4')}>
+            <Linkified text={description} />
+          </p>
+          {description.length > 240 && (
+            <button type="button" onClick={() => setOpen(!open)} className="mt-1 text-sm font-bold hover:underline">
+              {open ? t.showLess : `… ${t.showMore}`}
+            </button>
+          )}
+        </div>
+      )}
+      {(categories.length > 0 || info?.explicit) && (
+        <div className="flex flex-wrap gap-2">
+          {categories.map((category) => (
+            <span key={category} className="rounded-full bg-foreground/[0.08] px-3 py-1 text-sm font-medium">
+              {category}
+            </span>
+          ))}
+          {info?.explicit && <span className="rounded-full bg-foreground/[0.08] px-3 py-1 text-sm font-medium">{t.explicit}</span>}
+        </div>
+      )}
+      <ul className="space-y-2 text-sm text-muted-foreground">
+        {show.episodeCount ? <li>{t.episodeCount(show.episodeCount)}</li> : null}
+        {language && <li>{t.languageLabel(language)}</li>}
+        {info?.website && (
+          <li>
+            <a href={info.website} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1.5 font-medium text-foreground hover:underline">
+              <IconWorld className="size-4" /> {t.website}
+            </a>
+          </li>
+        )}
+        {show.url && (
+          <li>
+            <a href={show.url} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1.5 font-medium text-foreground hover:underline">
+              <IconExternalLink className="size-4" /> {t.apple}
+            </a>
+          </li>
+        )}
+        {info?.copyright && <li className="text-xs">{info.copyright}</li>}
+      </ul>
+    </aside>
   )
 }
 
@@ -544,7 +758,7 @@ export function EpisodePage() {
   const known = savedEpisodes.find((item) => item.Id === itemId) ?? Object.values(progressAll).find((entry) => entry.item?.Id === itemId)?.item
   const episode = podcast.data?.episodes.find((entry) => entry.trackId === episodeId) ?? (known ? episodeFromItem(known) : undefined)
   const extras = useEpisodeExtras(episode, podcast.data?.podcast.feedUrl)
-  const tint = useDominantColor(episode?.image?.replace(/\/\d+x\d+bb\.jpg$/, '/64x64bb.jpg')).data
+  const tint = useDominantColor(artworkSize(episode?.image, 64)).data
   const transcriptBox = useRef<HTMLDivElement>(null)
 
   const isCurrent = !!episode && externalOf(currentTrack(state))?.guid === episode.guid
@@ -589,10 +803,10 @@ export function EpisodePage() {
 
   return (
     <div className="pb-12">
-      <div className="relative pt-14" style={{ background: `linear-gradient(to bottom, ${tint ?? 'rgb(64 64 64)'} 0%, transparent 100%)` }}>
+      <div className="relative pt-14" style={{ background: tintWash(tint ?? 'rgb(64 64 64)') }}>
         <div className="flex flex-col gap-6 px-4 pb-6 pt-10 sm:flex-row sm:items-end sm:px-8">
           <ImageLightbox
-            src={episode.image?.replace(/\/\d+x\d+bb\.jpg$/, '/1400x1400bb.jpg')}
+            src={artworkSize(episode.image, 1400)}
             label={episode.title}
             className="size-48 shrink-0 overflow-hidden rounded-md bg-muted shadow-2xl shadow-black/50 sm:size-56"
           >
@@ -725,7 +939,7 @@ export function SavedEpisodesPage() {
   const episodes = saved.map((item) => episodeFromItem(item)).filter((episode): episode is Episode => !!episode)
   return (
     <div className="pb-12">
-      <div className="relative pt-14" style={{ background: 'linear-gradient(to bottom, color-mix(in srgb, var(--color-listen) 40%, black) 0%, transparent 100%)' }}>
+      <div className="relative pt-14" style={{ background: tintWash('color-mix(in srgb, var(--color-listen) 40%, black)') }}>
         <div className="flex flex-col gap-6 px-4 pb-6 pt-10 sm:flex-row sm:items-end sm:px-8">
           <div className="size-48 shrink-0 overflow-hidden rounded-md shadow-2xl shadow-black/50 sm:size-56">
             <SavedEpisodesCover />

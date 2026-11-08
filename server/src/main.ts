@@ -31,6 +31,10 @@ const IMAGE_HOSTS = /(^|\.)mzstatic\.com$/
 const IMAGE_LIMIT = 8 * 1024 * 1024
 const IMAGE_DIR = join(DATA_DIR, 'images')
 const RELAY_DIR = join(DATA_DIR, 'relay')
+/** Largest podcast feed, chapter list or transcript relayed (bytes). */
+const FEED_LIMIT = 15 * 1024 * 1024
+/** What the feed relay passes on: feeds, chapter lists and transcripts (text of some kind), nothing else. */
+const FEED_TYPES = /xml|rss|atom|json|text\/|vtt|srt|subrip/i
 const HOUR = 60 * 60_000
 
 /**
@@ -339,6 +343,52 @@ async function serveRelay(response: ServerResponse, name: string, path: string, 
   }
 }
 
+/**
+ * GET /api/feed?url=…: a podcast's RSS feed, or a chapter list or transcript it points to. Most feeds don't let
+ * browsers read them; through here they can, and are kept on disk for everyone (feeds 6 h, the files they point to,
+ * which don't change, 30 days). Signed-in users only, https only, text only and size-limited.
+ */
+async function serveFeed(response: ServerResponse, source: string | null) {
+  let target: URL
+  try {
+    target = new URL(source ?? '')
+  } catch {
+    return send(response, 400, { error: 'Bad url' })
+  }
+  if (target.protocol !== 'https:') return send(response, 403, { error: 'Only https' })
+  const file = join(RELAY_DIR, 'feeds', createHash('sha256').update(target.href).digest('hex'))
+  let cached: RelayEntry | null = null
+  try {
+    cached = JSON.parse(await readFile(file, 'utf8')) as RelayEntry
+  } catch {
+    // Not asked before.
+  }
+  const reply = (entry: RelayEntry) => {
+    response.writeHead(entry.status, { 'Content-Type': entry.type, 'Cache-Control': 'private, max-age=3600' })
+    response.end(entry.body)
+  }
+  const ttl = (entry: RelayEntry) => (/xml|rss|atom/i.test(entry.type) ? 6 * HOUR : 30 * 24 * HOUR)
+  if (cached && Date.now() - cached.at < ttl(cached)) return reply(cached)
+  try {
+    const upstream = await fetch(target, { headers: { 'User-Agent': 'Lumio/1.0 (self-hosted Jellyfin client)' }, signal: AbortSignal.timeout(20_000) })
+    const type = upstream.headers.get('content-type') ?? 'application/octet-stream'
+    const length = Number(upstream.headers.get('content-length') ?? 0)
+    if (!upstream.ok || !FEED_TYPES.test(type) || length > FEED_LIMIT) {
+      if (cached) return reply(cached)
+      return send(response, 502, { error: 'Feed unavailable' })
+    }
+    const body = await upstream.text()
+    if (body.length > FEED_LIMIT) return send(response, 502, { error: 'Feed too large' })
+    const entry: RelayEntry = { at: Date.now(), status: 200, type, body }
+    await mkdir(join(RELAY_DIR, 'feeds'), { recursive: true })
+    await writeFile(file, JSON.stringify(entry))
+    reply(entry)
+  } catch {
+    if (cached) return reply(cached)
+    send(response, 502, { error: 'Feed unavailable' })
+  }
+}
+
 async function handle(request: IncomingMessage, response: ServerResponse) {
   const url = new URL(request.url ?? '/', 'http://localhost')
   // Everything outside /api is the app.
@@ -353,6 +403,9 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
 
   const me = await authenticate(tokenOf(request, url))
   if (!me) return send(response, 401, { error: 'Not signed in' })
+
+  // GET /feed?url=…: podcast feeds and the files they point to.
+  if (path === '/feed' && request.method === 'GET') return serveFeed(response, url.searchParams.get('url'))
 
   // GET /relay/<service>/…: outside services, relayed and cached (for signed-in users only, as it may use the server's
   // keys). /concerts/… is the older address of the Ticketmaster relay.

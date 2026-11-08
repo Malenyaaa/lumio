@@ -7,7 +7,7 @@ import { externalItem, externalOf } from '@/lib/external-items'
 import { plainText } from '@/lib/format'
 import { getLocale } from '@/lib/i18n'
 import { CLIENT, PREFS_ID, useListenLibrary } from './playlists'
-import { relayedImage } from '@/features/social/social'
+import { fetchFeed, relayedImage } from '@/features/social/social'
 
 /**
  * Podcasts, from Apple's public podcast directory (the iTunes Search API: search, charts, and each show's latest
@@ -454,8 +454,9 @@ function joinCues(cues: TranscriptCue[]) {
 }
 
 /**
- * Chapters, a transcript and the full show notes of an episode, from the show's RSS feed (Podcasting 2.0 tags).
- * Many feeds don't let browsers read them; then chapters still come from timestamps in the description.
+ * Chapters, a transcript and the full show notes of an episode, from the show's RSS feed (Podcasting 2.0 tags),
+ * read through the Lumio server (most feeds don't let browsers read them). Without it, chapters still come from
+ * timestamps in the description.
  */
 export function useEpisodeExtras(episode: Episode | undefined, feedUrl: string | undefined) {
   return useQuery({
@@ -467,7 +468,7 @@ export function useEpisodeExtras(episode: Episode | undefined, feedUrl: string |
       const extras: EpisodeExtras = { chapters: [], transcript: [] }
       try {
         if (!feedUrl) throw new Error('no feed')
-        const xml = new DOMParser().parseFromString(await (await fetch(feedUrl)).text(), 'text/xml')
+        const xml = new DOMParser().parseFromString(await (await fetchFeed(feedUrl)).text(), 'text/xml')
         const items = [...xml.getElementsByTagName('item')]
         const item = items.find((entry) => entry.getElementsByTagName('guid')[0]?.textContent?.trim() === episode!.guid)
         if (item) {
@@ -476,7 +477,7 @@ export function useEpisodeExtras(episode: Episode | undefined, feedUrl: string |
           if (notes.length > episode!.description.length + 20) extras.notes = notes
           const chaptersUrl = tag('podcast:chapters')[0]?.getAttribute('url')
           if (chaptersUrl) {
-            const data = (await (await fetch(chaptersUrl)).json()) as { chapters?: Array<{ startTime: number; title?: string; toc?: boolean }> }
+            const data = (await (await fetchFeed(chaptersUrl)).json()) as { chapters?: Array<{ startTime: number; title?: string; toc?: boolean }> }
             extras.chapters = (data.chapters ?? []).filter((chapter) => chapter.title && chapter.toc !== false).map((chapter) => ({ start: chapter.startTime, title: chapter.title! }))
             if (extras.chapters.length) extras.chaptersFrom = 'feed'
           }
@@ -484,7 +485,7 @@ export function useEpisodeExtras(episode: Episode | undefined, feedUrl: string |
           const transcripts = tag('podcast:transcript').map((element) => ({ url: element.getAttribute('url'), type: element.getAttribute('type') ?? '' }))
           const timed = transcripts.find((entry) => /vtt|srt/.test(entry.type)) ?? transcripts.find((entry) => /json/.test(entry.type))
           if (timed?.url) {
-            const response = await fetch(timed.url)
+            const response = await fetchFeed(timed.url)
             if (/json/.test(timed.type)) {
               const data = (await response.json()) as { segments?: Array<{ startTime: number; endTime: number; body: string; speaker?: string }> }
               extras.transcript = joinCues((data.segments ?? []).map((segment) => ({ start: segment.startTime, end: segment.endTime, text: segment.body, speaker: segment.speaker })))
@@ -499,6 +500,52 @@ export function useEpisodeExtras(episode: Episode | undefined, feedUrl: string |
         if (extras.chapters.length) extras.chaptersFrom = 'description'
       }
       return extras
+    },
+  })
+}
+
+/** Apple's artwork in another size; relayed URLs are resized inside (the size is part of Apple's address). */
+export function artworkSize(url: string | undefined, size: number) {
+  if (!url) return undefined
+  const relayed = url.match(/[?&]url=([^&]+)/)
+  if (relayed) return sized(decodeURIComponent(relayed[1]!), size)
+  return url.replace(/\/\d+x\d+(bb)?\.(jpg|png|webp)$/, `/${size}x${size}bb.jpg`)
+}
+
+/** What a show's feed says about it, beyond Apple's listing. */
+export interface PodcastInfo {
+  description: string
+  categories: string[]
+  website?: string
+  language?: string
+  explicit: boolean
+  copyright?: string
+}
+
+/** A show's description, categories, website and language, from its feed (through the Lumio server). */
+export function usePodcastInfo(feedUrl: string | undefined) {
+  return useQuery({
+    queryKey: ['podcast-info', feedUrl],
+    enabled: !!feedUrl,
+    staleTime: 6 * HOUR,
+    gcTime: 7 * 24 * HOUR,
+    retry: false,
+    queryFn: async (): Promise<PodcastInfo> => {
+      const xml = new DOMParser().parseFromString(await (await fetchFeed(feedUrl!)).text(), 'text/xml')
+      const channel = xml.getElementsByTagName('channel')[0]
+      if (!channel) throw new Error('Not a feed')
+      // The channel's own tags, not those of its episodes.
+      const own = (name: string) => [...channel.children].filter((element) => element.tagName === name)
+      const text = (name: string) => own(name)[0]?.textContent?.trim() || undefined
+      const categories = [...new Set([...channel.getElementsByTagName('itunes:category')].map((element) => element.getAttribute('text') ?? '').filter(Boolean))]
+      return {
+        description: plainText(text('itunes:summary') ?? text('description') ?? ''),
+        categories,
+        website: text('link'),
+        language: text('language'),
+        explicit: /yes|true/i.test(text('itunes:explicit') ?? ''),
+        copyright: text('copyright'),
+      }
     },
   })
 }
