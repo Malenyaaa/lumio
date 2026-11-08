@@ -13,6 +13,9 @@ Internet ─► your reverse proxy (TLS) ─► lumio:8097
 
 - **Jellyfin apps keep working.** Android, iOS, TV apps, Infuse and the like use the same address; their requests go
   straight through (streams with seeking, WebSockets for remote control).
+- **Jellyfin's Android app shows Lumio.** The official Android app displays the server's web client, which at this
+  address is Lumio; it signs in there as usual, and its app settings and server/account switch are in Lumio's profile
+  menu.
 - **jellyfin-web stays for administrators.** The dashboard (`/web/#/dashboard` and its subpages), the metadata manager
   (`/web/#/metadata`) and plugin pages (`/web/#/configurationpage?…`) open as before; everything else of jellyfin-web
   (its home, its player, leaving the dashboard) sends you back to Lumio. Signed in to Lumio, you are signed in there too.

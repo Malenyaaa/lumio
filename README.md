@@ -5,7 +5,7 @@ server (tested against 10.11) and needs no server plugin of its own.
 
 ## Setup
 
-Lumio runs as one container in front of Jellyfin and becomes its public face (Jellyfin's API, apps and administration keep working through it). See **[docs/SETUP.md](docs/SETUP.md)** for the bare minimum and the recommended setup (SSO, Meilisearch, Intro Skipper, keys).
+Lumio runs as one container in front of Jellyfin and becomes its public face (Jellyfin's API, apps and administration keep working through it). Jellyfin's official Android app, which shows the server's web client, then shows Lumio. See **[docs/SETUP.md](docs/SETUP.md)** for the bare minimum and the recommended setup (SSO, Meilisearch, Intro Skipper, keys).
 
 ## Screenshots
 
@@ -50,6 +50,8 @@ film stills © Blender Foundation, CC BY).
   - Device-specific settings stay in the browser.
 - **Watch together and remote control**: SyncPlay groups ("Einer Gruppe beitreten") and controlling other Jellyfin
   sessions ("Abspielen auf"). Other clients can also cast to Lumio.
+- **Jellyfin's Android app**: the official app shows Lumio as the server's web client and stays signed in with it.
+  Its own screens (app settings, switching server or account) are in Lumio's profile menu there.
 - **Sign-in**: Quick Connect, which is how SSO setups such as Authentik sign in, or a username and password.
 - **Administration**: admins get links to the Jellyfin dashboard and metadata manager.
 
@@ -150,6 +152,11 @@ src/
   transcoding.
 - **Settings storage**: settings jellyfin-web keeps per device (bitrate limit, skip lengths, subtitle look) are
   stored in `localStorage` per user. Account-wide ones (audio/subtitle language, autoplay) go to the server.
+- **Jellyfin's Android app**: the app is a WebView around the server's web client and only counts the page as loaded
+  once it requests a `main.*.bundle.js` (jellyfin-web's bundle name), so Lumio ships an empty
+  `public/main.lumio.bundle.js`. It reads the sign-in from `jellyfin_credentials`, which Lumio mirrors its session
+  into (`features/auth/session.tsx`). `lib/native-app.ts` wraps the app's `window.NativeInterface`; inside the app
+  the persistent-storage notice is skipped, since a WebView can't grant it.
 - **Tabs**: several Lumio tabs in one browser share a device id, and with it one server session. That matters for
   SyncPlay and remote control.
 
