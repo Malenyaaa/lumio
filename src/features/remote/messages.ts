@@ -4,6 +4,7 @@ export const deviceMessages = defineMessages({
   de: {
     noDevices: 'Keine Geräte gefunden. Öffne Jellyfin auf einem anderen Gerät, dann erscheint es hier.',
     playing: (title: string) => `Spielt: ${title}`,
+    othersDevices: 'Geräte anderer Benutzer',
     playOn: 'Abspielen auf',
     playOnDevice: (device: string) => `Abspielen auf: ${device}`,
     thisDevice: 'Dieses Gerät',
@@ -15,6 +16,7 @@ export const deviceMessages = defineMessages({
   en: {
     noDevices: 'No devices found. Open Jellyfin on another device and it shows up here.',
     playing: (title: string) => `Playing: ${title}`,
+    othersDevices: 'Other users’ devices',
     playOn: 'Play on',
     playOnDevice: (device: string) => `Play on: ${device}`,
     thisDevice: 'This device',

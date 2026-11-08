@@ -6,7 +6,7 @@ import { jellyfin } from '@/lib/jellyfin'
 
 const REFRESH_MS = 4000
 
-/** Other devices of this user that can be remote-controlled right now (never this browser itself). */
+/** Devices that can be remote-controlled right now: the user's own, and for admins also other users' (never this browser itself). */
 export function useControllableSessions(enabled: boolean) {
   const { api, session } = useAuthedSession()
   return useQuery({
