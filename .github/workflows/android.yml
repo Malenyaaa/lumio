@@ -80,5 +80,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           APK: ${{ runner.temp }}/lumio-${{ steps.version.outputs.name }}.apk
         run: |
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag
+          # The Android and desktop jobs share the Release; whichever comes first creates it.
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag || true
           gh release upload "$GITHUB_REF_NAME" "$APK" --clobber

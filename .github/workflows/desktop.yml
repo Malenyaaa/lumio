@@ -1,0 +1,68 @@
+# Builds Lumio's desktop app (Electron) for Windows (NSIS installer) and Linux (AppImage, deb) and attaches the files to
+# the GitHub Release of the tag, next to the Android APK. No workflow artifacts (their storage is tight); unsigned on
+# Windows for now (SmartScreen warns on first start).
+name: Desktop
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: --win
+          # The oldest supported Ubuntu: the AppImage then runs on older systems too (glibc).
+          - os: ubuntu-22.04
+            target: --linux
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Version
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          [ "$GITHUB_REF_TYPE" = tag ] || version="0.0.0-${GITHUB_SHA::7}"
+          echo "name=$version" >> "$GITHUB_OUTPUT"
+
+      # The pages for the app (.env.desktop: they carry themselves and ask for the server), into electron/dist.
+      - run: pnpm build:desktop
+
+      - run: pnpm exec electron-builder ${{ matrix.target }} --publish never -c.extraMetadata.version=${{ steps.version.outputs.name }}
+
+      - name: Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The Android and desktop jobs share the Release; whichever comes first creates it.
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag || true
+          shopt -s nullglob
+          files=(release/lumio-*.exe release/lumio-*.AppImage release/lumio-*.deb)
+          gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber

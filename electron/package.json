@@ -1,0 +1,11 @@
+{
+  "name": "lumio",
+  "productName": "Lumio",
+  "version": "0.0.0",
+  "description": "Lumio, a client for Jellyfin",
+  "author": "PalmarHealer",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "main": "main.mjs",
+  "private": true
+}

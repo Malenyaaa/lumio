@@ -1,0 +1,32 @@
+# Lumio for Windows (NSIS installer) and Linux (AppImage, deb): `pnpm dist:desktop`, and the Desktop workflow on v* tags,
+# which attaches the installers to the GitHub Release. The app is electron/ (its own package.json, no dependencies:
+# the pages are bundled in electron/dist), so none of the web app's packages end up in the installer.
+appId: de.nauren.lumio
+productName: Lumio
+copyright: Lumio contributors, GPL-3.0
+directories:
+  app: electron
+  output: release
+  buildResources: electron/build
+files:
+  - main.mjs
+  - dist/**/*
+  - package.json
+  # The app has no packages of its own; never the web app's (pnpm would offer them from the workspace).
+  - '!**/node_modules/**/*'
+npmRebuild: false
+win:
+  target: nsis
+  icon: electron/build/icon.png
+nsis:
+  oneClick: true
+  perMachine: false
+  artifactName: lumio-${version}-setup.${ext}
+linux:
+  target: [AppImage, deb]
+  icon: electron/build/icon.png
+  category: AudioVideo
+  maintainer: PalmarHealer
+  artifactName: lumio-${version}.${ext}
+# The workflow uploads the files itself (one Release for Android and desktop).
+publish: null

@@ -28,3 +28,7 @@ dist-ssr
 
 # Lumio server data
 server/data
+
+# Desktop app: its copy of the built pages, and the installers
+electron/dist
+release
