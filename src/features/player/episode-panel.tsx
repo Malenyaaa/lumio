@@ -13,6 +13,7 @@ import { landscapeImageUrl } from '@/lib/images'
 import { cn } from '@/lib/utils'
 import { episodeMessages } from './messages'
 import { usePanelFocus } from './panel-focus'
+import { useVideoDownloadMessages, useVideoUnavailable, VideoDownloadMark } from './video-download-ui'
 
 interface EpisodePanelProps {
   /** The item being played; a series episode shows its season's episodes, an audio track its album. */
@@ -152,6 +153,9 @@ function EpisodeRow({ episode, current, onSelect }: EpisodeRowProps) {
   const thumb = landscapeImageUrl(api, episode, { fillWidth: 320 })
   const isTrack = episode.Type === 'Audio'
   const overview = plainText(episode.Overview)
+  // Offline, only stored episodes play (as in Listen, the rest is greyed out).
+  const downloadT = useVideoDownloadMessages()
+  const unavailable = useVideoUnavailable(isTrack ? null : episode.Id) && !isTrack
 
   // Bring the episode that is playing into view when the panel opens.
   useEffect(() => {
@@ -161,7 +165,13 @@ function EpisodeRow({ episode, current, onSelect }: EpisodeRowProps) {
   return (
     <li ref={row}>
       <div className={cn('group/row flex items-start gap-3 rounded-lg p-2 transition-colors hover:bg-white/10', current && 'bg-white/10')}>
-        <button type="button" onClick={() => !current && onSelect(episode.Id!)} className="flex min-w-0 flex-1 items-start gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <button
+          type="button"
+          disabled={unavailable && !current}
+          title={unavailable && !current ? downloadT.unavailable : undefined}
+          onClick={() => !current && onSelect(episode.Id!)}
+          className="flex min-w-0 flex-1 items-start gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-40"
+        >
           {!isTrack && (
             <span className="relative block aspect-video w-32 shrink-0 overflow-hidden rounded-md bg-white/10">
               {thumb && <FadeImage src={thumb} alt="" loading="lazy" className="size-full object-cover" />}
@@ -178,7 +188,8 @@ function EpisodeRow({ episode, current, onSelect }: EpisodeRowProps) {
               {episode.IndexNumber != null ? `${episode.IndexNumber}. ` : ''}
               {episode.Name}
             </span>
-            <span className="block text-xs text-white/60">
+            <span className="flex items-center gap-1.5 text-xs text-white/60">
+              {!isTrack && <VideoDownloadMark itemId={episode.Id} />}
               {current ? t.playing : formatRuntime(episode.RunTimeTicks)}
             </span>
             {overview && <span className="line-clamp-2 block text-xs text-white/70">{overview}</span>}

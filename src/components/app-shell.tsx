@@ -57,6 +57,7 @@ import { inMode, isLaunchAtRoot, lastMode, modeHome, rememberMode, rememberPath,
 import { nameColor } from '@/lib/name-color'
 import { useTheme, useThemePreference, type ThemePreference } from '@/lib/theme'
 import { cn } from '@/lib/utils'
+import { videoCacheAvailable } from '@/features/player/video-cache'
 
 /**
  * One step back in the app's own history, like the browser's back button. Only shown where there is somewhere in the
@@ -111,6 +112,7 @@ function useActiveSection(views: BaseItemDto[]): string | undefined {
 
   if (pathname === '/') return 'home'
   if (pathname.startsWith('/watchlist')) return 'watchlist'
+  if (pathname.startsWith('/downloads')) return 'downloads'
   if (pathname.startsWith('/search')) return 'search'
   if (category) return category.params.category
   const sectionOf = (view: BaseItemDto | undefined) => view && (categoryOf(view) ?? view.Id ?? undefined)
@@ -131,6 +133,8 @@ function Nav() {
     ...categories.map((category) => ({ key: category.id, to: categoryPath(category.id), label: category.label })),
     ...others.map((view) => ({ key: view.Id!, to: `/library/${view.Id}`, label: view.Name ?? '' })),
     ...(hidden.includes('nav:watchlist') ? [] : [{ key: 'watchlist', to: '/watchlist', label: t.watchlist }]),
+    // Films and episodes kept on this device (and what is left to play offline).
+    ...(hidden.includes('nav:downloads') || !videoCacheAvailable ? [] : [{ key: 'downloads', to: '/downloads', label: t.downloads }]),
     ...navLinks.map((link) => ({ key: `plugin:${link.id}`, to: link.href, label: link.label, external: link.external })),
   ]
 

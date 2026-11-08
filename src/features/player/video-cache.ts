@@ -8,6 +8,7 @@ import { jellyfin } from '@/lib/jellyfin'
  * approach differs: while a series plays, its next episodes are downloaded (as one MP4 each, at a bitrate set in the
  * settings, with their text subtitles), they then start instantly and play offline, and once watched to the end they
  * are deleted again. Anything older than a week goes too, as does whatever doesn't fit the space allowed.
+ * Downloads (see video-downloads) keep their files here too, pinned: never trimmed, expired or deleted when watched.
  */
 const CACHE_NAME = 'lumio-video-v1'
 const INDEX_KEY = 'lumio.videoCache.index'
@@ -30,6 +31,8 @@ interface Entry {
   subtitles: CachedSubtitle[]
   /** What the item's streams looked like, for the player's track menus. */
   streams: MediaStream[]
+  /** Held by a download: stays until the download is removed. */
+  pinned?: boolean
 }
 
 type Index = Record<string, Entry>
@@ -45,8 +48,9 @@ let stats = summarize()
 const listeners = new Set<() => void>()
 const inFlight = new Map<string, Promise<void>>()
 
+/** The cache's part (downloads are counted on their own). */
 function summarize() {
-  const entries = Object.values(index)
+  const entries = Object.values(index).filter((entry) => !entry.pinned)
   return { count: entries.length, bytes: entries.reduce((sum, entry) => sum + entry.bytes, 0) }
 }
 
@@ -74,6 +78,30 @@ export function useVideoCacheStats() {
 }
 
 export const isVideoCached = (itemId: string) => !!index[itemId]
+export const isVideoPinned = (itemId: string) => !!index[itemId]?.pinned
+export const pinnedVideoIds = () => Object.keys(index).filter((itemId) => index[itemId]!.pinned)
+/** A stored file's size (0 when there is none). */
+export const videoBytes = (itemId: string) => index[itemId]?.bytes ?? 0
+
+/** Pins a stored file for a download, or hands it back to the cache (`false`, the download was removed). */
+export function pinVideo(itemId: string, pinned: boolean) {
+  const entry = index[itemId]
+  if (!entry || !!entry.pinned === pinned) return
+  // Back in the cache it counts as new, so it isn't the first to go.
+  index[itemId] = { ...entry, pinned: pinned || undefined, added: pinned ? entry.added : Date.now() }
+  saveIndex()
+}
+
+/** Whether an item has a stored file (re-renders when that changes). */
+export function useVideoStored(itemId: string | null | undefined) {
+  return useSyncExternalStore(
+    (listener) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    () => !!itemId && !!index[itemId],
+  )
+}
 
 /** What the player needs to play a stored copy: the file, the subtitles as object URLs, and the item's streams. */
 export async function cachedVideo(itemId: string) {
@@ -101,6 +129,10 @@ export interface VideoCacheSettings {
   maxBytes: number
   /** Download bitrate in bit/s. */
   bitrate: number
+  /** For a download: kept for good (and not counted against the cache's space). */
+  pinned?: boolean
+  /** Told the bytes received so far while it downloads. */
+  onProgress?: (bytes: number) => void
 }
 
 /**
@@ -110,7 +142,12 @@ export interface VideoCacheSettings {
  */
 export function downloadVideo(api: Api, session: { userId: string; accessToken: string }, item: BaseItemDto, settings: VideoCacheSettings): Promise<void> {
   const itemId = item.Id
-  if (!videoCacheAvailable || !itemId || index[itemId]) return Promise.resolve()
+  if (!videoCacheAvailable || !itemId) return Promise.resolve()
+  // Stored ahead already: a download just keeps that copy.
+  if (index[itemId]) {
+    if (settings.pinned) pinVideo(itemId, true)
+    return Promise.resolve()
+  }
   const running = inFlight.get(itemId)
   if (running) return running
   const job = (async () => {
@@ -133,13 +170,14 @@ export function downloadVideo(api: Api, session: { userId: string; accessToken: 
         ApiKey: session.accessToken,
       })
       const response = await fetch(`${api.basePath}/Videos/${itemId}/stream.mp4?${params}`, { priority: 'low' } as RequestInit)
-      if (!response.ok || !response.body) return
+      if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`)
       // Counted on the way into the cache.
       let bytes = 0
       const counted = response.body.pipeThrough(
         new TransformStream<Uint8Array, Uint8Array>({
           transform(chunk, controller) {
             bytes += chunk.byteLength
+            settings.onProgress?.(bytes)
             controller.enqueue(chunk)
           },
         }),
@@ -160,15 +198,16 @@ export function downloadVideo(api: Api, session: { userId: string; accessToken: 
         subtitles.push({ index: stream.Index, language: stream.Language ?? undefined, title: stream.DisplayTitle ?? undefined })
       }
 
-      index[itemId] = { bytes, added: Date.now(), name: item.Name ?? '', audioIndex: audioIndex ?? undefined, subtitles, streams }
+      index[itemId] = { bytes, added: Date.now(), name: item.Name ?? '', audioIndex: audioIndex ?? undefined, subtitles, streams, pinned: settings.pinned || undefined }
       saveIndex()
-      await trimVideos(settings.maxBytes, itemId)
-    } catch {
-      // Offline, storage full or refused: the episode streams as usual.
+      if (!settings.pinned) await trimVideos(settings.maxBytes, itemId)
+    } catch (error) {
+      // Offline, storage full or refused: the episode streams as usual (a download tries again later).
       await caches
         .open(CACHE_NAME)
         .then((cache) => cache.delete(fileKey(itemId)))
         .catch(() => undefined)
+      if (settings.pinned) throw error
     } finally {
       inFlight.delete(itemId)
     }
@@ -188,12 +227,12 @@ export async function forgetVideo(itemId: string) {
   for (const subtitle of entry?.subtitles ?? []) await cache.delete(subtitleKey(itemId, subtitle.index))
 }
 
-/** Drops copies older than a week, then the oldest until everything fits (`keep` stays). */
+/** Drops copies older than a week, then the oldest until everything fits (`keep` stays; downloads always do). */
 export async function trimVideos(maxBytes: number, keep?: string) {
   if (!videoCacheAvailable) return
-  for (const [itemId, entry] of Object.entries(index)) if (Date.now() - entry.added > MAX_AGE_MS && itemId !== keep) await forgetVideo(itemId)
+  for (const [itemId, entry] of Object.entries(index)) if (!entry.pinned && Date.now() - entry.added > MAX_AGE_MS && itemId !== keep) await forgetVideo(itemId)
   let total = summarize().bytes
-  for (const [itemId, entry] of Object.entries(index).sort((a, b) => a[1].added - b[1].added)) {
+  for (const [itemId, entry] of Object.entries(index).filter(([, entry]) => !entry.pinned).sort((a, b) => a[1].added - b[1].added)) {
     if (total <= maxBytes) break
     if (itemId === keep) continue
     await forgetVideo(itemId)
@@ -201,8 +240,7 @@ export async function trimVideos(maxBytes: number, keep?: string) {
   }
 }
 
+/** Empties the cache; downloads stay. */
 export async function clearVideoCache() {
-  if (videoCacheAvailable) await caches.delete(CACHE_NAME).catch(() => undefined)
-  index = {}
-  saveIndex()
+  for (const [itemId, entry] of Object.entries(index)) if (!entry.pinned) await forgetVideo(itemId).catch(() => undefined)
 }

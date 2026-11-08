@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { audioCacheAvailable, clearAudioCache, OFTEN_PLAYED, trimAudioCache, useAudioCacheStats, useStorageInfo } from '@/features/listen/player/audio-cache'
 import { clearVideoCache, trimVideos, useVideoCacheStats, videoCacheAvailable } from '@/features/player/video-cache'
+import { clearVideoDownloads, useVideoDownloadStats } from '@/features/player/video-downloads'
 import { appCacheBytes, clearAppCaches } from '@/lib/app-cache'
 import { Section, SelectField, SettingsPage, SettingsPending, SwitchField, withCurrent } from './fields'
 import { useLocalSettings, type SegmentAction, type SegmentKind } from './local-settings'
@@ -405,6 +406,8 @@ export function DownloadsPage() {
         </Section>
       )}
 
+      {videoCacheAvailable && <VideoDownloadsSection />}
+
       {videoCacheAvailable && (
         <Section title={t.videoCache} description={t.videoCacheDescription} scope="device">
           <SelectField
@@ -443,6 +446,34 @@ export function DownloadsPage() {
         </Section>
       )}
     </SettingsPage>
+  )
+}
+
+/** Watch's downloads: their quality, how much they take, and removing them all (the list is Watch's Downloads tab). */
+function VideoDownloadsSection() {
+  const { settings, update } = useLocalSettings()
+  const t = useMessages(playbackMessages)
+  const size = useSize()
+  const stats = useVideoDownloadStats()
+  return (
+    <Section title={t.videoDownloadsTitle} description={t.videoDownloadsDescription} scope="device">
+      <SelectField
+        id="video-download-quality"
+        label={t.videoDownloadQualityLabel}
+        hint={t.videoDownloadQualityHint}
+        value={settings.videoDownloadMbit}
+        options={[3, 5, 8, 12, 20].map((mbit) => ({ value: mbit, label: `${mbit} Mbit/s` }))}
+        onChange={(value) => update({ videoDownloadMbit: value })}
+      />
+      {stats.count + stats.pending > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <p className="text-sm text-muted-foreground">{t.videoDownloadsUsage(stats.count, size(stats.bytes))}</p>
+          <Button variant="outline" size="sm" onClick={clearVideoDownloads}>
+            {t.removeVideoDownloads}
+          </Button>
+        </div>
+      )}
+    </Section>
   )
 }
 

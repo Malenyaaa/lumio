@@ -103,6 +103,8 @@ export interface LocalSettings {
   videoCacheGb: number
   /** Bitrate episodes are downloaded at, in Mbit/s. */
   videoBitrateMbit: number
+  /** Bitrate films and episodes are downloaded at (Watch's downloads), in Mbit/s. */
+  videoDownloadMbit: number
   /** Where "concerts near you" are looked for (a city or the device's position); null = not set. */
   concertLocation: { label: string; lat: number; lon: number } | null
   /** What is left out of the taste profile (mixes, radios, "your artists"), by id. */
@@ -202,6 +204,7 @@ export const DEFAULT_SETTINGS: LocalSettings = {
   videoPrefetch: 1,
   videoCacheGb: 5,
   videoBitrateMbit: 8,
+  videoDownloadMbit: 8,
   concertLocation: null,
   tasteExclusions: { artists: [], albums: [], tracks: [], playlists: [] },
 }

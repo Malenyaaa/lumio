@@ -35,7 +35,7 @@ import { initialChoice, usePlayback, useStreamOptions, type PlaybackChoice } fro
 import { reportActivity } from '@/features/social/social'
 import { usePreloadNext } from './preload-next'
 import { useVideoPrefetch } from './use-video-prefetch'
-import { forgetVideo, isVideoCached } from './video-cache'
+import { forgetVideo, isVideoCached, isVideoPinned } from './video-cache'
 import { startAfterIntro, useMediaSegments } from './segments'
 import { fitLabels } from './labels'
 import { SettingsPanel } from './settings-panel'
@@ -212,8 +212,8 @@ function Player({ id }: { id: string }) {
   })
 
   const handleEnded = useEffectEvent(() => {
-    // Watched to the end: a stored copy has done its job (episodes are rarely watched twice).
-    if (isVideoCached(id)) void forgetVideo(id)
+    // Watched to the end: a copy stored ahead has done its job (episodes are rarely watched twice); downloads stay.
+    if (isVideoCached(id) && !isVideoPinned(id)) void forgetVideo(id)
     // In a group the server advances the queue for everyone; each member doing it would race.
     if (autoplayNext && !syncActive) playNext()
   })

@@ -22,10 +22,12 @@ import { EpisodePage, PodcastPage, PodcastsPage, SavedEpisodesPage } from '@/fea
 import { FollowListPage, ProfilePage as ListenProfilePage } from '@/features/listen/profile-page'
 import { ListenShell } from '@/features/listen/listen-shell'
 import { MusicPlayerHost } from '@/features/listen/player/music-host'
+import { VideoDownloadsHost } from '@/features/player/video-download-ui'
 import { PlayEntry } from '@/features/listen/player/play-entry'
 import { DetailPage } from '@/features/items/detail-page'
 import { CategoryPage } from '@/features/library/category-page'
 import { HistoryPage } from '@/features/library/history-page'
+import { WatchDownloadsPage } from '@/features/library/downloads-page'
 import { LibraryPage } from '@/features/library/library-page'
 import { PersonPage } from '@/features/library/person-page'
 import { WatchlistPage } from '@/features/library/watchlist-page'
@@ -66,9 +68,14 @@ function RootLayout() {
   )
 }
 
-/** The Lumio server connection exists only while someone is signed in. */
+/** The Lumio server connection (and the video downloads) exist only while someone is signed in. */
 function SocialHostWhenSignedIn() {
-  return useSession().session ? <SocialHost /> : null
+  return useSession().session ? (
+    <>
+      <SocialHost />
+      <VideoDownloadsHost />
+    </>
+  ) : null
 }
 
 /** The settings pages; both apps have them (under /settings and /listen/settings), in their own frame. */
@@ -110,6 +117,7 @@ const router = createBrowserRouter(
         <Route path="browse/:category" element={<CategoryPage />} />
         <Route path="library/:id" element={<LibraryPage />} />
         <Route path="watchlist" element={<WatchlistPage />} />
+        <Route path="downloads" element={<WatchDownloadsPage />} />
         <Route path="history" element={<HistoryPage />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="person/:id" element={<PersonPage />} />

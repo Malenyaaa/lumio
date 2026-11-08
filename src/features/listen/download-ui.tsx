@@ -168,7 +168,7 @@ export function DownloadButton({
  * The download symbol in its three looks, all on one circle (the size of Tabler's circle icons, so they line up with
  * the buttons beside them): an outlined arrow, a ring filling up while it downloads, a filled circle once done.
  */
-function DownloadGlyph({ state, share = 0, className }: { state: 'none' | 'queued' | 'loading' | 'done'; share?: number; className?: string }) {
+export function DownloadGlyph({ state, share = 0, className }: { state: 'none' | 'queued' | 'loading' | 'done'; share?: number; className?: string }) {
   const length = 2 * Math.PI * 9
   return (
     <svg viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" className={cn('shrink-0', className)} aria-hidden>

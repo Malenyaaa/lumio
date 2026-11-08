@@ -1,6 +1,6 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
 import { IconBookmark, IconBookmarkFilled, IconEye, IconEyeCheck, IconPlayerPlay } from '@tabler/icons-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { Navigate, useLocation, useParams, useSearchParams } from 'react-router'
 import { Link } from '@/components/link'
 import { FadeImage } from '@/components/media/fade-image'
@@ -27,6 +27,7 @@ import { TrackPicker, type TrackChoice } from './track-picker'
 import { useEpisodes, useItem, useOtherVersions, useSeasons, useSeriesGuestStars, useSetFavorite, useSetPlayed, useSimilarItems } from './queries'
 import { useUserViews } from '@/features/home/queries'
 import { MediaAdminMenu } from '@/features/admin/media-admin'
+import { EpisodeDownloadButton, MovieDownloadButton, SeasonDownloadButton, useVideoDownloadMessages, useVideoUnavailable } from '@/features/player/video-download-ui'
 
 export function DetailPage() {
   const { id = '' } = useParams()
@@ -106,6 +107,7 @@ export function DetailPage() {
           {item.Type === 'Movie' && <TrackPicker item={item} value={tracks} onChange={setTracks} />}
           <div className="flex flex-wrap gap-3">
             <PlayButton item={item} tracks={tracks} />
+            {item.Type === 'Movie' && <MovieDownloadButton movie={item} />}
             {WATCHLIST_TYPES.has(item.Type ?? '') && <WatchlistButton item={item} />}
             {PLAYED_TYPES.has(item.Type ?? '') && <PlayedButton item={item} />}
             <PluginSlot name="item:actions" context={{ item }} className="contents" />
@@ -126,7 +128,7 @@ export function DetailPage() {
         {series && <MediaRow title={t.seriesRow(series.name)} items={series.films} currentId={item.Id} />}
         <PersonRow title={t.cast} people={cast.slice(0, 30).map((person) => ({ person }))} />
         {isSeries && <GuestStarsRow seriesId={item.Id!} />}
-        {isSeries && <SeasonsSection key={`${item.Id}:${search.get('season') ?? ''}:${search.get('episode') ?? ''}`} seriesId={item.Id!} initialSeasonId={search.get('season') ?? undefined} highlightId={search.get('episode') ?? undefined} />}
+        {isSeries && <SeasonsSection key={`${item.Id}:${search.get('season') ?? ''}:${search.get('episode') ?? ''}`} series={item} seriesId={item.Id!} initialSeasonId={search.get('season') ?? undefined} highlightId={search.get('episode') ?? undefined} />}
         <SimilarRow item={item} exclude={series?.films} />
         <PluginSlot name="item:bottom" context={{ item }} className="px-4 sm:px-8" />
       </div>
@@ -164,7 +166,17 @@ const SIMILAR_TYPES = new Set(['Movie', 'Series', 'MusicAlbum', 'BoxSet', 'Book'
 
 function PlayButton({ item, tracks }: { item: BaseItemDto; tracks: TrackChoice }) {
   const { target, label } = usePlayTarget(item)
+  const downloadT = useVideoDownloadMessages()
+  // Offline, only what is stored on the device plays.
+  const unavailable = useVideoUnavailable(target?.Type === 'Movie' || target?.Type === 'Episode' ? target.Id : null)
   if (!target) return null
+  if (unavailable) {
+    return (
+      <Button size="lg" disabled title={downloadT.unavailable}>
+        <IconPlayerPlay /> <span className="max-w-64 truncate">{label}</span>
+      </Button>
+    )
+  }
 
   return (
     <Button size="lg" nativeButton={false} render={<Link to={playHref(target, { a: tracks.audio, s: tracks.subtitle })} />}>
@@ -228,12 +240,13 @@ function currentSeasonId(seasons: BaseItemDto[]): string | undefined {
 }
 
 interface SeasonsSectionProps {
+  series: BaseItemDto
   seriesId: string
   initialSeasonId?: string
   highlightId?: string
 }
 
-function SeasonsSection({ seriesId, initialSeasonId, highlightId }: SeasonsSectionProps) {
+function SeasonsSection({ series, seriesId, initialSeasonId, highlightId }: SeasonsSectionProps) {
   const seasons = useSeasons(seriesId)
   const [picked, setPicked] = useState<string | undefined>(initialSeasonId)
   const orderedSeasons = useMemo(() => {
@@ -242,7 +255,6 @@ function SeasonsSection({ seriesId, initialSeasonId, highlightId }: SeasonsSecti
   }, [seasons.data])
   const seasonId = picked ?? currentSeasonId(orderedSeasons)
   const episodes = useEpisodes(seriesId, seasonId)
-  const { api } = useAuthedSession()
 
   // Jump to the episode the user came from (e.g. "Weiterschauen"), once per episode.
   const highlighted = useRef<HTMLLIElement>(null)
@@ -258,52 +270,78 @@ function SeasonsSection({ seriesId, initialSeasonId, highlightId }: SeasonsSecti
 
   return (
     <section className="space-y-4 px-4 sm:px-8">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {orderedSeasons.map((season) => (
             <Button key={season.Id} size="sm" variant={season.Id === seasonId ? 'default' : 'outline'} onClick={() => setPicked(season.Id!)}>
               {season.Name}
             </Button>
           ))}
+          <SeasonDownloadButton
+            series={series}
+            seasons={orderedSeasons}
+            season={orderedSeasons.find((season) => season.Id === seasonId)}
+            episodes={episodes.data}
+          />
         </div>
 
         <ul className="grid gap-3">
           {episodes.isLoading && Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)}
           {episodes.data?.map((episode) => {
-            const thumb = landscapeImageUrl(api, episode, { fillWidth: 320 })
-            const progress = episode.UserData?.PlayedPercentage
             const isHighlighted = episode.Id === highlightId
-            const overview = plainText(episode.Overview)
             return (
-              <li key={episode.Id} ref={isHighlighted ? highlighted : undefined}>
-                <Link
-                  to={playHref(episode)}
-                  className={cn(
-                    'flex gap-4 rounded-lg p-2 outline-none transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring',
-                    isHighlighted && 'bg-muted ring-1 ring-foreground/30',
-                  )}
-                >
-                  <div className="relative aspect-video w-40 shrink-0 overflow-hidden rounded-md bg-muted sm:w-52">
-                    {thumb && <FadeImage src={thumb} alt="" loading="lazy" className="size-full object-cover" />}
-                    <WatchedBadge item={episode} className="absolute right-1.5 top-1.5" />
-                    {!!progress && (
-                      <div className="absolute inset-x-0 bottom-0 h-1 bg-black/50">
-                        <div className="h-full bg-primary" style={{ width: `${progress}%` }} />
-                      </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 space-y-1">
-                    <p className={cn('truncate font-medium', episode.UserData?.Played && 'text-muted-foreground')}>
-                      {episode.IndexNumber}. {episode.Name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{formatRuntime(episode.RunTimeTicks)}</p>
-                    <p className="line-clamp-2 whitespace-pre-line text-sm text-muted-foreground">{overview}</p>
-                  </div>
-                </Link>
-              </li>
+              <EpisodeItem
+                key={episode.Id}
+                ref={isHighlighted ? highlighted : undefined}
+                episode={episode}
+                highlighted={isHighlighted}
+                context={[series, ...orderedSeasons, ...(episodes.data ?? [])]}
+              />
             )
           })}
         </ul>
     </section>
+  )
+}
+
+/** An episode in the season's list; offline, one without a stored copy is greyed out and can't be opened. */
+function EpisodeItem({ episode, highlighted, context, ref }: { episode: BaseItemDto; highlighted: boolean; context: BaseItemDto[]; ref?: Ref<HTMLLIElement> }) {
+  const { api } = useAuthedSession()
+  const t = useVideoDownloadMessages()
+  const unavailable = useVideoUnavailable(episode.Id)
+  const thumb = landscapeImageUrl(api, episode, { fillWidth: 320 })
+  const progress = episode.UserData?.PlayedPercentage
+  const overview = plainText(episode.Overview)
+  return (
+    <li ref={ref} title={unavailable ? t.unavailable : undefined} className="flex items-center gap-2">
+      <Link
+        to={playHref(episode)}
+        aria-disabled={unavailable || undefined}
+        onClick={(event) => unavailable && event.preventDefault()}
+        className={cn(
+          'flex min-w-0 flex-1 gap-4 rounded-lg p-2 outline-none transition hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring',
+          highlighted && 'bg-muted ring-1 ring-foreground/30',
+          unavailable && 'cursor-default opacity-40 hover:bg-transparent',
+        )}
+      >
+        <div className="relative aspect-video w-40 shrink-0 overflow-hidden rounded-md bg-muted sm:w-52">
+          {thumb && <FadeImage src={thumb} alt="" loading="lazy" className="size-full object-cover" />}
+          <WatchedBadge item={episode} className="absolute right-1.5 top-1.5" />
+          {!!progress && (
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-black/50">
+              <div className="h-full bg-primary" style={{ width: `${progress}%` }} />
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 space-y-1">
+          <p className={cn('truncate font-medium', episode.UserData?.Played && 'text-muted-foreground')}>
+            {episode.IndexNumber}. {episode.Name}
+          </p>
+          <p className="text-xs text-muted-foreground">{formatRuntime(episode.RunTimeTicks)}</p>
+          <p className="line-clamp-2 whitespace-pre-line text-sm text-muted-foreground">{overview}</p>
+        </div>
+      </Link>
+      <EpisodeDownloadButton episode={episode} context={context} className="mr-1" />
+    </li>
   )
 }
 
