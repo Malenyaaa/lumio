@@ -291,6 +291,14 @@ function Extras() {
       <div className="w-24">
         <Slider
           aria-label={t.volume}
+          // As in music apps: a quiet light bar, the accent and the knob only while pointing at it, dragging or focused.
+          className={cn(
+            '[&_[data-slot=slider-track]]:bg-foreground/20 [&_[data-slot=slider-range]]:bg-foreground/80',
+            '[&_[data-slot=slider-thumb]]:border-0 [&_[data-slot=slider-thumb]]:opacity-0 [&_[data-slot=slider-thumb]]:transition-opacity',
+            'hover:[&_[data-slot=slider-range]]:bg-listen hover:[&_[data-slot=slider-thumb]]:opacity-100',
+            'data-dragging:[&_[data-slot=slider-range]]:bg-listen data-dragging:[&_[data-slot=slider-thumb]]:opacity-100',
+            'focus-within:[&_[data-slot=slider-thumb]]:opacity-100',
+          )}
           min={0}
           max={100}
           value={[state.muted ? 0 : Math.round(state.volume * 100)]}
