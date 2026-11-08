@@ -7,7 +7,7 @@ import {
   IconSettings,
   IconX,
 } from '@tabler/icons-react'
-import { useEffect, useRef, type PointerEvent, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, type PointerEvent, type ReactNode } from 'react'
 import { Link } from '@/components/link'
 import { FadeImage } from '@/components/media/fade-image'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -27,6 +27,7 @@ import { ResizeHandle } from '../resize-handle'
 import { endTrackDrag, startTrackDrag } from '../track-drag'
 import { TrackContextMenu, TrackMenu } from '../track-menu'
 import { NowPlaying } from './now-playing'
+import { SourceLink } from './queue-source'
 import { QueueDrop } from './player-bar'
 
 const messages = defineMessages({
@@ -37,6 +38,11 @@ const messages = defineMessages({
     aboutArtist: 'Über den Künstler',
     listeners: (n: string) => `${n} Hörer`,
     upNext: 'Als Nächstes',
+    currentTrack: 'Aktueller Titel',
+    nextInQueue: 'Nächster Titel in der Warteschlange',
+    clearQueue: 'Warteschlange löschen',
+    nextFrom: 'Nächster Titel von:',
+    autoplayFrom: 'Ähnliche Titel, basierend auf',
     nowPlaying: 'Läuft gerade',
     emptyQueue: 'Danach kommt nichts mehr.',
     remove: 'Aus der Warteschlange entfernen',
@@ -68,6 +74,11 @@ const messages = defineMessages({
     aboutArtist: 'About the artist',
     listeners: (n: string) => `${n} listeners`,
     upNext: 'Next up',
+    currentTrack: 'Now playing',
+    nextInQueue: 'Next in queue',
+    clearQueue: 'Clear queue',
+    nextFrom: 'Next from:',
+    autoplayFrom: 'Similar songs, based on',
     nowPlaying: 'Now playing',
     emptyQueue: 'Nothing comes after this.',
     remove: 'Remove from queue',
@@ -271,7 +282,8 @@ function PanelHeader({ view, title, track, expanded, immersive }: { view: Listen
           </IconButton>
         ))}
       <h2 className={cn('min-w-0 flex-1 truncate text-base font-semibold', expanded && 'pl-3')}>{title}</h2>
-      <TrackMenu track={track} visible />
+      {/* The queue's own rows are what counts there; the track's menu stays with "now playing" and the lyrics. */}
+      {view !== 'queue' && <TrackMenu track={track} visible />}
       <IconButton label={expanded ? t.shrink : t.expand} onClick={() => setListenPanelExpanded(!expanded)}>
         {expanded ? <IconArrowsDiagonalMinimize2 className="size-4" /> : <IconArrowsDiagonal className="size-4" />}
       </IconButton>
@@ -424,37 +436,101 @@ function QualityView({ track }: { track: BaseItemDto }) {
   )
 }
 
+/** How many autoplay songs the queue shows ahead. */
+const AUTOPLAY_SHOWN = 10
+
+/**
+ * The queue, as in Spotify: the current track; the user's own queue (with a button to clear it); what comes next from
+ * the collection that was started (named, as a link); and the similar songs autoplay has lined up after it. When a song
+ * starts, the rows slide up into their new places.
+ */
 function Queue() {
   const t = useMessages(messages)
   const state = useMusic()
   const track = currentTrack(state)
-  const upcoming = state.queue.slice(state.index + 1)
+  const list = useRef<HTMLDivElement>(null)
+  const positions = useRef(new Map<string, number>())
+
+  const ahead = (kind: 'user' | 'context' | 'autoplay') =>
+    state.entries
+      .map((entry, position) => ({ entry, position, item: state.queue[position]! }))
+      .filter(({ entry, position }) => position > state.index && entry.kind === kind)
+  const user = ahead('user')
+  const context = ahead('context')
+  const autoplay = ahead('autoplay').slice(0, AUTOPLAY_SHOWN)
+
+  // Rows that moved since the last render glide from where they were (by their entry's id, across sections).
+  useLayoutEffect(() => {
+    const box = list.current
+    if (!box) return
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const next = new Map<string, number>()
+    for (const row of box.querySelectorAll<HTMLElement>('[data-uid]')) {
+      const uid = row.dataset.uid!
+      const top = row.offsetTop
+      const before = positions.current.get(uid)
+      if (!still && before !== undefined && before !== top) {
+        row.animate([{ transform: `translateY(${before - top}px)` }, { transform: 'none' }], { duration: 320, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' })
+      } else if (!still && before === undefined && positions.current.size) {
+        row.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220 })
+      }
+      next.set(uid, top)
+    }
+    positions.current = next
+  })
+
+  const row = ({ entry, position, item }: { entry: { uid: string }; position: number; item: BaseItemDto }) => (
+    <QueueRow key={entry.uid} uid={entry.uid} item={item} index={position} removable />
+  )
+
   return (
-    <div className="space-y-5">
-      {track && (
+    <div ref={list} className="relative space-y-5">
+      {track && state.entries[state.index] && (
         <section className="space-y-1">
-          <h3 className="text-sm font-semibold">{t.nowPlaying}</h3>
-          <QueueRow item={track} index={state.index} current />
+          <h3 className="text-sm font-semibold">{t.currentTrack}</h3>
+          <QueueRow uid={state.entries[state.index]!.uid} item={track} index={state.index} current />
         </section>
       )}
-      <section className="space-y-1">
-        <h3 className="text-sm font-semibold">{t.upNext}</h3>
-        {upcoming.length === 0 && <p className="py-2 text-sm text-muted-foreground">{t.emptyQueue}</p>}
-        {upcoming.map((item, offset) => (
-          <QueueRow key={`${item.Id}-${state.index + 1 + offset}`} item={item} index={state.index + 1 + offset} removable />
-        ))}
-      </section>
+      {user.length > 0 && (
+        <section className="space-y-1">
+          <div className="flex items-baseline justify-between gap-3">
+            <h3 className="text-sm font-semibold">{t.nextInQueue}</h3>
+            <button type="button" onClick={() => music.clearQueue()} className="shrink-0 text-xs font-semibold text-muted-foreground hover:text-foreground hover:underline">
+              {t.clearQueue}
+            </button>
+          </div>
+          {user.map(row)}
+        </section>
+      )}
+      {context.length > 0 && (
+        <section className="space-y-1">
+          <h3 className="truncate text-sm font-semibold">
+            {t.nextFrom} <SourceLink source={state.source} />
+          </h3>
+          {context.map(row)}
+        </section>
+      )}
+      {autoplay.length > 0 && (
+        <section className="space-y-1">
+          <h3 className="truncate text-sm font-semibold">
+            {t.autoplayFrom} <SourceLink source={state.source} />
+          </h3>
+          {autoplay.map(row)}
+        </section>
+      )}
+      {!user.length && !context.length && !autoplay.length && <p className="py-2 text-sm text-muted-foreground">{t.emptyQueue}</p>}
     </div>
   )
 }
 
-function QueueRow({ item, index, current, removable }: { item: BaseItemDto; index: number; current?: boolean; removable?: boolean }) {
+function QueueRow({ uid, item, index, current, removable }: { uid: string; item: BaseItemDto; index: number; current?: boolean; removable?: boolean }) {
   const { api } = useAuthedSession()
   const t = useMessages(messages)
   const cover = portraitImageUrl(api, item, { fillHeight: 96 })
   return (
     <TrackContextMenu track={item}>
       <div
+        data-uid={uid}
         draggable
         onDragStart={(event) => startTrackDrag(event, [item])}
         onDragEnd={endTrackDrag}

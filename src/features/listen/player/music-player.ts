@@ -20,8 +20,22 @@ import { DIRECT_FORMATS } from './quality'
  */
 export type RepeatMode = 'off' | 'all' | 'one'
 
+/**
+ * Where an entry of the play order comes from, as in Spotify: the collection that was started (`context`), the user's
+ * own queue (`user`: added songs, played before the collection goes on), or autoplay after the collection ended.
+ */
+export type QueueKind = 'context' | 'user' | 'autoplay'
+
+/** What the player knows about each entry of `queue` (same positions): where it comes from, and a stable id for lists. */
+export interface QueueEntry {
+  kind: QueueKind
+  uid: string
+}
+
 export interface MusicState {
   queue: BaseItemDto[]
+  /** One per track in `queue`. */
+  entries: QueueEntry[]
   /** Position of the current track in `queue`; -1 when nothing is loaded. */
   index: number
   playing: boolean
@@ -61,6 +75,7 @@ function readVolume() {
 
 let state: MusicState = {
   queue: [],
+  entries: [],
   index: -1,
   playing: false,
   buffering: false,
@@ -176,6 +191,8 @@ const SAVE_POSITION_MS = 5000
 
 interface SavedSession {
   queue: BaseItemDto[]
+  /** Where each track comes from (older sessions: all from the collection). */
+  kinds?: QueueKind[]
   index: number
   position: number
   source: string | null
@@ -206,6 +223,7 @@ function writeSession() {
     const from = Math.max(0, Math.min(state.index - 100, state.queue.length - KEEP_QUEUE))
     const saved: SavedSession = {
       queue: state.queue.slice(from, from + KEEP_QUEUE).map(compactTrack),
+      kinds: state.entries.slice(from, from + KEEP_QUEUE).map((entry) => entry.kind),
       index: state.index - from,
       position: pendingStart ?? audio?.currentTime ?? 0,
       source: state.source,
@@ -230,7 +248,8 @@ function restoreSession(userId: string) {
     const track = saved?.queue[saved.index]
     if (!saved || !track) return
     pendingStart = saved.position
-    setState({ queue: saved.queue, index: saved.index, source: saved.source, shuffle: saved.shuffle, repeat: saved.repeat, unshuffled: null, playing: false })
+    const entries = saved.queue.map((_, position) => entry(saved.kinds?.[position] ?? 'context'))
+    setState({ queue: saved.queue, entries, index: saved.index, source: saved.source, shuffle: saved.shuffle, repeat: saved.repeat, unshuffled: null, playing: false })
     setTime({ position: saved.position, duration: ticksToSeconds(track.RunTimeTicks ?? 0) })
     updateMediaSession()
   } catch {
@@ -366,8 +385,8 @@ async function go(index: number, startAt?: number) {
   window.clearInterval(progressTimer)
   progressTimer = window.setInterval(() => !audio.paused && report('progress'), PROGRESS_EVERY_MS)
   updateMediaSession()
-  // The last song of the queue: line up what comes after it (autoplay) now, so "next" works and it loads ahead.
-  if (index >= state.queue.length - 1) await extendQueue()
+  // Once the collection is through, autoplay keeps the next songs lined up (and shown), so it simply goes on.
+  await extendQueue()
   void cacheAhead()
 }
 
@@ -381,14 +400,32 @@ export function setAutoplayProvider(next: typeof autoplay) {
   autoplay = next
 }
 
+/** How many autoplay songs are kept decided ahead, once the collection has run out. */
+const AUTOPLAY_AHEAD = 10
+
+/** Autoplay songs lined up after the current track. */
+const autoplayAhead = () => state.entries.slice(state.index + 1).filter((item) => item.kind === 'autoplay').length
+/** Songs of the collection still to come. */
+const contextAhead = () => state.entries.slice(state.index + 1).filter((item) => item.kind === 'context').length
+
+/**
+ * Once nothing of the collection is left to play, keeps `AUTOPLAY_AHEAD` similar songs lined up after everything
+ * else (the user's queue still plays first). They are not the user's queue: clearing it leaves them.
+ */
 async function extendQueue() {
   if (!autoplay || !connection || extending || state.repeat !== 'off' || !readLocalSettings(connection.userId).musicAutoplay) return
+  if (state.index < 0 || contextAhead() > 0 || autoplayAhead() >= AUTOPLAY_AHEAD) return
   extending = true
   try {
-    const more = await autoplay(state.queue)
-    if (more.length) setState({ queue: [...state.queue, ...more] })
+    for (let attempt = 0; attempt < 3 && autoplayAhead() < AUTOPLAY_AHEAD; attempt++) {
+      const known = new Set(state.queue.map((item) => item.Id))
+      const more = (await autoplay(state.queue)).filter((item) => item.Id && !known.has(item.Id))
+      if (!more.length) break
+      const add = more.slice(0, AUTOPLAY_AHEAD - autoplayAhead() + 5)
+      setState({ queue: [...state.queue, ...add], entries: [...state.entries, ...add.map(() => entry('autoplay'))] })
+    }
   } catch {
-    // No suggestions: the queue simply ends.
+    // No suggestions: playback simply ends after the last song.
   } finally {
     extending = false
   }
@@ -488,6 +525,25 @@ function announceQueued(how: 'queue' | 'next', items: BaseItemDto[]) {
 
 export const START = -1
 
+function entry(kind: QueueKind): QueueEntry {
+  return { kind, uid: Math.random().toString(36).slice(2, 10) }
+}
+
+/** Where the user's queue ends: right after the current track and the songs already queued by hand. */
+function userQueueEnd() {
+  let at = state.index + 1
+  while (state.entries[at]?.kind === 'user') at++
+  return at
+}
+
+function insertAt(position: number, items: BaseItemDto[], kind: QueueKind) {
+  const queue = [...state.queue]
+  const entries = [...state.entries]
+  queue.splice(position, 0, ...items)
+  entries.splice(position, 0, ...items.map(() => entry(kind)))
+  setState({ queue, entries })
+}
+
 export const music = {
   /**
    * Replaces the queue with `items` and plays from `startIndex` (a track picked by the user), or with `START` (the
@@ -506,25 +562,28 @@ export const music = {
       queue = [first, ...shuffled(playable.filter((item) => item !== first))]
       index = 0
     }
-    setState({ queue, shuffle, unshuffled: shuffle ? playable : null, source: options.source ?? null })
+    setState({ queue, entries: queue.map(() => entry('context')), shuffle, unshuffled: shuffle ? playable : null, source: options.source ?? null })
     if (options.source) recordRecent(options.source)
     void go(index, options.startAt)
   },
-  /** Puts tracks right after the current one. */
+  /** Puts tracks at the front of the user's queue: they play right after the current one. */
   playNext(items: BaseItemDto[]) {
     if (!items.length) return
     if (state.index < 0) return music.play(items)
-    const queue = [...state.queue]
-    queue.splice(state.index + 1, 0, ...items)
-    setState({ queue })
+    insertAt(state.index + 1, items, 'user')
     announceQueued('next', items)
   },
-  /** Appends tracks to the end of the queue. */
+  /** Adds tracks to the end of the user's queue: after what was queued before, but before the collection goes on. */
   addToQueue(items: BaseItemDto[]) {
     if (!items.length) return
     if (state.index < 0) return music.play(items)
-    setState({ queue: [...state.queue, ...items] })
+    insertAt(userQueueEnd(), items, 'user')
     announceQueued('queue', items)
+  },
+  /** Empties the user's queue; the collection (and autoplay) go on as before. */
+  clearQueue() {
+    const keep = state.entries.map((item, position) => position <= state.index || item.kind !== 'user')
+    setState({ queue: state.queue.filter((_, position) => keep[position]), entries: state.entries.filter((_, position) => keep[position]) })
   },
   toggle() {
     if (!audio || state.index < 0) return
@@ -593,15 +652,30 @@ export const music = {
   toggleShuffle() {
     if (state.source) saveShufflePref(state.source, !state.shuffle)
     const current = currentTrack()
+    // Only the collection is shuffled: the user's queue still comes first, autoplay last.
+    const ahead = (kind: QueueKind) => state.queue.slice(state.index + 1).filter((_, offset) => state.entries[state.index + 1 + offset]?.kind === kind)
+    const user = ahead('user')
+    const auto = ahead('autoplay')
+    const tail = (context: BaseItemDto[]) => {
+      const queue = [...state.queue.slice(0, state.index + 1), ...user, ...context, ...auto]
+      const entries = [
+        ...state.entries.slice(0, state.index + 1),
+        ...state.entries.slice(state.index + 1).filter((item) => item.kind === 'user'),
+        ...context.map(() => entry('context')),
+        ...state.entries.slice(state.index + 1).filter((item) => item.kind === 'autoplay'),
+      ]
+      return { queue, entries }
+    }
     if (!state.shuffle) {
-      // Everything after the current track in random order; the current one keeps playing.
-      const before = state.queue.slice(0, state.index + 1)
-      const after = shuffled(state.queue.slice(state.index + 1))
-      setState({ shuffle: true, unshuffled: state.queue, queue: [...before, ...after] })
+      // The rest of the collection in random order; the current track keeps playing.
+      setState({ shuffle: true, unshuffled: state.queue.filter((_, position) => state.entries[position]?.kind === 'context'), ...tail(shuffled(ahead('context'))) })
     } else {
-      const original = state.unshuffled ?? state.queue
-      const index = current ? Math.max(0, original.indexOf(current)) : -1
-      setState({ shuffle: false, unshuffled: null, queue: original, index })
+      // Back to the collection's order, going on from the current track where it is in it.
+      const original = state.unshuffled ?? ahead('context')
+      const at = current ? original.indexOf(current) : -1
+      const remaining = new Set(ahead('context'))
+      const rest = at >= 0 ? original.slice(at + 1) : original.filter((item) => remaining.has(item))
+      setState({ shuffle: false, unshuffled: null, ...tail(rest) })
     }
   },
   cycleRepeat() {
@@ -611,7 +685,9 @@ export const music = {
   remove(index: number) {
     if (index === state.index) return
     const queue = state.queue.filter((_, position) => position !== index)
-    setState({ queue, index: index < state.index ? state.index - 1 : state.index })
+    const entries = state.entries.filter((_, position) => position !== index)
+    setState({ queue, entries, index: index < state.index ? state.index - 1 : state.index })
+    void extendQueue()
   },
   /** Ends playback and empties the queue (the mini player's close button). */
   stop() {
@@ -620,10 +696,13 @@ export const music = {
   /** Moves a queued track to another position. */
   move(from: number, to: number) {
     const queue = [...state.queue]
+    const entries = [...state.entries]
     const [moved] = queue.splice(from, 1)
+    const [movedEntry] = entries.splice(from, 1)
     queue.splice(to, 0, moved!)
+    entries.splice(to, 0, movedEntry!)
     const playingItem = currentTrack()
-    setState({ queue, index: playingItem ? queue.indexOf(playingItem) : state.index })
+    setState({ queue, entries, index: playingItem ? queue.indexOf(playingItem) : state.index })
   },
 }
 
@@ -637,7 +716,7 @@ function stop() {
   audio.removeAttribute('src')
   audio.load()
   window.clearInterval(progressTimer)
-  setState({ queue: [], index: -1, playing: false, buffering: false, unshuffled: null, source: null })
+  setState({ queue: [], entries: [], index: -1, playing: false, buffering: false, unshuffled: null, source: null })
   setTime({ position: 0, duration: 0 })
 }
 
