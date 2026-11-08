@@ -1,6 +1,6 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
 import axios, { type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
-import { markServerReachable } from '@/lib/network'
+import { checkReachability, markServerReachable } from '@/lib/network'
 import { downloadedVideoIds } from '@/features/player/video-downloads'
 import { downloadedCollections } from './player/downloads'
 
@@ -209,33 +209,13 @@ export function installOfflineLibrary() {
     } catch {
       throw error
     }
-    // No answer at all: offline (or the server is down) until it answers again.
-    if (error.code !== 'ERR_CANCELED') {
-      markServerReachable(false)
-      watchForServer(url.origin + url.pathname.replace(/\/(Users|Items|Artists|Audio|Shows|Sessions|Playlists)\b.*$/i, ''))
-    }
+    // No answer at all: maybe offline (or the server is down); its ping decides, at once (a single failed request
+    // during a blip doesn't switch to offline).
+    if (error.code !== 'ERR_CANCELED') checkReachability()
     await loaded
     const data = answer(url)
     if (data === null) throw error
     return { data, status: 200, statusText: 'OK (offline)', headers: {}, config: error.config as InternalAxiosRequestConfig } satisfies AxiosResponse
     },
   )
-}
-
-let watching: number | undefined
-
-/** While the server can't be reached, asks every 15 seconds whether it is back (its answers end offline mode). */
-function watchForServer(base: string) {
-  if (watching) return
-  watching = window.setInterval(() => {
-    if (!navigator.onLine) return
-    void fetch(`${base}/System/Ping`, { cache: 'no-store' })
-      .then((response) => {
-        if (!response.ok && response.status >= 500) return
-        markServerReachable(true)
-        window.clearInterval(watching)
-        watching = undefined
-      })
-      .catch(() => undefined)
-  }, 15_000)
 }

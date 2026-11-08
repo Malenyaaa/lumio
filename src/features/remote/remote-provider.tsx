@@ -12,6 +12,7 @@ import { getSessionApi } from '@jellyfin/sdk/lib/utils/api/session-api'
 import { getSyncPlayApi } from '@jellyfin/sdk/lib/utils/api/sync-play-api'
 import { getSystemApi } from '@jellyfin/sdk/lib/utils/api/system-api'
 import { WebSocketService } from '@jellyfin/sdk/lib/websocket'
+import { checkReachability, setReachabilityProbe, useOffline } from '@/lib/network'
 import { createContext, useCallback, useContext, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { toast } from 'sonner'
@@ -479,13 +480,26 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       .catch(() => undefined)
   })
 
-  // One socket per signed-in session.
+  // Whether the server is reachable is checked with its ping while signed in (see network).
+  const serverUrl = session?.serverUrl
   useEffect(() => {
-    if (!session) return
+    setReachabilityProbe(serverUrl ? `${serverUrl}/System/Ping` : null)
+    return () => setReachabilityProbe(null)
+  }, [serverUrl])
+
+  // One socket per signed-in session, while the server can be reached: offline it would only keep failing (each try
+  // an error in the console); it connects again as soon as the server answers.
+  const offline = useOffline()
+  useEffect(() => {
+    if (!session || offline) return
     staleGroupChecked.current = false
     const url = `${session.serverUrl.replace(/^http/, 'ws')}/socket?ApiKey=${encodeURIComponent(session.accessToken)}&deviceId=${encodeURIComponent(jellyfin.deviceInfo.id)}`
     const socket = new WebSocketService(url)
-    const stopStatus = socket.onStatusChange((status) => status === SOCKET_OPEN && announceCapabilities())
+    const stopStatus = socket.onStatusChange((status) => {
+      if (status === SOCKET_OPEN) announceCapabilities()
+      // Dropped: maybe the connection is gone; the ping finds out (and offline closes this socket).
+      else if (status === 'disconnected') checkReachability()
+    })
     const stopMessages = socket.subscribe(['Play', 'Playstate', 'GeneralCommand', 'SyncPlayCommand', 'SyncPlayGroupUpdate'], (message) => {
       switch (message.MessageType) {
         case 'Play': return handlePlay(message.Data as PlayRequest)
@@ -500,7 +514,7 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       stopStatus()
       socket.disconnect()
     }
-  }, [session])
+  }, [session, offline])
 
   const registerPlayer = useCallback((controller: PlayerController) => {
     player.current = controller
