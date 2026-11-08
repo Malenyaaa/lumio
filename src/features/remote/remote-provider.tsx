@@ -7,15 +7,17 @@ import type {
   PlaystateRequest,
   SendCommand,
 } from '@jellyfin/sdk/lib/generated-client/models'
+import { getLibraryApi } from '@jellyfin/sdk/lib/utils/api/library-api'
 import { getSessionApi } from '@jellyfin/sdk/lib/utils/api/session-api'
 import { getSyncPlayApi } from '@jellyfin/sdk/lib/utils/api/sync-play-api'
 import { getSystemApi } from '@jellyfin/sdk/lib/utils/api/system-api'
 import { WebSocketService } from '@jellyfin/sdk/lib/websocket'
 import { createContext, useCallback, useContext, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { useSession } from '@/features/auth/session'
 import { messagesFor } from '@/lib/i18n'
+import { ticksToSeconds } from '@/lib/format'
 import { jellyfin } from '@/lib/jellyfin'
 import { remoteMessages } from './messages'
 import { RemoteBar } from './remote-bar'
@@ -155,6 +157,7 @@ async function measureClockOffset(request: () => Promise<{ RequestReceptionTime?
 export function RemoteProvider({ children }: { children: ReactNode }) {
   const { session, api } = useSession()
   const navigate = useNavigate()
+  const inListen = useLocation().pathname.startsWith('/listen')
   const player = useRef<PlayerController | null>(null)
   const [target, setTarget] = useState<RemoteTarget | null>(null)
   const [group, setGroup] = useState<GroupInfoDto | null>(null)
@@ -264,10 +267,27 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
 
   const handlePlaystate = useEffectEvent((request: PlaystateRequest) => {
     const controller = player.current
-    if (!controller) return
+    // No video playing: the commands steer Listen's music player (when music is loaded here).
+    if (!controller) {
+      if (!music.isLoaded()) return
+      switch (request.Command) {
+        case 'Pause': return music.pause()
+        case 'Unpause': return music.resume()
+        case 'PlayPause': return music.toggle()
+        case 'Stop': return music.stop()
+        case 'Seek': return music.seek(ticksToSeconds(request.SeekPositionTicks ?? 0))
+        case 'NextTrack': return music.next()
+        case 'PreviousTrack': return music.previous()
+        case 'Rewind': return music.seekBy(-10)
+        case 'FastForward': return music.seekBy(30)
+      }
+      return
+    }
     switch (request.Command) {
       case 'Pause': return controller.pause()
       case 'Unpause': return controller.play()
+      // The usual play/pause button of remote controls (Lumio's remote bar sends it too).
+      case 'PlayPause': return controller.isPaused() ? controller.play() : controller.pause()
       case 'Stop': return controller.stop()
       case 'Seek': return void controller.seekToTicks(request.SeekPositionTicks ?? 0)
       case 'NextTrack': return controller.next()
@@ -283,24 +303,37 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       case 'DisplayMessage':
         toast(args.Header ?? messagesFor(remoteMessages).message, { description: args.Text })
         break
-      case 'SetVolume':
-        player.current?.setVolume(Math.min(Math.max(Number(args.Volume ?? 100) / 100, 0), 1))
+      case 'SetVolume': {
+        const volume = Math.min(Math.max(Number(args.Volume ?? 100) / 100, 0), 1)
+        if (player.current) player.current.setVolume(volume)
+        else music.setVolume(volume)
         break
+      }
       case 'Mute':
-        player.current?.setMuted(true)
-        break
       case 'Unmute':
-        player.current?.setMuted(false)
-        break
       case 'ToggleMute':
-        player.current?.setMuted('toggle')
+        if (player.current) player.current.setMuted(command.Name === 'Mute' ? true : command.Name === 'Unmute' ? false : 'toggle')
+        else if (command.Name === 'ToggleMute' || (command.Name === 'Mute') !== music.isMuted()) music.toggleMute()
         break
     }
   })
 
-  const handlePlay = useEffectEvent((request: PlayRequest) => {
+  const handlePlay = useEffectEvent(async (request: PlayRequest) => {
     const itemId = request.ItemIds?.[0]
     if (!itemId) return
+    // Music (and audiobooks) play in Listen's player, with the whole list sent and its queue commands.
+    if (api && session) {
+      const ids = request.ItemIds ?? []
+      const found = (await getLibraryApi(api).getItems({ userId: session.userId, ids }).catch(() => null))?.data.Items ?? []
+      const byId = new Map(found.map((item) => [item.Id, item]))
+      const items = ids.map((id) => byId.get(id)).filter((item) => !!item)
+      if (items.length && items.every((item) => item.MediaType === 'Audio')) {
+        if (request.PlayCommand === 'PlayNext') return music.playNext(items)
+        if (request.PlayCommand === 'PlayLast') return music.addToQueue(items)
+        const start = request.StartIndex ?? 0
+        return music.playHere(items, start, request.StartPositionTicks ? ticksToSeconds(request.StartPositionTicks) : undefined)
+      }
+    }
     if (request.PlayCommand && request.PlayCommand !== 'PlayNow') {
       const t = messagesFor(remoteMessages)
       toast(t.queueUnsupported, { description: t.queueUnsupportedHint })
@@ -544,7 +577,8 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
     <RemoteContext value={value}>
       {children}
       {/* Always rendered so it can animate out; it shows nothing without a target. */}
-      {session && <RemoteBar target={target} onDisconnect={() => setTarget(null)} />}
+      {/* Listen's own player bar turns into the remote control instead (see RemotePlayerBar). */}
+      {session && <RemoteBar target={inListen ? null : target} onDisconnect={() => setTarget(null)} />}
     </RemoteContext>
   )
 }

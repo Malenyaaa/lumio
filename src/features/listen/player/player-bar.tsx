@@ -40,9 +40,18 @@ import { toggleListenPanel, useListenPanel, type ListenPanel } from './panel'
 import { playCircle } from '../play-circle'
 import { endTrackDrag, startTrackDrag, useTrackDrop } from '../track-drag'
 import { TrackContextMenu } from '../track-menu'
+import { useRemote } from '@/features/remote/remote-provider'
+import { RemotePlayerBar } from './remote-player-bar'
 
 /** Listen's player bar along the bottom: the track, the transport with its progress, and queue, lyrics and volume. */
 export function PlayerBar() {
+  const remote = useRemote()
+  // Controlling another device: the whole bar becomes its remote control.
+  if (remote.target) return <RemotePlayerBar target={remote.target} onDisconnect={() => remote.setTarget(null)} />
+  return <LocalPlayerBar />
+}
+
+function LocalPlayerBar() {
   const t = useMessages(playerBarMessages)
   const state = useMusic()
   const track = currentTrack(state)

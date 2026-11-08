@@ -664,6 +664,31 @@ export const music = {
   pause() {
     audio?.pause()
   },
+  /** Goes on if paused (a remote "unpause"). */
+  resume() {
+    if (state.index >= 0 && !state.playing) music.toggle()
+  },
+  /** Jumps by some seconds (a remote's rewind / fast forward). */
+  seekBy(seconds: number) {
+    music.seek((pendingStart ?? audio?.currentTime ?? 0) + seconds)
+  },
+  isMuted() {
+    return state.muted
+  },
+  /** Whether music is loaded here (another device may steer it then). */
+  isLoaded() {
+    return state.index >= 0
+  },
+  /** Starts tracks asked for by another device: here, never forwarded to a device this one controls. */
+  playHere(items: BaseItemDto[], startIndex: number, startAt?: number) {
+    const sink = remoteSink
+    remoteSink = null
+    try {
+      music.play(items, startIndex, { startAt })
+    } finally {
+      remoteSink = sink
+    }
+  },
   next() {
     if (state.index < state.queue.length - 1) void go(state.index + 1)
     else if (state.repeat === 'all' && state.queue.length) void go(0)

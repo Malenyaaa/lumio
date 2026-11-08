@@ -3,7 +3,9 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { useAppMode } from '@/lib/app-mode'
 import { useMessages } from '@/lib/i18n'
+import { cn } from '@/lib/utils'
 import { browserName } from '@/lib/jellyfin'
 import { DeviceList } from './device-list'
 import { deviceMessages } from './messages'
@@ -13,13 +15,25 @@ import { useRemote } from './remote-provider'
 export function DeviceMenu() {
   const t = useMessages(deviceMessages)
   const remote = useRemote()
+  const listen = useAppMode() === 'listen'
   const [open, setOpen] = useState(false)
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger render={<Button variant="ghost" size="icon" aria-label={remote.target ? t.playOnDevice(remote.target.name) : t.playOn} title={t.playOn} className="relative" />}>
+      {/* Connected to a device: the button says which, in the app's accent, so it is clear at a glance. */}
+      <PopoverTrigger
+        render={
+          <Button
+            variant="ghost"
+            size={remote.target ? 'sm' : 'icon'}
+            aria-label={remote.target ? t.playOnDevice(remote.target.name) : t.playOn}
+            title={remote.target ? t.playOnDevice(remote.target.name) : t.playOn}
+            className={cn('relative', remote.target && (listen ? 'text-listen hover:text-listen' : 'text-primary hover:text-primary'))}
+          />
+        }
+      >
         <IconCast />
-        {remote.target && <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary" />}
+        {remote.target && <span className="hidden max-w-32 truncate text-xs font-semibold sm:inline">{remote.target.name}</span>}
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-2">
         <p className="px-2 pb-1 pt-1 text-sm font-medium">{t.playOn}</p>
