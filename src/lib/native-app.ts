@@ -1,3 +1,5 @@
+import { inCapacitor, minimizeCapacitorApp, setCapacitorFullscreen } from '@/lib/capacitor'
+
 /**
  * Jellyfin's official Android app, which shows the server's web client (here Lumio) in a WebView. It adds
  * `window.NativeInterface` before the page loads; its own screens (app settings, server and account selection), the
@@ -27,10 +29,21 @@ export const openAppSettings = () => native()?.openClientSettings()
 
 export const openServerSelection = () => native()?.openServerSelection()
 
-/** Lets the app hide the system bars and turn to landscape (the video player), or undo that. */
-export const setAppFullscreen = (on: boolean) => (on ? native()?.enableFullscreen() : native()?.disableFullscreen())
+/** Inside an app (Jellyfin's or Lumio's own Android app) rather than a browser: no fullscreen button, no install hint. */
+export const inNativeApp = () => inJellyfinApp() || inCapacitor()
 
-export const exitApp = () => native()?.exitApp()
+/** Lets the app hide the system bars and turn to landscape (the video player), or undo that. */
+export function setAppFullscreen(on: boolean) {
+  if (inCapacitor()) return void setCapacitorFullscreen(on)
+  if (on) native()?.enableFullscreen()
+  else native()?.disableFullscreen()
+}
+
+/** Leaving from the start page: Jellyfin's app goes to the background while music plays (else closes), Lumio's always. */
+export function exitApp() {
+  if (inCapacitor()) return minimizeCapacitorApp()
+  native()?.exitApp()
+}
 
 /** What the app's media notification shows; times in milliseconds. */
 export interface AppMediaSession {

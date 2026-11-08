@@ -59,6 +59,9 @@ export const controlsMessages = defineMessages({
     gamepadLabel: 'Gamepad aktivieren',
     gamepadHint: 'Auf Eingaben verbundener Controller hören. Das kommt mit dem TV-Modus und ist bis dahin nicht verfügbar.',
     notAvailable: 'Noch nicht verfügbar',
+    app: 'App',
+    autoPipLabel: 'Bild im Bild beim Verlassen',
+    autoPipHint: 'Läuft ein Video und du wechselst zu einer anderen App, spielt es in einem kleinen Fenster weiter.',
   },
   en: {
     title: 'Controls',
@@ -88,6 +91,9 @@ export const controlsMessages = defineMessages({
     gamepadLabel: 'Enable gamepad',
     gamepadHint: 'Listen for input from connected controllers. This arrives with the TV mode and is not available until then.',
     notAvailable: 'Not available yet',
+    app: 'App',
+    autoPipLabel: 'Picture in picture when leaving',
+    autoPipHint: 'When you switch to another app while a video plays, it keeps playing in a small window.',
   },
 })
 

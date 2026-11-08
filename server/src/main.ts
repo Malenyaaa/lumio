@@ -18,7 +18,8 @@ import { DEFAULT_PRIVACY, Store, type Activity, type Person, type Privacy } from
  * Jellyfin server (and caches for a few minutes). Live updates go out as server-sent events.
  *
  * Settings (environment): JELLYFIN_URL (required), PORT (8097), DATA_DIR (./data), WEB_DIR (the built app, ../dist),
- * ALLOWED_ORIGINS (comma-separated; only needed when the app runs elsewhere, e.g. the Vite dev server),
+ * ALLOWED_ORIGINS (comma-separated; only needed when the app runs elsewhere, e.g. the Vite dev server; Lumio's own
+ * Android app is always allowed),
  * LASTFM_API_KEY, TICKETMASTER_API_KEY and TMDB_API_KEY (optional: the keys for those services, which the app then asks
  * through this server; an app built with keys of its own can use those instead), MUSICBRAINZ_CONTACT (optional;
  * how MusicBrainz can reach the operator), PROXY_JELLYFIN (true: Lumio is the public face and passes everything of
@@ -41,7 +42,9 @@ const SSO_PROVIDERS = (process.env.SSO_PROVIDERS ?? '')
   .filter((provider) => /^[\w.-]+$/.test(provider.id))
 const PORT = Number(process.env.PORT ?? 8097)
 const DATA_DIR = process.env.DATA_DIR ?? './data'
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '').split(',').map((origin) => origin.trim()).filter(Boolean)
+/** Lumio's own apps, which carry the pages themselves: Android (Capacitor) is https://localhost. */
+const APP_ORIGINS = ['https://localhost']
+const ALLOWED_ORIGINS = [...APP_ORIGINS, ...(process.env.ALLOWED_ORIGINS ?? '').split(',').map((origin) => origin.trim()).filter(Boolean)]
 const WEB_DIR = resolve(process.env.WEB_DIR ?? join(import.meta.dirname, '../../dist'))
 /** A token is checked with Jellyfin again after this long. */
 const TOKEN_TTL_MS = 5 * 60_000

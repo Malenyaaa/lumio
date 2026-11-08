@@ -1,0 +1,84 @@
+# Builds Lumio's Android app and attaches it to the GitHub Release of the tag (v1.2.3 → lumio-1.2.3.apk). The APK goes
+# straight onto the Release: no workflow artifacts (their storage is shared across all repositories and tight).
+#
+# Signing: the repository secrets ANDROID_KEYSTORE_BASE64 (the keystore, base64), ANDROID_KEYSTORE_PASSWORD,
+# ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD. Keep a copy of the keystore outside GitHub: an app signed with another key
+# can't update an installed one (users would have to uninstall, losing their downloads). Without the secrets the run
+# fails rather than publishing an APK nobody could update.
+name: Android
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # Gradle's downloads and build cache live in the Actions cache (not artifact storage).
+      - uses: gradle/actions/setup-gradle@v4
+
+      - run: pnpm install --frozen-lockfile
+
+      # The pages for the app (.env.android: they carry themselves and ask for the server), copied into android/.
+      - run: pnpm build:android
+
+      - name: Version
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          [ "$GITHUB_REF_TYPE" = tag ] || version="0.0.0-${GITHUB_SHA::7}"
+          echo "name=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then echo "::error::ANDROID_KEYSTORE_BASE64 is not set"; exit 1; fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/lumio.jks"
+
+      - name: Build
+        working-directory: android
+        env:
+          LUMIO_VERSION: ${{ steps.version.outputs.name }}
+          LUMIO_VERSION_CODE: ${{ github.run_number }}
+          LUMIO_KEYSTORE: ${{ runner.temp }}/lumio.jks
+          LUMIO_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          LUMIO_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          LUMIO_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          ./gradlew assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/lumio-${LUMIO_VERSION}.apk"
+
+      - name: Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APK: ${{ runner.temp }}/lumio-${{ steps.version.outputs.name }}.apk
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag
+          gh release upload "$GITHUB_REF_NAME" "$APK" --clobber

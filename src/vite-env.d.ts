@@ -11,6 +11,8 @@ interface ImportMetaEnv {
   readonly VITE_LASTFM_API_KEY?: string
   readonly VITE_TICKETMASTER_API_KEY?: string
   readonly VITE_SOCIAL_URL?: string
+  /** Set for the apps (Android), which carry the built pages themselves: see lib/platform. */
+  readonly VITE_BUNDLED?: string
 }
 
 interface ImportMeta {

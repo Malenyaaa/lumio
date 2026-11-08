@@ -39,7 +39,8 @@ import { forgetVideo, isVideoCached, isVideoPinned, storedAudio, storedQuality, 
 import { useOffline } from '@/lib/network'
 import { useBackLayer } from '@/lib/back'
 import { useTouch } from '@/lib/use-media-query'
-import { inJellyfinApp, setAppFullscreen } from '@/lib/native-app'
+import { inNativeApp, setAppFullscreen } from '@/lib/native-app'
+import { inCapacitor, onPipEvents, setAutoPip } from '@/lib/capacitor'
 import { startAfterIntro, useMediaSegments } from './segments'
 import { fitLabels } from './labels'
 import { SettingsPanel } from './settings-panel'
@@ -515,9 +516,9 @@ function Player({ id }: { id: string }) {
   useEffect(() => {
     if (!fullscreen) (window.screen.orientation as ScreenOrientation & { unlock?: () => void } | undefined)?.unlock?.()
   }, [fullscreen])
-  // Inside Jellyfin's Android app the player is always fullscreen (no system bars, turned to landscape); there is no
-  // fullscreen to toggle.
-  const inApp = inJellyfinApp()
+  // Inside an app (Jellyfin's or Lumio's) the player is always fullscreen (no system bars, turned to landscape); there
+  // is no fullscreen to toggle.
+  const inApp = inNativeApp()
   useEffect(() => {
     if (!inApp) return
     setAppFullscreen(true)
@@ -541,6 +542,29 @@ function Player({ id }: { id: string }) {
       if (document.pictureInPictureElement === el) void document.exitPictureInPicture().catch(() => undefined)
     }
   }, [pipSupported])
+  // Lumio's Android app: leaving it while the video plays shrinks the whole app into a floating window (Android's own
+  // picture in picture; the setting can turn it off). In there the player shows only the picture.
+  const [appPip, setAppPip] = useState(false)
+  useEffect(() => {
+    const el = video.current
+    if (!inCapacitor() || isAudio) return
+    setAutoPip(settings.autoPip && !state.paused, el?.videoWidth ?? 16, el?.videoHeight ?? 9, !state.paused)
+  }, [settings.autoPip, state.paused, isAudio, data])
+  useEffect(() => () => setAutoPip(false, 0, 0, false), [])
+  const pipActions = useRef({ togglePlay, seekBy })
+  useEffect(() => {
+    pipActions.current = { togglePlay, seekBy }
+  })
+  useEffect(() => {
+    if (!inCapacitor()) return
+    return onPipEvents(setAppPip, (action) => {
+      if (action === 'playpause') pipActions.current.togglePlay()
+      else if (action === 'back') pipActions.current.seekBy(-settings.skipBackSeconds)
+      else if (action === 'forward') pipActions.current.seekBy(settings.skipForwardSeconds)
+      // The window was closed: the video stops rather than playing on unseen.
+      else if (action === 'close') video.current?.pause()
+    })
+  }, [settings.skipBackSeconds, settings.skipForwardSeconds])
   const togglePip = useCallback(() => {
     const el = video.current
     if (!el) return
@@ -929,7 +953,7 @@ function Player({ id }: { id: string }) {
         </div>
       )}
 
-      {!isAudio && <PauseSpotlight item={item.data} visible={spotlightVisible} />}
+      {!isAudio && <PauseSpotlight item={item.data} visible={spotlightVisible && !appPip} />}
 
       {activeSegment && segmentAction === 'AskToSkip' && (
         <Button
@@ -959,7 +983,7 @@ function Player({ id }: { id: string }) {
         />
       )}
 
-      <div className={cn('transition-opacity duration-300', !controlsVisible && 'pointer-events-none opacity-0')}>
+      <div className={cn('transition-opacity duration-300', (!controlsVisible || appPip) && 'pointer-events-none opacity-0')}>
         <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 bg-linear-to-b from-black/70 to-transparent pt-[max(1rem,var(--safe-top))] pr-[max(1rem,var(--safe-right))] pb-4 pl-[max(1rem,var(--safe-left))] text-white">
           <Button variant="ghost" size="icon" aria-label={t.back} onClick={goBack}>
             <IconArrowLeft />

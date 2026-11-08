@@ -1,3 +1,4 @@
+import { inCapacitor } from '@/lib/capacitor'
 import { useMessages } from '@/lib/i18n'
 import { Row, Section, SelectField, SettingsPage, SwitchField } from './fields'
 import { useLocalSettings } from './local-settings'
@@ -72,6 +73,13 @@ export function ControlsPage() {
           onChange={(value) => update({ pauseSpotlightSeconds: value })}
         />
       </Section>
+
+      {/* Only Lumio's Android app can shrink a video into a floating window on its own. */}
+      {inCapacitor() && (
+        <Section title={t.app} scope="device">
+          <SwitchField id="auto-pip" label={t.autoPipLabel} hint={t.autoPipHint} checked={settings.autoPip} onChange={(checked) => update({ autoPip: checked })} />
+        </Section>
+      )}
 
       <Section title={t.controller} scope="device">
         <Row label={t.gamepadLabel} hint={t.gamepadHint}>

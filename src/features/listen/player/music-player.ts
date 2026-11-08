@@ -13,6 +13,8 @@ import { recordRecent } from '../recent'
 import { adoptIntoCache, audioCacheAvailable, cachedAudioUrl, isCached, prefetchAudio, recordCachedPlay } from './audio-cache'
 import { isOffline } from '@/lib/network'
 import { inJellyfinApp, setAppPlaybackManager, updateAppMediaSession } from '@/lib/native-app'
+import { inCapacitor } from '@/lib/capacitor'
+import { MediaSession as NativeMediaSession } from '@capgo/capacitor-media-session'
 import { flushPlays, logBuffering, logPlay, type EndReason, type PlayContext, type StartReason } from './play-log'
 import { downloadedAudioUrl, downloadId, isDownloaded, setDownloadQuality, setDownloadSource, setReleaseHandler } from './downloads'
 import { DIRECT_FORMATS } from './quality'
@@ -924,27 +926,33 @@ export function setArtworkResolver(resolve: typeof artwork) {
 
 function updateMediaSession() {
   updateAppSession()
-  if (!('mediaSession' in navigator)) return
   const item = currentTrack()
   if (!item) return
   const cover = artwork(item)
-  navigator.mediaSession.metadata = new MediaMetadata({
+  const metadata = {
     title: item.Name ?? '',
     artist: (item.Artists ?? []).join(', ') || item.AlbumArtist || '',
     album: item.Album ?? '',
     artwork: cover ? [{ src: cover, sizes: '512x512' }] : [],
-  })
+  }
+  // Lumio's Android app: its WebView has no media session of its own; the plugin's keeps the music going in the
+  // background and shows the notification.
+  if (inCapacitor()) return void NativeMediaSession.setMetadata(metadata).catch(() => undefined)
+  if ('mediaSession' in navigator) navigator.mediaSession.metadata = new MediaMetadata(metadata)
 }
 
-if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
-  const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
-    ['play', () => music.toggle()],
-    ['pause', () => music.pause()],
-    ['nexttrack', () => music.next()],
-    ['previoustrack', () => music.previous()],
-    ['seekto', (details) => details.seekTime !== undefined && music.seek(details.seekTime)],
-  ]
-  for (const [action, handler] of handlers) {
+const SESSION_HANDLERS: Array<[MediaSessionAction, (details: { seekTime?: number | null }) => void]> = [
+  ['play', () => music.toggle()],
+  ['pause', () => music.pause()],
+  ['nexttrack', () => music.next()],
+  ['previoustrack', () => music.previous()],
+  ['seekto', (details) => details.seekTime != null && music.seek(details.seekTime)],
+]
+
+if (typeof navigator !== 'undefined' && inCapacitor()) {
+  for (const [action, handler] of SESSION_HANDLERS) void NativeMediaSession.setActionHandler({ action: action as 'play' }, handler).catch(() => undefined)
+} else if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+  for (const [action, handler] of SESSION_HANDLERS) {
     try {
       navigator.mediaSession.setActionHandler(action, handler)
     } catch {
@@ -958,6 +966,13 @@ if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
  * the background) goes through the app. It sends the notification's buttons back as jellyfin-web commands.
  */
 function updateAppSession() {
+  if (inCapacitor() && audio) {
+    const playing = !audio.paused
+    void NativeMediaSession.setPlaybackState({ playbackState: currentTrack() ? (playing ? 'playing' : 'paused') : 'none' }).catch(() => undefined)
+    const duration = durationOf()
+    if (duration) void NativeMediaSession.setPositionState({ duration, position: Math.min(pendingStart ?? audio.currentTime, duration), playbackRate: 1 }).catch(() => undefined)
+    return
+  }
   if (!inJellyfinApp() || !audio) return
   const item = currentTrack()
   if (!item?.Id) return updateAppMediaSession(null)

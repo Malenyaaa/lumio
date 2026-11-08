@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { modeHome, modeOf } from '@/lib/app-mode'
+import { inCapacitor, onCapacitorBack } from '@/lib/capacitor'
 import { exitApp, inJellyfinApp, setAppBackHandler } from '@/lib/native-app'
 
 /**
@@ -19,11 +20,11 @@ interface CloseWatcherLike {
 
 /**
  * In the browser (and an installed web app), Chromium's CloseWatcher gets Android's back gesture before it leaves the
- * page. Jellyfin's app handles its back button itself (`goBack`), so there it would only fire twice.
+ * page. The apps (Jellyfin's, Lumio's) hand their back button to `goBack` themselves, so there it would only fire twice.
  */
 function watchClose(close: Closer): CloseWatcherLike | null {
   const Watcher = (window as { CloseWatcher?: new () => CloseWatcherLike }).CloseWatcher
-  if (!Watcher || inJellyfinApp()) return null
+  if (!Watcher || inJellyfinApp() || inCapacitor()) return null
   try {
     const watcher = new Watcher()
     watcher.onclose = close
@@ -82,3 +83,5 @@ export function goBack() {
 }
 
 if (inJellyfinApp()) setAppBackHandler(goBack)
+// Lumio's own app: the device's back button (its default would leave the app at once).
+if (inCapacitor()) onCapacitorBack(goBack)

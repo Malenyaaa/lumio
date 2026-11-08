@@ -77,6 +77,8 @@ export interface LocalSettings {
   controlsHideSeconds: number
   /** Show the title and description overlay on a paused video (0 = never). */
   pauseSpotlightSeconds: number
+  /** Lumio's Android app: leaving it while a video plays shrinks the video into a floating window. */
+  autoPip: boolean
   /** Animate page changes. */
   pageAnimations: boolean
   /** Show the short notices in a corner ("Saved", "Added to queue"); off hides them all. */
@@ -190,6 +192,7 @@ export const DEFAULT_SETTINGS: LocalSettings = {
   hoverDelayMs: 550,
   controlsHideSeconds: 3,
   pauseSpotlightSeconds: 10,
+  autoPip: true,
   pageAnimations: true,
   toasts: true,
   homeLayout: 'personal',

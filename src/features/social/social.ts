@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiBase } from '@/lib/platform'
 import { useAuthedSession } from '@/features/auth/session'
 
 /**
@@ -49,16 +50,14 @@ export interface FriendActivity {
 
 /**
  * The Lumio server's API. Lumio always runs with its server, which also serves the app, so this is the same origin's
- * /api (in development Vite passes it on to the local server). VITE_SOCIAL_URL overrides it for setups that serve the
- * app from elsewhere.
+ * /api (in development Vite passes it on to the local server); the apps use the server signed in to (lib/platform).
  */
-const API_BASE = (import.meta.env.VITE_SOCIAL_URL?.trim() || '/api').replace(/\/+$/, '')
 
 /** A picture from another host, relayed (and kept) by the Lumio server: cached like the app's own, drawable on canvases. */
-export const relayedImage = (url: string | undefined) => (url ? `${API_BASE}/image?url=${encodeURIComponent(url)}` : undefined)
+export const relayedImage = (url: string | undefined) => (url ? `${apiBase()}/image?url=${encodeURIComponent(url)}` : undefined)
 
 export function useSocialUrl(): string {
-  return API_BASE
+  return apiBase()
 }
 
 // ---- the connection, also used outside React (the players report what plays) ----
