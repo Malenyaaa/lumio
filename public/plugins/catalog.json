@@ -1,0 +1,12 @@
+[
+  {
+    "id": "playback-reporting",
+    "name": "Playback Reporting",
+    "description": {
+      "de": "Wiedergabe-Statistiken als Admin-Seite in Lumio: wer was wann und womit schaut oder hört, Verläufe pro Tag, Tageszeiten, Clients und Geräte.",
+      "en": "Playback statistics as an admin page in Lumio: who watches or listens to what, when and with what; activity per day, times of day, clients and devices."
+    },
+    "url": "/plugins/playback-reporting.js",
+    "requires": "Playback Reporting"
+  }
+]

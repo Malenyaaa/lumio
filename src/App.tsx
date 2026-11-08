@@ -30,6 +30,7 @@ import { PersonPage } from '@/features/library/person-page'
 import { WatchlistPage } from '@/features/library/watchlist-page'
 import { DisplayPage } from '@/features/admin/display-page'
 import { MetadataPage } from '@/features/admin/metadata-page'
+import { PluginSettingsPage } from '@/features/admin/plugin-settings-page'
 import { BrandingEffects } from '@/features/admin/branding'
 import { BrandingPage } from '@/features/admin/branding-page'
 import { PluginRoutePage } from '@/features/admin/plugin-route-page'
@@ -85,6 +86,7 @@ function settingsRoutes() {
       <Route path="branding" element={<BrandingPage />} />
       <Route path="plugins" element={<PluginsPage />} />
       <Route path="metadata" element={<MetadataPage />} />
+      <Route path="plugin/:id" element={<PluginSettingsPage />} />
     </Route>
   )
 }

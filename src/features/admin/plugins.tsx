@@ -42,6 +42,15 @@ export interface PluginMenuItem {
   onClick?: () => void
 }
 
+/** A page of the settings, added by a plugin (served at /settings/plugin/<id>, listed in the settings' navigation). */
+export interface PluginSettingsPage {
+  id: string
+  label: string
+  /** Listed under "Administration", for administrators only. */
+  admin?: boolean
+  render: SlotRenderer
+}
+
 export interface PluginRoute {
   /** Served at /plugin/<path>. */
   path: string
@@ -71,6 +80,8 @@ export interface LumioPluginApi {
   addMenuItem(item: PluginMenuItem): Dispose
   addSlot(slot: SlotName, render: SlotRenderer): Dispose
   addRoute(route: PluginRoute): Dispose
+  /** A page of the settings (e.g. an admin tool), listed in their navigation. */
+  addSettingsPage(page: PluginSettingsPage): Dispose
   hide(target: HideTarget): Dispose
   /** Changes data before it is shown, e.g. 'homeRows' (the rows of the home page). */
   transform<T>(name: string, fn: (value: T, context?: Record<string, unknown>) => T): Dispose
@@ -85,12 +96,13 @@ interface Registry {
   menuItems: PluginMenuItem[]
   slots: Array<{ key: number; slot: SlotName; render: SlotRenderer }>
   routes: PluginRoute[]
+  settingsPages: PluginSettingsPage[]
   hidden: string[]
   /** Bumped when transforms change, so users of them re-render. */
   transformVersion: number
 }
 
-let registry: Registry = { navLinks: [], menuItems: [], slots: [], routes: [], hidden: [], transformVersion: 0 }
+let registry: Registry = { navLinks: [], menuItems: [], slots: [], routes: [], settingsPages: [], hidden: [], transformVersion: 0 }
 const listeners = new Set<() => void>()
 const transforms = new Map<string, Array<(value: unknown, context?: Record<string, unknown>) => unknown>>()
 const eventHandlers = new Map<PluginEvent, Set<(payload: unknown) => void>>()
@@ -190,6 +202,10 @@ function createApi(disposers: Dispose[]): LumioPluginApi {
       const entry = { key: nextKey++, slot, render }
       update((current) => ({ ...current, slots: [...current.slots, entry] }))
       return track(() => update((current) => ({ ...current, slots: remove(current.slots, entry) })))
+    },
+    addSettingsPage(page) {
+      update((current) => ({ ...current, settingsPages: [...current.settingsPages, page] }))
+      return track(() => update((current) => ({ ...current, settingsPages: remove(current.settingsPages, page) })))
     },
     addRoute(route) {
       const entry = { ...route, path: route.path.replace(/^\/+|\/+$/g, '') }

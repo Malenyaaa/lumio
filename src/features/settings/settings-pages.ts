@@ -1,7 +1,8 @@
-import { IconBadgeCc, IconCards, IconDownload, IconHome, IconKeyboard, IconLayoutDashboard, IconLock, IconPalette, IconPlayerPlay, IconPuzzle, IconTags, IconUserCircle } from '@tabler/icons-react'
+import { IconBadgeCc, IconCards, IconDownload, IconPlug, IconHome, IconKeyboard, IconLayoutDashboard, IconLock, IconPalette, IconPlayerPlay, IconPuzzle, IconTags, IconUserCircle } from '@tabler/icons-react'
 import { inMode, useAppMode } from '@/lib/app-mode'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import { useUserConfiguration } from './use-user-configuration'
+import { usePluginRegistry } from '@/features/admin/plugins'
 
 const labels = defineMessages({
   de: {
@@ -56,10 +57,16 @@ export function useSettingsPages() {
   const isAdmin = !!useUserConfiguration().data?.Policy?.IsAdministrator
   // Settings open inside whichever app is in use (/settings in Watch, /listen/settings in Listen).
   const mode = useAppMode()
-  return PAGES.filter((page) => !('admin' in page) || isAdmin).map((page) => ({
-    ...page,
+  const builtIn = PAGES.filter((page) => !('admin' in page) || isAdmin).map((page) => ({
+    key: page.key as string,
+    icon: page.icon as typeof IconPlug,
     to: inMode(mode, page.to),
     admin: 'admin' in page,
     label: names[page.key],
   }))
+  // Pages plugins add (admin tools listed under "Administration").
+  const fromPlugins = usePluginRegistry()
+    .settingsPages.filter((page) => !page.admin || isAdmin)
+    .map((page) => ({ key: `plugin:${page.id}`, icon: IconPlug, to: inMode(mode, `/settings/plugin/${page.id}`), admin: !!page.admin, label: page.label }))
+  return [...builtIn, ...fromPlugins]
 }

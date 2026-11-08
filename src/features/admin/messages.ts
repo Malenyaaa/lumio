@@ -76,6 +76,11 @@ export const adminMessages = defineMessages({
     pluginsWarning:
       'Plugins sind JavaScript-Module mit vollem Zugriff auf Lumio und die Sitzung jedes Nutzers. Füge nur Plugins aus vertrauenswürdigen Quellen hinzu.',
     installed: 'Installiert',
+    available: 'Verfügbare Plugins',
+    availableHint: 'Plugins, die mit Lumio kommen. Sie werden mit jedem Lumio-Update mit aktualisiert.',
+    addFromCatalog: 'Hinzufügen',
+    added: 'Hinzugefügt',
+    requiresJellyfin: (name: string) => `Braucht das Jellyfin-Plugin „${name}“.`,
     noPlugins: 'Noch keine Plugins.',
     addPlugin: 'Plugin hinzufügen',
     pluginName: 'Name',
@@ -172,6 +177,11 @@ export const adminMessages = defineMessages({
     pluginsWarning:
       "Plugins are JavaScript modules with full access to Lumio and every user's session. Only add plugins from sources you trust.",
     installed: 'Installed',
+    available: 'Available plugins',
+    availableHint: 'Plugins that come with Lumio. They are updated with every Lumio update.',
+    addFromCatalog: 'Add',
+    added: 'Added',
+    requiresJellyfin: (name: string) => `Needs the Jellyfin plugin "${name}".`,
     noPlugins: 'No plugins yet.',
     addPlugin: 'Add plugin',
     pluginName: 'Name',

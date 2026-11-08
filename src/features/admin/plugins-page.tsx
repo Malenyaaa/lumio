@@ -1,9 +1,10 @@
-import { IconAlertTriangle, IconCode, IconLink, IconTrash } from '@tabler/icons-react'
+import { IconAlertTriangle, IconCode, IconLink, IconPuzzle, IconTrash } from '@tabler/icons-react'
+import { useQuery } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Section, SettingsPage } from '@/features/settings/fields'
-import { useMessages } from '@/lib/i18n'
+import { useLocale, useMessages } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { useLumioConfig } from './branding'
 import type { PluginEntry } from './lumio-config'
@@ -64,6 +65,8 @@ export function PluginsPage() {
         ))}
       </Section>
 
+      <Catalog installed={plugins} pending={save.isPending} onAdd={(plugin) => change((list) => [...list, plugin])} />
+
       <AddPlugin pending={save.isPending} onAdd={(plugin) => change((list) => [...list, plugin])} />
 
       <Section title={t.apiTitle}>
@@ -91,6 +94,50 @@ const EXAMPLE = `export default function setup(lumio) {
   lumio.transform('homeRows', (rows) => rows.filter((row) => row.id !== 'latest-music'))
   lumio.on('playback:start', ({ itemId }) => console.log('playing', itemId))
 }`
+
+interface CatalogEntry {
+  id: string
+  name: string
+  description: Partial<Record<'de' | 'en', string>>
+  url: string
+  /** A Jellyfin plugin it needs, by name. */
+  requires?: string
+}
+
+/** The plugins that come with Lumio (public/plugins), one click to add; served with the app, so they update with it. */
+function Catalog({ installed, pending, onAdd }: { installed: PluginEntry[]; pending: boolean; onAdd: (plugin: PluginEntry) => void }) {
+  const t = useMessages(adminMessages)
+  const locale = useLocale()
+  const catalog = useQuery({
+    queryKey: ['plugin-catalog'],
+    staleTime: 60 * 60_000,
+    queryFn: async () => {
+      const response = await fetch(`${import.meta.env.BASE_URL}plugins/catalog.json`)
+      return response.ok ? ((await response.json()) as CatalogEntry[]) : []
+    },
+  })
+  if (!catalog.data?.length) return null
+  return (
+    <Section title={t.available} description={t.availableHint}>
+      {catalog.data.map((entry) => {
+        const added = installed.some((plugin) => plugin.id === entry.id)
+        return (
+          <div key={entry.id} className="flex items-center gap-3 p-4">
+            <IconPuzzle className="size-4 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">{entry.name}</p>
+              <p className="text-xs text-muted-foreground">{entry.description[locale] ?? entry.description.en}</p>
+              {entry.requires && <p className="text-xs text-muted-foreground">{t.requiresJellyfin(entry.requires)}</p>}
+            </div>
+            <Button size="sm" variant={added ? 'ghost' : 'outline'} disabled={pending || added} onClick={() => onAdd({ id: entry.id, name: entry.name, enabled: true, source: { type: 'url', url: entry.url } })}>
+              {added ? t.added : t.addFromCatalog}
+            </Button>
+          </div>
+        )
+      })}
+    </Section>
+  )
+}
 
 function AddPlugin({ pending, onAdd }: { pending: boolean; onAdd: (plugin: PluginEntry) => void }) {
   const t = useMessages(adminMessages)

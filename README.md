@@ -163,6 +163,7 @@ export default function setup(lumio) {
   lumio.addNavLink({ id: 'requests', label: 'Requests', href: 'https://requests.example.com', external: true })
   lumio.addMenuItem({ id: 'help', label: 'Help', href: '/plugin/help' })
   lumio.addRoute({ path: 'help', render: (element) => { element.textContent = 'Help' } })
+  lumio.addSettingsPage({ id: 'stats', label: 'Statistics', admin: true, render: (element) => { element.textContent = '…' } })
   lumio.addSlot('item:bottom', (element, { item }) => { element.textContent = item.Name })
   lumio.hide('header:cast')
   lumio.transform('homeRows', (rows) => rows.filter((row) => row.id !== 'new'))
@@ -175,6 +176,12 @@ export default function setup(lumio) {
   `home:hero`, `home:<row id>`, `item:ratings`, `item:links`.
 - Events: `navigate`, `item`, `playback:start`, `playback:stop`.
 - `lumio.jellyfin` gives the signed-in session (`api`, `serverUrl`, `userId`, `accessToken`, `isAdmin`).
+
+Plugins that come with Lumio live in [`public/plugins/`](public/plugins) and are listed in its `catalog.json`; admins add
+them under Settings → Plugins → Available plugins (they are served with the app, so they update with it):
+
+- **Playback Reporting**: an admin page with the statistics of Jellyfin's Playback Reporting plugin (plays and time,
+  per day, per user, by type, playback method, client and device, times of day).
 
 Branding and plugins are stored in the Jellyfin server's branding configuration (as one comment inside its custom CSS),
 which every client can read (even before signing in) and only admins can write. jellyfin-web only sees a CSS comment.
