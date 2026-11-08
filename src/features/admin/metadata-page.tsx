@@ -1,10 +1,11 @@
-import { IconPlayerPlay, IconPlayerStop, IconSearch } from '@tabler/icons-react'
+import { IconPlayerPlay, IconPlayerStop, IconSearch, IconX } from '@tabler/icons-react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useUserViews } from '@/features/home/queries'
-import { useItem } from '@/features/items/queries'
+import { useItem, useMergedGenres } from '@/features/items/queries'
+import { useArtistDirectory } from '@/features/listen/credits'
 import { Section, SettingsPage, SwitchField } from '@/features/settings/fields'
 import { lumioGet, lumioSend } from '@/features/social/social'
 import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
@@ -19,6 +20,15 @@ const messages = defineMessages({
       'Lumio ergänzt die Bibliothek um Angaben von außen. Was gespielt oder geöffnet wird, schlägt Lumio von selbst nach; hier lässt sich alles auf einmal erledigen. Die Aufgaben laufen auf dem Lumio-Server weiter, auch wenn du die Seite verlässt.',
     adminOnly: 'Nur für Administrator*innen.',
     libraries: 'Bibliotheken',
+    exclusions: 'Ausschließen',
+    exclusionsHint:
+      'Songs dieser Künstler*innen oder Genres schlägt Lumio nie nach, weder in den Aufgaben noch beim Abspielen. Gut für Hörspiele oder Hörbücher in der Musikbibliothek.',
+    excludedArtists: 'Künstler*innen',
+    excludedGenres: 'Genres',
+    addArtist: 'Künstler*in hinzufügen …',
+    addGenre: 'Genre hinzufügen …',
+    removeExclusion: (name: string) => `${name} wieder einbeziehen`,
+    noExclusions: 'Keine',
     librariesHint: 'Welche Bibliotheken die Aufgaben durchgehen. Hörspiele oder Hörbücher etwa lassen sich ausschließen.',
     credits: 'Songinfos und Künstler*innen',
     creditsHint:
@@ -55,6 +65,14 @@ const messages = defineMessages({
       'Lumio adds information from outside to the library. What plays or is opened is looked up on its own; here everything can be done at once. The tasks keep running on the Lumio server when you leave this page.',
     adminOnly: 'Administrators only.',
     libraries: 'Libraries',
+    exclusions: 'Leave out',
+    exclusionsHint: "Lumio never looks up songs by these artists or in these genres, in the tasks or while they play. Handy for audio plays or audiobooks in the music library.",
+    excludedArtists: 'Artists',
+    excludedGenres: 'Genres',
+    addArtist: 'Add artist …',
+    addGenre: 'Add genre …',
+    removeExclusion: (name: string) => `Include ${name} again`,
+    noExclusions: 'None',
     librariesHint: 'Which libraries the tasks go through. Audio plays or audiobooks, say, can be left out.',
     credits: 'Song credits and artists',
     creditsHint:
@@ -120,6 +138,86 @@ type JobName = 'credits' | 'artists'
 /** What the popup shows: a song's metadata, or an artist whose information failed. */
 type Opened = { kind: 'track'; id: string; meta: TrackMetaInfo; error?: string } | { kind: 'artist'; id: string; name: string; error?: string }
 
+/**
+ * A list of names to leave out, as removable chips, with a field that suggests from what the library has (Enter, or
+ * picking a suggestion, adds).
+ */
+function ExclusionPicker({
+  id,
+  label,
+  placeholder,
+  values,
+  options,
+  disabled,
+  onChange,
+}: {
+  id: string
+  label: string
+  placeholder: string
+  values: string[]
+  options: string[]
+  disabled?: boolean
+  onChange: (values: string[]) => void
+}) {
+  const t = useMessages(messages)
+  const [draft, setDraft] = useState('')
+  const add = (value: string) => {
+    const name = options.find((option) => option.toLocaleLowerCase() === value.trim().toLocaleLowerCase()) ?? value.trim()
+    if (name && !values.includes(name)) onChange([...values, name])
+    setDraft('')
+  }
+  return (
+    <div className="space-y-2 p-4">
+      <p className="text-sm font-medium">{label}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {values.length === 0 && <span className="text-sm text-muted-foreground">{t.noExclusions}</span>}
+        {values.map((value) => (
+          <span key={value} className="flex items-center gap-1 rounded-full bg-muted py-1 pl-3 pr-1 text-sm">
+            {value}
+            <button
+              type="button"
+              disabled={disabled}
+              aria-label={t.removeExclusion(value)}
+              title={t.removeExclusion(value)}
+              onClick={() => onChange(values.filter((entry) => entry !== value))}
+              className="grid size-5 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+            >
+              <IconX className="size-3.5" />
+            </button>
+          </span>
+        ))}
+      </div>
+      <Input
+        list={`${id}-options`}
+        value={draft}
+        disabled={disabled}
+        placeholder={placeholder}
+        aria-label={placeholder}
+        onChange={(event) => {
+          const value = event.target.value
+          // Picking a suggestion adds it at once.
+          if (options.includes(value)) add(value)
+          else setDraft(value)
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && draft.trim()) {
+            event.preventDefault()
+            add(draft)
+          }
+        }}
+        className="max-w-sm"
+      />
+      <datalist id={`${id}-options`}>
+        {options
+          .filter((option) => !values.includes(option))
+          .map((option) => (
+            <option key={option} value={option} />
+          ))}
+      </datalist>
+    </div>
+  )
+}
+
 /** The music libraries the tasks can go through (not films or series). */
 const MUSIC_TYPES = new Set(['music', 'audiobooks', 'books', 'musicvideos', 'mixed'])
 
@@ -164,6 +262,7 @@ function JobSection({
   start,
   secondsEach,
   libraries,
+  exclusions,
   onOpen,
 }: {
   name: JobName
@@ -172,6 +271,8 @@ function JobSection({
   start: string
   secondsEach: number
   libraries: string[]
+  /** Artists and genres the task leaves out. */
+  exclusions: { excludeArtists: string[]; excludeGenres: string[] }
   onOpen: (opened: Opened) => void
 }) {
   const t = useMessages(messages)
@@ -181,7 +282,7 @@ function JobSection({
   const control = useMutation({
     mutationFn: async (method: 'POST' | 'DELETE') => {
       // The artist task asks Last.fm with the app's key, unless the server has its own.
-      const body = method === 'POST' ? { libraries, ...(name === 'artists' ? { lastfmKey: import.meta.env.VITE_LASTFM_API_KEY?.trim() } : {}) } : undefined
+      const body = method === 'POST' ? { libraries, ...exclusions, ...(name === 'artists' ? { lastfmKey: import.meta.env.VITE_LASTFM_API_KEY?.trim() } : {}) } : undefined
       const response = await lumioSend(method, `/admin/jobs/${name}`, body)
       if (!response?.ok) throw new Error('Unavailable')
       return (await response.json()) as JobState
@@ -310,6 +411,9 @@ export function MetadataPage() {
   const views = (useUserViews().data ?? []).filter((view) => MUSIC_TYPES.has(view.CollectionType ?? 'mixed'))
   const excluded = config.metadataExcludedLibraries ?? []
   const libraries = views.filter((view) => !excluded.includes(view.Id!)).map((view) => view.Id!)
+  const exclusions = { excludeArtists: config.metadataExcludedArtists ?? [], excludeGenres: config.metadataExcludedGenres ?? [] }
+  const artistNames = [...(useArtistDirectory().data?.values() ?? [])].map((artist) => artist.name).sort((a, b) => a.localeCompare(b))
+  const genreNames = (useMergedGenres(views).data ?? []).map((genre) => genre.Name ?? '').filter(Boolean)
   const [opened, setOpened] = useState<Opened | null>(null)
   const credits = useJob('credits', isAdmin)
   const missing = useQuery({
@@ -355,7 +459,28 @@ export function MetadataPage() {
         ))}
       </Section>
 
-      <JobSection name="credits" title={t.credits} hint={t.creditsHint} start={t.creditsStart} secondsEach={3} libraries={libraries} onOpen={setOpened} />
+      <Section title={t.exclusions} description={t.exclusionsHint}>
+        <ExclusionPicker
+          id="metadata-artists"
+          label={t.excludedArtists}
+          placeholder={t.addArtist}
+          values={exclusions.excludeArtists}
+          options={artistNames}
+          disabled={save.isPending}
+          onChange={(values) => save.mutate((current) => ({ ...current, metadataExcludedArtists: values }))}
+        />
+        <ExclusionPicker
+          id="metadata-genres"
+          label={t.excludedGenres}
+          placeholder={t.addGenre}
+          values={exclusions.excludeGenres}
+          options={genreNames}
+          disabled={save.isPending}
+          onChange={(values) => save.mutate((current) => ({ ...current, metadataExcludedGenres: values }))}
+        />
+      </Section>
+
+      <JobSection name="credits" title={t.credits} hint={t.creditsHint} start={t.creditsStart} secondsEach={3} libraries={libraries} exclusions={exclusions} onOpen={setOpened} />
       {!!missing.data?.length && (
         <Section title={t.missingTitle(missing.data.length)} description={t.missingHint}>
           <div className="max-h-96 divide-y overflow-y-auto">
@@ -365,7 +490,7 @@ export function MetadataPage() {
           </div>
         </Section>
       )}
-      <JobSection name="artists" title={t.artists} hint={t.artistsHint} start={t.artistsStart} secondsEach={5} libraries={libraries} onOpen={setOpened} />
+      <JobSection name="artists" title={t.artists} hint={t.artistsHint} start={t.artistsStart} secondsEach={5} libraries={libraries} exclusions={exclusions} onOpen={setOpened} />
 
       <BrowseSection onOpen={setOpened} />
 

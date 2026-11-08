@@ -612,8 +612,23 @@ async function runJob<T>(job: JobState & { stop?: boolean }, load: () => Promise
   }
 }
 
-type Track = { Id: string; Name?: string; Artists?: string[]; AlbumArtist?: string; Album?: string; AlbumId?: string; RunTimeTicks?: number }
-type Artist = { Id: string; Name?: string; ProviderIds?: Record<string, string> }
+type Track = { Id: string; Name?: string; Artists?: string[]; AlbumArtist?: string; Album?: string; AlbumId?: string; RunTimeTicks?: number; Genres?: string[] }
+type Artist = { Id: string; Name?: string; ProviderIds?: Record<string, string>; Genres?: string[] }
+
+/** What the tasks go through: some libraries (all when none are named), without some artists and genres. */
+interface Scope {
+  libraries?: string[]
+  /** Artist names whose tracks (as artist or album artist) are left out. */
+  artists: string[]
+  genres: string[]
+}
+
+const NO_SCOPE: Scope = { artists: [], genres: [] }
+
+/** Whether a track or artist is left out by the scope's artists or genres. */
+function leftOut(scope: Scope, names: Array<string | undefined>, genres: string[] | undefined) {
+  return names.some((name) => scope.artists.some((excluded) => sameName(excluded, name))) || (genres ?? []).some((genre) => scope.genres.some((excluded) => sameName(excluded, genre)))
+}
 
 const trackMeta = (track: Track): TrackMeta => ({
   title: track.Name!,
@@ -624,13 +639,15 @@ const trackMeta = (track: Track): TrackMeta => ({
 })
 
 /** Looks up the credits of every track that wasn't yet (about three seconds a track, at MusicBrainz's pace). */
-function scanCredits(token: string, userId: string, libraries?: string[]) {
+function scanCredits(token: string, userId: string, scope: Scope = NO_SCOPE) {
   return runJob<Track>(
     jobs.credits,
     async () => {
-      const tracks = await libraryItems<Track>(token, userId, '/Users/{user}/Items', { Recursive: 'true', IncludeItemTypes: 'Audio' }, libraries)
+      const tracks = await libraryItems<Track>(token, userId, '/Users/{user}/Items', { Recursive: 'true', IncludeItemTypes: 'Audio', Fields: 'Genres' }, scope.libraries)
       const known = store.trackCredits(tracks.map((track) => track.Id))
-      return tracks.filter((track) => !known[track.Id] && track.Name && (track.Artists?.[0] ?? track.AlbumArtist))
+      return tracks.filter(
+        (track) => !known[track.Id] && track.Name && (track.Artists?.[0] ?? track.AlbumArtist) && !leftOut(scope, [...(track.Artists ?? []), track.AlbumArtist], track.Genres),
+      )
     },
     async (track) => !!(await creditsFor(track.Id, trackMeta(track))),
     (track) => ({ id: track.Id, title: track.Name ?? '', artist: track.Artists?.[0] ?? track.AlbumArtist ?? '', album: track.Album, albumId: track.AlbumId }),
@@ -697,10 +714,10 @@ async function precacheArtist(artist: Artist, lastfmKey: string | undefined): Pr
 }
 
 /** Fetches every artist's information into the caches (see precacheArtist). */
-function scanArtists(token: string, userId: string, lastfmKey: string | undefined, libraries?: string[]) {
+function scanArtists(token: string, userId: string, lastfmKey: string | undefined, scope: Scope = NO_SCOPE) {
   return runJob<Artist>(
     jobs.artists,
-    () => libraryItems<Artist>(token, userId, '/Artists', { userId, Fields: 'ProviderIds' }, libraries),
+    async () => (await libraryItems<Artist>(token, userId, '/Artists', { userId, Fields: 'ProviderIds,Genres' }, scope.libraries)).filter((artist) => !leftOut(scope, [artist.Name], artist.Genres)),
     async (artist) => {
       const { found, failed } = await precacheArtist(artist, lastfmKey)
       if (failed.length) throw new Error(failed.join(' · '))
@@ -781,11 +798,18 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
     const job = jobs[jobName]
     if (request.method === 'POST' && !job.running) {
       const token = tokenOf(request, url)!
-      // Which libraries to go through (an admin can leave some out, e.g. audio plays); all when none are named.
-      const body = await readJson<{ lastfmKey?: unknown; libraries?: unknown }>(request).catch(() => ({}) as { lastfmKey?: unknown; libraries?: unknown })
-      const libraries = Array.isArray(body.libraries) ? body.libraries.filter((id): id is string => typeof id === 'string' && /^[0-9a-f-]{32,36}$/i.test(id)) : undefined
-      if (jobName === 'credits') void scanCredits(token, me.id, libraries)
-      else void scanArtists(token, me.id, typeof body.lastfmKey === 'string' && /^[0-9a-f]{32}$/i.test(body.lastfmKey) ? body.lastfmKey : undefined, libraries)
+      // What to go through: an admin can leave libraries, artists and genres out (e.g. audio plays).
+      type Body = { lastfmKey?: unknown; libraries?: unknown; excludeArtists?: unknown; excludeGenres?: unknown }
+      const body = await readJson<Body>(request).catch(() => ({}) as Body)
+      const texts = (value: unknown, pattern?: RegExp) =>
+        Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string' && (!pattern || pattern.test(entry))).map((entry) => entry.slice(0, 200)).slice(0, 500) : []
+      const scope: Scope = {
+        libraries: Array.isArray(body.libraries) ? texts(body.libraries, /^[0-9a-f-]{32,36}$/i) : undefined,
+        artists: texts(body.excludeArtists),
+        genres: texts(body.excludeGenres),
+      }
+      if (jobName === 'credits') void scanCredits(token, me.id, scope)
+      else void scanArtists(token, me.id, typeof body.lastfmKey === 'string' && /^[0-9a-f]{32}$/i.test(body.lastfmKey) ? body.lastfmKey : undefined, scope)
     }
     if (request.method === 'DELETE') job.stop = true
     const { stop: _stop, ...state } = job

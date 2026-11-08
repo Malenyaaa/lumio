@@ -7,6 +7,7 @@ import { externalOf } from '@/lib/external-items'
 import { ticksToSeconds } from '@/lib/format'
 import { artistsOf } from '@/lib/item-links'
 import { sameName } from './external'
+import { useLumioConfig } from '@/features/admin/branding'
 
 const HOUR = 60 * 60_000
 
@@ -82,6 +83,12 @@ const isTrack = (track: BaseItemDto | undefined): track is BaseItemDto => !!trac
  */
 export function useTrackCredits(track: BaseItemDto | undefined, lookup = false): TrackCredits | null | undefined {
   const client = useQueryClient()
+  // What an admin left out of the metadata (audio plays, say) isn't looked up while it plays either.
+  const config = useLumioConfig().data
+  const excluded =
+    !!track &&
+    ([...(track.Artists ?? []), track.AlbumArtist].some((name) => config?.metadataExcludedArtists?.some((entry) => sameName(entry, name))) ||
+      (track.Genres ?? []).some((genre) => config?.metadataExcludedGenres?.some((entry) => sameName(entry, genre))))
   const id = isTrack(track) ? track.Id! : undefined
   const stored = useQuery({
     queryKey: ['track-credits', id],
@@ -94,7 +101,7 @@ export function useTrackCredits(track: BaseItemDto | undefined, lookup = false):
   const artist = track ? artistsOf(track)[0]?.name : undefined
   const looked = useQuery({
     queryKey: ['track-credits-lookup', id],
-    enabled: lookup && !!id && !!artist && stored.data === UNKNOWN,
+    enabled: lookup && !excluded && !!id && !!artist && stored.data === UNKNOWN,
     staleTime: 6 * HOUR,
     retry: false,
     queryFn: async () => {

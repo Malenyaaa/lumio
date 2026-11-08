@@ -33,6 +33,10 @@ export interface LumioConfig {
   cacheVersion?: number
   /** Libraries the music metadata tasks leave out (e.g. audio plays); by id. */
   metadataExcludedLibraries?: string[]
+  /** Artists (by name) whose songs are never looked up, by the tasks nor while they play. */
+  metadataExcludedArtists?: string[]
+  /** Genres whose songs and artists are never looked up. */
+  metadataExcludedGenres?: string[]
 }
 
 export interface ModeBranding {
