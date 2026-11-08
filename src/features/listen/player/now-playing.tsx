@@ -23,6 +23,8 @@ import { ArtistLine } from './player-bar'
 import { useTrackQuality } from './quality'
 import { usePlayerControls, usePlayerTime } from './player-controls'
 import { useArtistBio, useArtistPhoto } from '../artist-photo'
+import { useRecordingCredits, useTrackArtists } from '../credits'
+import { TrackContextMenu } from '../track-menu'
 
 const messages = defineMessages({
   de: {
@@ -40,6 +42,12 @@ const messages = defineMessages({
     composer: 'Komponist*in',
     lyricist: 'Texter*in',
     producer: 'Produzent*in',
+    writer: 'Songwriter*in',
+    mixer: 'Mix',
+    engineer: 'Tontechnik',
+    publisher: 'Verlag',
+    label: 'Label',
+    isrc: 'ISRC',
     nextInQueue: 'Nächster Titel in der Warteschlange',
     openQueue: 'Warteschlange öffnen',
     queueEmpty: 'Deine Warteschlange ist leer.',
@@ -71,6 +79,12 @@ const messages = defineMessages({
     composer: 'Composer',
     lyricist: 'Lyricist',
     producer: 'Producer',
+    writer: 'Songwriter',
+    mixer: 'Mixing',
+    engineer: 'Engineering',
+    publisher: 'Publisher',
+    label: 'Label',
+    isrc: 'ISRC',
     nextInQueue: 'Next in queue',
     openQueue: 'Open queue',
     queueEmpty: 'Your queue is empty.',
@@ -118,27 +132,39 @@ interface Credit {
   role: string
 }
 
-/** Who made a track: its artists first (the first as main artist), then composers, lyricists and producers. */
+/**
+ * Who made a track: its artists first (the first as main artist, with featured artists from MusicBrainz), then
+ * writers, composers, lyricists, producers and mixing (Jellyfin's people, else MusicBrainz's), the album artist; and
+ * the labels and publishers behind it.
+ */
 function useCredits(track: BaseItemDto | undefined) {
   const t = useMessages(messages)
   const item = useItem(track?.Id ?? '', !!track?.Id && !externalOf(track)).data ?? track
-  if (!item) return { item, credits: [] as Credit[] }
-  const credits: Credit[] = artistsOf(item).map((artist, index) => ({ id: artist.id, name: artist.name, role: index === 0 ? t.mainArtist : t.artist }))
-  const roles: Record<string, string> = { Composer: t.composer, Lyricist: t.lyricist, Producer: t.producer, Writer: t.lyricist }
-  for (const person of item.People ?? []) {
-    const role = roles[person.Type ?? '']
-    if (role && person.Name && !credits.some((credit) => credit.name === person.Name && credit.role === role)) credits.push({ name: person.Name, role })
+  const recording = useRecordingCredits(item).data
+  const artists = useTrackArtists(item)
+  if (!item) return { item, credits: [] as Credit[], recording }
+  const credits: Credit[] = artists.map((artist, index) => ({ id: artist.id, name: artist.name, role: index === 0 ? t.mainArtist : t.artist }))
+  const push = (name: string | null | undefined, role: string) => {
+    if (name && !credits.some((credit) => credit.name === name && credit.role === role)) credits.push({ name, role })
   }
+  const roles: Record<string, string> = { Composer: t.composer, Lyricist: t.lyricist, Producer: t.producer, Writer: t.writer }
+  for (const person of item.People ?? []) if (roles[person.Type ?? '']) push(person.Name, roles[person.Type ?? '']!)
+  for (const name of recording?.writers ?? []) push(name, t.writer)
+  for (const name of recording?.composers ?? []) push(name, t.composer)
+  for (const name of recording?.lyricists ?? []) push(name, t.lyricist)
+  for (const name of recording?.producers ?? []) push(name, t.producer)
+  for (const name of recording?.mixers ?? []) push(name, t.mixer)
+  for (const name of recording?.engineers ?? []) push(name, t.engineer)
   for (const album of item.AlbumArtists ?? [])
     if (album.Name && !credits.some((credit) => credit.name === album.Name)) credits.push({ id: album.Id ?? undefined, name: album.Name, role: t.albumArtist })
-  return { item, credits }
+  return { item, credits, recording }
 }
 
 function SongInfoDialog({ track, onClose }: { track: BaseItemDto | null; onClose: () => void }) {
   const t = useMessages(messages)
   const { api } = useAuthedSession()
   const locale = getLocaleTag(useLocale())
-  const { item, credits } = useCredits(track ?? undefined)
+  const { item, credits, recording } = useCredits(track ?? undefined)
   const quality = useTrackQuality(track ?? undefined)
   const shown = item ?? track
   const cover = shown ? portraitImageUrl(api, shown, { fillHeight: 240 }) : undefined
@@ -151,6 +177,9 @@ function SongInfoDialog({ track, onClose }: { track: BaseItemDto | null; onClose
         [t.genres, shown.Genres?.join(', ') || undefined],
         [t.quality, quality?.label],
         [t.plays, shown.UserData?.PlayCount ? t.playCount(shown.UserData.PlayCount) : undefined],
+        [t.label, recording?.labels.join(', ') || undefined],
+        [t.publisher, recording?.publishers.join(', ') || undefined],
+        [t.isrc, recording?.isrc],
       ]
     : []
   return (
@@ -216,9 +245,12 @@ export function NowPlaying({ track }: { track: BaseItemDto }) {
   const external = !!externalOf(track)
   return (
     <div className="space-y-4">
-      <Link to={itemHref(track)} data-vt="listen-cover" className="block aspect-square overflow-hidden rounded-lg bg-muted shadow-lg">
-        {cover && <FadeImage key={cover} src={cover} alt="" className="size-full object-cover" />}
-      </Link>
+      {/* Right-click: the song's menu. */}
+      <TrackContextMenu track={track}>
+        <Link to={itemHref(track)} data-vt="listen-cover" className="block aspect-square overflow-hidden rounded-lg bg-muted shadow-lg">
+          {cover && <FadeImage key={cover} src={cover} alt="" className="size-full object-cover" />}
+        </Link>
+      </TrackContextMenu>
       <div className="min-w-0">
         <Link to={itemHref(track)} className="block truncate text-xl font-bold hover:underline">
           {track.Name}

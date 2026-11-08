@@ -43,6 +43,7 @@ import { endTrackDrag, startTrackDrag, useTrackDrop } from '../track-drag'
 import { TrackContextMenu } from '../track-menu'
 import { usePlayerControls, usePlayerTime } from './player-controls'
 import { lengthLabel, toggleRemainingTime, useRemainingTime } from '@/lib/remaining-time'
+import { useTrackArtists } from '../credits'
 
 /** Listen's player bar along the bottom: the track, the transport with its progress, and queue, lyrics and volume. */
 export function PlayerBar() {
@@ -150,7 +151,9 @@ function QualityLine({ track }: { track: BaseItemDto }) {
 
 /** "Kygo, Tom Odell", each a link to the artist's page. */
 export function ArtistLine({ item, className }: { item: BaseItemDto; className?: string }) {
-  const artists = artistsOf(item)
+  // With the featured artists MusicBrainz names that the file's tags leave out.
+  const credited = useTrackArtists(item.Type === 'Audio' ? item : undefined)
+  const artists = item.Type === 'Audio' ? credited : artistsOf(item)
   return (
     <p className={cn('truncate text-xs text-muted-foreground', className)}>
       {artists.map((artist, index) => (

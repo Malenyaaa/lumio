@@ -481,16 +481,19 @@ function BigNowPlaying({ track }: { track: BaseItemDto }) {
 
   return (
     <div onPointerMove={tilt} onPointerLeave={reset} className="flex h-full items-center justify-center py-6 [perspective:1200px]">
-      <div
-        ref={card}
-        // Flies in from the small cover (see setListenPanelExpanded).
-        data-vt="listen-cover"
-        className="relative aspect-square h-[min(72svh,50rem)] max-w-full overflow-hidden rounded-xl bg-muted shadow-2xl shadow-black/50 transition-transform duration-300 ease-out [transform-style:preserve-3d] motion-reduce:transition-none motion-reduce:[transform:none]"
-      >
-        {/* Not draggable: the cover is for looking at (and the drag would fight the tilt). */}
-        {cover && <FadeImage key={cover} src={cover} alt="" draggable={false} className="size-full select-none object-cover" />}
-        <div ref={sheen} className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300" />
-      </div>
+      {/* Right-click: the song's menu. */}
+      <TrackContextMenu track={track}>
+        <div
+          ref={card}
+          // Flies in from the small cover (see setListenPanelExpanded).
+          data-vt="listen-cover"
+          className="relative aspect-square h-[min(72svh,50rem)] max-w-full overflow-hidden rounded-xl bg-muted shadow-2xl shadow-black/50 transition-transform duration-300 ease-out [transform-style:preserve-3d] motion-reduce:transition-none motion-reduce:[transform:none]"
+        >
+          {/* Not draggable: the cover is for looking at (and the drag would fight the tilt). */}
+          {cover && <FadeImage key={cover} src={cover} alt="" draggable={false} className="size-full select-none object-cover" />}
+          <div ref={sheen} className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300" />
+        </div>
+      </TrackContextMenu>
     </div>
   )
 }

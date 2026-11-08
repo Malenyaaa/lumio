@@ -87,7 +87,7 @@ JELLYFIN_URL=https://jellyfin.example.org PORT=8097 DATA_DIR=/var/lib/lumio node
 | `LASTFM_API_KEY`  | no       | The server's own Last.fm key for the relay (otherwise the app's key is used).                 |
 
 The server relays and caches what the app asks Ticketmaster (6 h), Last.fm (artists 90 days, charts 24 h), MusicBrainz
-(90 days) and lrclib (lyrics, 180 days) for, podcast feeds with their chapters and transcripts (6 h / 30 days), and
+(artist links and song credits, 180 days) and lrclib (lyrics, 180 days) for, podcast feeds with their chapters and transcripts (6 h / 30 days), and
 podcast covers from Apple (kept), so one listener's lookup is there at once for everyone and the services' limits are
 kept centrally.
 

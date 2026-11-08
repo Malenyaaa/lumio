@@ -80,10 +80,10 @@ const RELAY_SERVICES: Record<string, RelayService> = {
     // Errors come inside a 200: "not found" (6) is an answer, being limited or down (8, 11, 16, 29) is not.
     keep: (status, body) => status < 400 && !/"error":\s*(8|11|16|29)\b/.test(body),
   },
-  // MusicBrainz: an artist and their links. It asks for at most one call a second and a name for the caller.
+  // MusicBrainz: an artist and their links, a recording's credits and its label. It asks for at most one call a second and a name for the caller.
   musicbrainz: {
     base: 'https://musicbrainz.org/ws/2/',
-    paths: /^artist(\/[0-9a-f-]{36})?$/,
+    paths: /^(artist|recording|release)(\/[0-9a-f-]{36})?$/,
     ttl: 180 * 24 * HOUR,
     spacing: 1100,
     headers: { 'User-Agent': 'Lumio/1.0 (self-hosted Jellyfin client)' },
