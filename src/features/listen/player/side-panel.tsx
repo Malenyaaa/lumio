@@ -148,20 +148,21 @@ export function SidePanel() {
       <div
         // Its own tone with a gap around it, rather than a border against the page.
         className={cn(
-          'absolute bottom-2 left-0 top-0 flex overflow-hidden rounded-xl bg-surface [--background:var(--surface)] transition-opacity duration-300',
+          'absolute bottom-2 left-0 top-0 flex overflow-hidden rounded-xl bg-surface [--background:var(--surface)] transition-[opacity,width] duration-300 ease-out',
           // Folded, it peeks over the grey strip while pointed at (clicks still reach the strip below).
           !open && 'pointer-events-none z-10 opacity-0 group-hover/panel:opacity-70',
-          // Big, it spans the window with the same gap on both sides.
+          // Big, it spans the window with the same gap on both sides (or up to the queue beside it).
           expanded && 'left-2',
         )}
-        data-vt="listen-panel"
-        style={{ width: expanded ? 'calc(100% - 1rem)' : layout.right - 8 }}
+        // Showing the queue or the quality, this box is "the beside panel": it stays where it is when the panel grows.
+        data-vt={!expanded && BESIDE_VIEWS.has(view) ? 'listen-beside' : 'listen-panel'}
+        style={{ width: expanded ? (beside ? `calc(100% - ${layout.right + 8}px)` : 'calc(100% - 1rem)') : layout.right - 8 }}
       >
         <PanelColumn view={view} titles={titles} track={track} expanded={expanded} />
-        {/* In the big panel, the queue or the quality sit in a column at the right edge. */}
-        {/* In the big panel, the queue or the quality slide in as a column at the right edge (and out again). */}
-        <BesideColumn target={expanded ? beside : null} expanded={expanded} titles={titles} track={track} />
       </div>
+      {/* In the big panel, the queue or the quality: a panel of its own at the right edge, exactly where the side
+          panel is otherwise (it slides in from the right when opened there, and out again). */}
+      <BesideColumn target={expanded ? beside : null} expanded={expanded} width={layout.right - 8} titles={titles} track={track} />
       {expanded ? null : open ? (
         <ResizeHandle
           edge="left"
@@ -255,14 +256,18 @@ function PanelLayer({ view, title, track, expanded }: { view: ListenPanel; title
 }
 
 /** The big panel's column at the right edge (queue or quality): it slides in from the right and out again when closed. */
+const BESIDE_VIEWS = new Set<ListenPanel>(['queue', 'quality'])
+
 function BesideColumn({
   target,
   expanded,
+  width,
   titles,
   track,
 }: {
   target: 'queue' | 'quality' | null
   expanded: boolean
+  width: number
   titles: Record<ListenPanel, string>
   track: BaseItemDto
 }) {
@@ -290,10 +295,14 @@ function BesideColumn({
         setShown(null)
         setLeaving(false)
       }}
-      // The column opens from nothing at the right edge, its content held there, so it slides in from the right.
-      className={cn('flex w-80 shrink-0 justify-end overflow-hidden', leaving ? 'beside-out' : slideIn && 'beside-in')}
+      data-vt="listen-beside"
+      style={{ width }}
+      className={cn(
+        'absolute bottom-2 right-2 top-0 z-10 flex flex-col overflow-hidden rounded-xl bg-surface [--background:var(--surface)]',
+        leaving ? 'beside-out' : slideIn && 'beside-in',
+      )}
     >
-      <div className="flex w-80 shrink-0 flex-col bg-background/30">
+      <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-3">
           <h2 className="truncate text-base font-semibold">{titles[shown]}</h2>
           <IconButton label={t.close} onClick={() => toggleListenPanel(shown)}>

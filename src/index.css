@@ -333,6 +333,13 @@ html.panel-transition::view-transition-group(listen-cover) {
 html.panel-transition [data-vt='listen-panel'] {
   view-transition-name: listen-panel;
 }
+/* The queue (or quality) keeps its place at the right edge whether the panel is big or not. */
+html.panel-transition [data-vt='listen-beside'] {
+  view-transition-name: listen-beside;
+}
+html.panel-transition [data-vt] {
+  transition: none !important;
+}
 html.panel-transition-cover [data-vt='listen-cover'] {
   view-transition-name: listen-cover;
 }
@@ -350,7 +357,9 @@ html.panel-transition::view-transition-group(listen-panel) {
   border-radius: 0.875rem;
 }
 html.panel-transition::view-transition-old(listen-panel),
-html.panel-transition::view-transition-new(listen-panel) {
+html.panel-transition::view-transition-new(listen-panel),
+html.panel-transition::view-transition-old(listen-beside),
+html.panel-transition::view-transition-new(listen-beside) {
   height: auto;
   width: auto;
   object-fit: none;
@@ -391,15 +400,15 @@ html.panel-transition::view-transition-new(listen-cover) {
 .panel-slide-out {
   animation: panel-down 240ms cubic-bezier(0.4, 0, 1, 1) both;
 }
-/* The big panel's column at the right edge (queue, quality) opens from nothing and closes again. */
+/* The big panel's queue or quality panel at the right edge slides in from the right and out again. */
 @keyframes beside-open {
   from {
-    width: 0;
+    transform: translateX(calc(100% + 1rem));
   }
 }
 @keyframes beside-close {
   to {
-    width: 0;
+    transform: translateX(calc(100% + 1rem));
   }
 }
 .beside-in {
