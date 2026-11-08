@@ -90,6 +90,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (axios.isAxiosError(error) && isRejectedSessionToken(error, session)) {
         saveSession(null)
         queryClient.clear()
+        void clearPersistedQueries()
         setSession(null)
       }
       return Promise.reject(error)

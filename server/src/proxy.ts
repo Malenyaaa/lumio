@@ -2,6 +2,7 @@ import { request as httpRequest, type IncomingMessage, type ServerResponse } fro
 import { request as httpsRequest } from 'node:https'
 import { connect as netConnect, type Socket } from 'node:net'
 import { connect as tlsConnect } from 'node:tls'
+import { isPrivateAddress } from './addresses.ts'
 
 /**
  * Lumio in front of Jellyfin (PROXY_JELLYFIN=true): Lumio is the only public face, and everything that belongs to
@@ -47,11 +48,17 @@ function upstreamOf(base: string) {
 function forwardedHeaders(request: IncomingMessage, upstream?: ReturnType<typeof upstreamOf>) {
   const headers = { ...request.headers }
   if (upstream?.secure) headers.host = upstream.url.host
-  const client = request.socket.remoteAddress ?? ''
+  const client = (request.socket.remoteAddress ?? '').replace(/^::ffff:/, '')
   // The reverse proxy in front (TLS) already says who the visitor is: passed on as it is, so Jellyfin (which reads the
-  // last address of the chain) sees the visitor rather than the reverse proxy. Lumio must then be reachable only
-  // through that proxy. Reached directly, the caller's own address is given.
-  headers['x-forwarded-for'] ??= client.replace(/^::ffff:/, '')
+  // last address of the chain) sees the visitor rather than the reverse proxy. Only a proxy in a private network is
+  // believed: reached straight from the internet, a caller could otherwise pass itself off as being at home (Jellyfin's
+  // LAN-only rules), so its own address is given.
+  if (!isPrivateAddress(client)) {
+    delete headers['x-forwarded-for']
+    delete headers['x-forwarded-proto']
+    delete headers['x-forwarded-host']
+  }
+  headers['x-forwarded-for'] ??= client
   headers['x-forwarded-proto'] ??= 'encrypted' in request.socket && request.socket.encrypted ? 'https' : 'http'
   headers['x-forwarded-host'] ??= headers.host
   return headers

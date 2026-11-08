@@ -7,6 +7,8 @@ import { useSession } from '@/features/auth/session'
 import { userOptions } from '@/features/settings/use-user-configuration'
 import { modeOf, type AppMode } from '@/lib/app-mode'
 import { useTheme } from '@/lib/theme'
+import { BUNDLED } from '@/lib/platform'
+import { DEFAULT_SERVER_URL } from '@/lib/jellyfin'
 import { fetchConfig, type LumioConfig } from './lumio-config'
 import { emitPluginEvent, setPluginHost, syncPlugins } from './plugins'
 
@@ -17,6 +19,17 @@ const DEFAULT_FAVICON = '/favicon.svg'
 function useBrandingServer() {
   const { session } = useSession()
   return session?.serverUrl ?? import.meta.env.VITE_JELLYFIN_URL ?? ''
+}
+
+/**
+ * Whether a server's plugins may run: they are code. On the web only the server this Lumio belongs to counts, not one
+ * a visitor signs in to by address (its admin's code would run on this site, with its storage and others' sign-ins);
+ * the apps belong to the server their user picked.
+ */
+function runsPluginsOf(serverUrl: string) {
+  if (BUNDLED) return true
+  const origin = URL.parse(serverUrl)?.origin
+  return !!origin && (origin === window.location.origin || origin === URL.parse(DEFAULT_SERVER_URL)?.origin)
 }
 
 export const configOptions = (serverUrl: string) =>
@@ -165,9 +178,10 @@ export function BrandingEffects() {
     })
   }, [session, api, isAdmin, navigate])
 
+  const brandingServer = useBrandingServer()
   useEffect(() => {
-    void syncPlugins(config.plugins ?? [])
-  }, [config.plugins])
+    void syncPlugins(runsPluginsOf(brandingServer) ? (config.plugins ?? []) : [])
+  }, [config.plugins, brandingServer])
 
   const { search } = useLocation()
   useEffect(() => {

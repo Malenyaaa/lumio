@@ -7,6 +7,7 @@ import { isIP, type Socket } from 'node:net'
 import { Readable } from 'node:stream'
 import { extname, join, normalize, resolve, sep } from 'node:path'
 import { isJellyfinRequest, proxyToJellyfin, proxyUpgrade } from './proxy.ts'
+import { isPrivateAddress } from './addresses.ts'
 import { latestApps } from './apps.ts'
 import { creditsOfRecording, lookupCredits, sameName, searchRecordings, type Failure, type JobState, type TrackCredits, type TrackMeta } from './credits.ts'
 import { DEFAULT_PRIVACY, Store, type Activity, type Person, type Privacy } from './store.ts'
@@ -171,8 +172,9 @@ async function authenticate(token: string | null): Promise<Person | null> {
   if (!token) return null
   const cached = tokens.get(token)
   if (cached && cached.until > Date.now()) return cached.person
+  tokens.delete(token)
   try {
-    const response = await fetch(`${JELLYFIN_URL}/Users/Me`, { headers: { Authorization: `MediaBrowser Token="${token}"` } })
+    const response = await fetch(`${JELLYFIN_URL}/Users/Me`, { headers: { Authorization: `MediaBrowser Token="${token}"` }, signal: AbortSignal.timeout(15_000) })
     if (!response.ok) return null
     const user = (await response.json()) as { Id: string; Name: string; PrimaryImageTag?: string | null; Policy?: { IsAdministrator?: boolean } }
     const person = { id: user.Id, name: user.Name, imageTag: user.PrimaryImageTag ?? null }
@@ -310,6 +312,11 @@ async function serveApp(request: IncomingMessage, response: ServerResponse, path
       'Content-Length': info.size,
       // Built files carry a hash and never change; the page and the service worker are checked every time.
       'Cache-Control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache',
+      // Not to be framed by other sites (clicks steered over a hidden Lumio); addresses leave no paths behind elsewhere.
+      'Content-Security-Policy': "frame-ancestors 'self'",
+      'X-Frame-Options': 'SAMEORIGIN',
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
     })
     if (request.method === 'HEAD') return response.end()
     createReadStream(file).pipe(response)
@@ -339,6 +346,10 @@ async function keptImage(source: string | null): Promise<{ body: Buffer; type: s
     throw new ImageError(400, 'Bad url')
   }
   if (target.protocol !== 'https:' || !IMAGE_HOSTS.test(target.hostname)) throw new ImageError(403, 'Host not allowed')
+  // Without query and fragment: anyone may ask (pictures load without a sign-in), and endless ?n=1, ?n=2… must not
+  // each be kept.
+  target.search = ''
+  target.hash = ''
   const file = join(IMAGE_DIR, createHash('sha256').update(target.href).digest('hex'))
   try {
     const [body, type] = await Promise.all([readFile(file), readFile(`${file}.type`, 'utf8')])
@@ -350,14 +361,37 @@ async function keptImage(source: string | null): Promise<{ body: Buffer; type: s
     const upstream = await fetch(target, { signal: AbortSignal.timeout(15_000) })
     const type = upstream.headers.get('content-type') ?? ''
     if (!upstream.ok || !type.startsWith('image/')) throw new ImageError(502, 'Image unavailable')
-    const body = Buffer.from(await upstream.arrayBuffer())
-    if (body.length > IMAGE_LIMIT) throw new ImageError(502, 'Image too large')
+    const body = await readLimited(upstream, IMAGE_LIMIT)
+    if (!body) throw new ImageError(502, 'Image too large')
     await mkdir(IMAGE_DIR, { recursive: true })
     await Promise.all([writeFile(file, body), writeFile(`${file}.type`, type)])
     return { body, type }
   } catch (error) {
     throw error instanceof ImageError ? error : new ImageError(502, 'Image unavailable')
   }
+}
+
+/**
+ * Headers for files from other sites served from Lumio's origin: never sniffed into something else, and opened on
+ * their own (an SVG picture, an HTML "feed") they run in a sandbox without Lumio's storage, so they can't read tokens.
+ */
+const UNTRUSTED_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:" }
+
+/** A response's body, read only up to a limit (Content-Length can be missing or wrong); null when it is larger. */
+async function readLimited(upstream: Response, limit: number): Promise<Buffer | null> {
+  if (Number(upstream.headers.get('content-length') ?? 0) > limit) {
+    await upstream.body?.cancel()
+    return null
+  }
+  if (!upstream.body) return Buffer.alloc(0)
+  const chunks: Buffer[] = []
+  let size = 0
+  for await (const chunk of Readable.fromWeb(upstream.body as import('node:stream/web').ReadableStream<Uint8Array>)) {
+    size += (chunk as Buffer).length
+    if (size > limit) return null
+    chunks.push(chunk as Buffer)
+  }
+  return Buffer.concat(chunks)
 }
 
 async function serveImage(response: ServerResponse, source: string | null) {
@@ -373,6 +407,7 @@ async function serveKept(response: ServerResponse, load: () => Promise<{ body: B
       // The address names the picture; it never changes.
       'Cache-Control': 'public, max-age=2592000, immutable',
       'Access-Control-Allow-Origin': '*',
+      ...UNTRUSTED_HEADERS,
     })
     response.end(body)
   } catch (error) {
@@ -382,9 +417,12 @@ async function serveKept(response: ServerResponse, load: () => Promise<{ body: B
 
 /** When each service may be called next. */
 const nextSlot = new Map<string, number>()
+/** How long a request waits for its turn at most: past that, the service is busy (no one can queue up hours). */
+const RELAY_QUEUE_MS = 60_000
 async function relaySlot(name: string, spacing: number) {
   const now = Date.now()
   const at = Math.max(now, nextSlot.get(name) ?? 0)
+  if (at - now > RELAY_QUEUE_MS) throw new RelayError(429, 'Busy, try again later')
   nextSlot.set(name, at + spacing)
   if (at > now) await new Promise((resolve) => setTimeout(resolve, at - now))
 }
@@ -468,6 +506,7 @@ async function serveFeed(response: ServerResponse, source: string | null) {
     return send(response, 400, { error: 'Bad url' })
   }
   if (target.protocol !== 'https:') return send(response, 403, { error: 'Only https' })
+  target.hash = ''
   const file = join(RELAY_DIR, 'feeds', createHash('sha256').update(target.href).digest('hex'))
   let cached: RelayEntry | null = null
   try {
@@ -476,22 +515,22 @@ async function serveFeed(response: ServerResponse, source: string | null) {
     // Not asked before.
   }
   const reply = (entry: RelayEntry) => {
-    response.writeHead(entry.status, { 'Content-Type': entry.type, 'Cache-Control': 'private, max-age=3600' })
+    response.writeHead(entry.status, { 'Content-Type': entry.type, 'Cache-Control': 'private, max-age=3600', ...UNTRUSTED_HEADERS })
     response.end(entry.body)
   }
   const ttl = (entry: RelayEntry) => (/xml|rss|atom/i.test(entry.type) ? 6 * HOUR : 30 * 24 * HOUR)
   if (cached && Date.now() - cached.at < ttl(cached)) return reply(cached)
   try {
-    const upstream = await fetch(target, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(20_000) })
-    const type = upstream.headers.get('content-type') ?? 'application/octet-stream'
-    const length = Number(upstream.headers.get('content-length') ?? 0)
-    if (!upstream.ok || !FEED_TYPES.test(type) || length > FEED_LIMIT) {
+    const upstream = await fetchPublic(target, 20_000, ['https:'])
+    const type = upstream?.headers.get('content-type') ?? 'application/octet-stream'
+    if (!upstream?.ok || !FEED_TYPES.test(type)) {
+      await upstream?.body?.cancel()
       if (cached) return reply(cached)
-      return send(response, 502, { error: 'Feed unavailable' })
+      return send(response, upstream ? 502 : 403, { error: upstream ? 'Feed unavailable' : 'Not allowed' })
     }
-    const body = await upstream.text()
-    if (body.length > FEED_LIMIT) return send(response, 502, { error: 'Feed too large' })
-    const entry: RelayEntry = { at: Date.now(), status: 200, type, body }
+    const body = await readLimited(upstream, FEED_LIMIT)
+    if (!body) return send(response, 502, { error: 'Feed too large' })
+    const entry: RelayEntry = { at: Date.now(), status: 200, type, body: body.toString('utf8') }
     await mkdir(join(RELAY_DIR, 'feeds'), { recursive: true })
     await writeFile(file, JSON.stringify(entry))
     reply(entry)
@@ -511,10 +550,24 @@ async function isPrivateHost(hostname: string) {
   } catch {
     return true
   }
-  return addresses.some((address) =>
-    /^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|0\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(address) ||
-    /^(::1$|::$|f[cd]|fe80:|::ffff:(127|10|192\.168)\.)/i.test(address),
-  )
+  return addresses.length === 0 || addresses.some(isPrivateAddress)
+}
+
+/**
+ * Fetches an address of another site, following redirects itself so that each hop is checked: only the allowed
+ * schemes, never into private networks (this server's own, the cloud's metadata address…). Null when not allowed.
+ */
+async function fetchPublic(target: URL, timeout: number, schemes = ['https:', 'http:']): Promise<Response | null> {
+  // Podcast links usually go through a few tracking redirects.
+  for (let hop = 0; hop < 8; hop++) {
+    if (!schemes.includes(target.protocol) || (await isPrivateHost(target.hostname))) return null
+    const answer = await fetch(target, { headers: { 'User-Agent': USER_AGENT }, redirect: 'manual', signal: AbortSignal.timeout(timeout) })
+    const next = answer.status >= 300 && answer.status < 400 ? answer.headers.get('location') : null
+    if (!next) return answer
+    await answer.body?.cancel()
+    target = new URL(next, target)
+  }
+  return null
 }
 
 /** Largest podcast episode relayed (bytes). */
@@ -533,19 +586,9 @@ async function servePodcastAudio(request: IncomingMessage, response: ServerRespo
     return send(response, 400, { error: 'Bad url' })
   }
   try {
-    let upstream: Response | null = null
-    // Podcast links usually go through a few tracking redirects; each hop is checked before it is followed.
-    for (let hop = 0; hop < 8; hop++) {
-      if ((target.protocol !== 'https:' && target.protocol !== 'http:') || (await isPrivateHost(target.hostname))) return send(response, 403, { error: 'Not allowed' })
-      const answer = await fetch(target, { headers: { 'User-Agent': USER_AGENT }, redirect: 'manual', signal: AbortSignal.timeout(30_000) })
-      const next = answer.status >= 300 && answer.status < 400 ? answer.headers.get('location') : null
-      if (!next) {
-        upstream = answer
-        break
-      }
-      target = new URL(next, target)
-    }
-    if (!upstream?.ok || !upstream.body) return send(response, 502, { error: 'Episode unavailable' })
+    const upstream = await fetchPublic(target, 30_000)
+    if (!upstream) return send(response, 403, { error: 'Not allowed' })
+    if (!upstream.ok || !upstream.body) return send(response, 502, { error: 'Episode unavailable' })
     const type = upstream.headers.get('content-type') ?? ''
     const length = Number(upstream.headers.get('content-length') ?? 0)
     if (!/^(audio\/|video\/mp4|application\/octet-stream)/i.test(type) || length > EPISODE_LIMIT) return send(response, 502, { error: 'Not an episode' })

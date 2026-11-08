@@ -26,6 +26,8 @@ function nextPath() {
 
 /** jellyfin-web's stored sign-in, when it is for this server. */
 function jellyfinWebToken(serverUrl: string): { AccessToken: string; UserId?: string } | null {
+  // jellyfin-web only ever runs on this address; its token never goes to a server typed in by address.
+  if (URL.parse(serverUrl)?.origin !== window.location.origin) return null
   try {
     const stored = JSON.parse(localStorage.getItem('jellyfin_credentials') ?? 'null') as { Servers?: Array<{ AccessToken?: string; ManualAddress?: string; UserId?: string }> } | null
     const trim = (value: string) => value.replace(/\/+$/, '')
