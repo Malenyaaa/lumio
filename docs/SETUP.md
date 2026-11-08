@@ -146,6 +146,39 @@ As an administrator, in Lumio's settings:
   information ahead, leaving out libraries, artists or genres (audio plays, say).
 - **Branding**, **Display**, **Plugins**: name, logo, colours, where previews open, Lumio plugins.
 
+## Cleaning up Jellyfin
+
+With Lumio in front, jellyfin-web only serves the administration. Whatever was there to change how jellyfin-web looks
+or behaves for viewers no longer reaches anyone and can go. What Jellyfin itself does on the server (metadata,
+segments, search, sign-in) stays.
+
+**No longer needed** (they only change jellyfin-web for viewers):
+
+| What | Why it can go |
+| --- | --- |
+| Home screen plugins: *Home Screen Sections*, *Collection Sections*, *Media Bar* | Lumio has its own home screens |
+| *Custom Tabs* | jellyfin-web tabs; links in Lumio's navigation come from a Lumio plugin (Settings → Plugins, `addNavLink`) |
+| *InPlayerEpisodePreview* | jellyfin-web's player; Lumio's player has its own episode list |
+| *File Transformation*, *Plugin Pages* | Helpers the plugins above use to change jellyfin-web; nothing else needs them |
+| *JavaScript Injector* and its snippets | They change jellyfin-web's pages; Lumio puts in what jellyfin-web still needs itself |
+| Theme and UI CSS in Dashboard → General → Custom CSS (themes, button fixes, skip-button styles) | Only jellyfin-web loads it. **Keep the comment that starts with `/* lumio`**: Lumio's branding, plugins and settings live in it |
+| The sign-in button in Dashboard → General → Login disclaimer | jellyfin-web's sign-in page now leads to Lumio's, which has the SSO button |
+
+**Keep** (Lumio uses them, or they work on the server):
+
+| What | Why it stays |
+| --- | --- |
+| *SSO-Auth* | Lumio's sign-in goes through it |
+| *Intro Skipper* | Finds intros and credits; Lumio's skip buttons use them. Keep it updated to a version for your Jellyfin, or it shows as "Not supported" and finds nothing |
+| *Meilisearch* | Fast, forgiving search for Lumio and every app (same: keep it updated) |
+| Metadata providers: *TMDb*, *OMDb*, *MusicBrainz*, *AudioDB*, *Studio Images*, anime providers (*AniDB*, *AniList*, *AniSearch*) if you have anime | Jellyfin's metadata, which Lumio shows |
+| *LanguageTags* | Tags items with their languages on the server; harmless, keep it if you filter by it |
+| *Playback Reporting*, *Reports* | Statistics and reports for administrators (in the dashboard); Lumio doesn't need them, keep them if you use them |
+| *ListenBrainz Similarity Provider* | Similar artists for Jellyfin's instant mixes; Lumio uses Last.fm for its radios, keep it if other apps use instant mixes |
+
+Remove plugins in Dashboard → Plugins (uninstall, then restart Jellyfin); plugins others depend on (File
+Transformation, Plugin Pages) last.
+
 ## Building it yourself
 
 The image needs nothing but Docker:
