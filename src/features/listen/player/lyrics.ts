@@ -5,6 +5,7 @@ import { queryOptions, useQuery } from '@tanstack/react-query'
 import { useAuthedSession } from '@/features/auth/session'
 import { externalOf } from '@/lib/external-items'
 import { ticksToSeconds } from '@/lib/format'
+import { relayFetch } from '@/features/social/social'
 
 export interface LyricLine {
   /** Seconds into the track; missing for plain (unsynced) lyrics. */
@@ -44,7 +45,9 @@ export function lyricsOptions(api: Api, item: BaseItemDto | undefined) {
     queryKey: ['lyrics', item?.Id],
     // Podcasts have no lyrics.
     enabled: !!item?.Id && !externalOf(item),
+    // Lyrics don't change: kept (also across restarts, see query-persist) as long as the saved data is.
     staleTime: Infinity,
+    gcTime: 30 * 24 * 60 * 60_000,
     retry: false,
     queryFn: async (): Promise<Lyrics | null> => {
       try {
@@ -63,7 +66,8 @@ export function lyricsOptions(api: Api, item: BaseItemDto | undefined) {
         album_name: item!.Album ?? '',
         duration: String(Math.round(ticksToSeconds(item!.RunTimeTicks ?? 0))),
       })
-      const response = await fetch(`https://lrclib.net/api/get?${params}`)
+      // Through the Lumio server, which keeps them for everyone.
+      const response = await relayFetch('lyrics', 'api/get', params, 'https://lrclib.net/')
       if (!response.ok) return null
       const found = (await response.json()) as { syncedLyrics?: string | null; plainLyrics?: string | null; instrumental?: boolean }
       if (found.syncedLyrics) return { lines: parseLrc(found.syncedLyrics), synced: true, source: 'lrclib' }

@@ -46,7 +46,9 @@ export function useLastfmArtist(name: string | undefined) {
   return useQuery({
     queryKey: ['lastfm-artist', name, getLocale()],
     enabled: !!LASTFM_KEY && !!name,
-    staleTime: DAY,
+    // Changes rarely: fresh for a week, kept a month.
+    staleTime: 7 * DAY,
+    gcTime: 30 * DAY,
     retry: false,
     queryFn: async (): Promise<LastfmArtist> => {
       type Response = {
@@ -83,7 +85,9 @@ export function useLastfmTopTracks(name: string | undefined) {
   return useQuery({
     queryKey: ['lastfm-top-tracks', name],
     enabled: !!LASTFM_KEY && !!name,
-    staleTime: DAY,
+    // Changes rarely: fresh for a week, kept a month.
+    staleTime: 7 * DAY,
+    gcTime: 30 * DAY,
     retry: false,
     queryFn: async (): Promise<LastfmTrack[]> => {
       type Response = { toptracks: { track?: Array<{ name: string; playcount?: string; listeners?: string }> } }
@@ -228,7 +232,9 @@ export function useArtistLinks(name: string | undefined, musicBrainzId: string |
   return useQuery({
     queryKey: ['artist-links', musicBrainzId ?? name],
     enabled: enabled && !!(musicBrainzId || name),
-    staleTime: DAY,
+    // Changes rarely: fresh for a week, kept a month.
+    staleTime: 7 * DAY,
+    gcTime: 30 * DAY,
     retry: false,
     queryFn: async (): Promise<ArtistLink[]> => {
       // Through the Lumio server (cached a week), which also keeps to MusicBrainz's one call a second.

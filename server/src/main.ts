@@ -43,8 +43,11 @@ interface RelayService {
   paths: RegExp
   /** The query parameter that carries the API key, and the server's own key (else the app's is used). */
   key?: { param: string; value?: string }
-  /** Answers are fresh this long; older ones are fetched again (and still served if the service fails). */
-  ttl: number
+  /**
+   * How long an answer stays fresh (by its status and what was asked); older ones are fetched again, and still served
+   * if the service fails. What hardly changes (lyrics, biographies, links) is kept for months.
+   */
+  ttl: number | ((status: number, path: string, params: URLSearchParams) => number)
   /** Time between two calls (the service's rate limit). */
   spacing: number
   headers?: Record<string, string>
@@ -67,7 +70,8 @@ const RELAY_SERVICES: Record<string, RelayService> = {
     base: 'https://ws.audioscrobbler.com/2.0/',
     paths: /^$/,
     key: { param: 'api_key', value: process.env.LASTFM_API_KEY?.trim() },
-    ttl: 24 * HOUR,
+    // Charts move daily; an artist's biography, top tracks and similar artists hardly do.
+    ttl: (_status, _path, params) => (/^artist\./.test(params.get('method') ?? '') ? 30 * 24 * HOUR : 24 * HOUR),
     spacing: 200,
     // Errors come inside a 200: "not found" (6) is an answer, being limited or down (8, 11, 16, 29) is not.
     keep: (status, body) => status < 400 && !/"error":\s*(8|11|16|29)\b/.test(body),
@@ -76,8 +80,17 @@ const RELAY_SERVICES: Record<string, RelayService> = {
   musicbrainz: {
     base: 'https://musicbrainz.org/ws/2/',
     paths: /^artist(\/[0-9a-f-]{36})?$/,
-    ttl: 7 * 24 * HOUR,
+    ttl: 90 * 24 * HOUR,
     spacing: 1100,
+    headers: { 'User-Agent': 'Lumio/1.0 (self-hosted Jellyfin client)' },
+    keep: (status) => status < 400 || status === 404,
+  },
+  // lrclib: lyrics. A song's lyrics don't change: kept half a year; "none found" is asked again after a week.
+  lyrics: {
+    base: 'https://lrclib.net/',
+    paths: /^api\/get$/,
+    ttl: (status) => (status === 404 ? 7 * 24 * HOUR : 180 * 24 * HOUR),
+    spacing: 100,
     headers: { 'User-Agent': 'Lumio/1.0 (self-hosted Jellyfin client)' },
     keep: (status) => status < 400 || status === 404,
   },
@@ -306,7 +319,8 @@ async function serveRelay(response: ServerResponse, name: string, path: string, 
     response.writeHead(entry.status, { 'Content-Type': entry.type, 'Cache-Control': 'private, max-age=3600' })
     response.end(entry.body)
   }
-  if (cached && Date.now() - cached.at < service.ttl) return reply(cached)
+  const fresh = (entry: RelayEntry) => Date.now() - entry.at < (typeof service.ttl === 'number' ? service.ttl : service.ttl(entry.status, path, params))
+  if (cached && fresh(cached)) return reply(cached)
   try {
     await relaySlot(name, service.spacing)
     if (service.key && key) query.set(service.key.param, key)
