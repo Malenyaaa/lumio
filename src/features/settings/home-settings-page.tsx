@@ -55,7 +55,7 @@ export function HomeSettingsPage() {
 
   return (
     <SettingsPage title={t.title} description={t.description}>
-      <Section title={t.layout} scope="device">
+      <Section title={t.layout} scope="account">
         <SelectField
           id="home-layout"
           label={t.layoutLabel}

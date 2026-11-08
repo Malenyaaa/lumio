@@ -147,7 +147,7 @@ export function SubtitlesPage() {
       <Section
         title={t.appearance}
         description={t.appearanceDescription}
-        scope="device"
+        scope="account"
       >
         <SelectField
           id="subtitle-style"

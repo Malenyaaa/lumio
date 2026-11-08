@@ -99,6 +99,54 @@ export interface LocalSettings {
   videoCacheGb: number
   /** Bitrate episodes are downloaded at, in Mbit/s. */
   videoBitrateMbit: number
+  /** Where "concerts near you" are looked for (a city or the device's position); null = not set. */
+  concertLocation: { label: string; lat: number; lon: number } | null
+}
+
+/**
+ * Settings that follow the account: kept on the Lumio server and the same on every device the user signs in on (how
+ * the player behaves, subtitles, skipping, where concerts are looked for …). Everything else belongs to the device:
+ * quality and bandwidth, caches and preloading (they depend on its connection and storage), which apps it shows.
+ */
+export const ACCOUNT_SETTINGS = [
+  'skipForwardSeconds',
+  'skipBackSeconds',
+  'segmentActions',
+  'subtitleStyle',
+  'subtitleSize',
+  'subtitleWeight',
+  'subtitleFont',
+  'subtitleColor',
+  'subtitleShadow',
+  'subtitleLine',
+  'keyboardShortcuts',
+  'videoFit',
+  'playbackRate',
+  'startAfterIntro',
+  'hoverPreview',
+  'hoverDelayMs',
+  'controlsHideSeconds',
+  'pauseSpotlightSeconds',
+  'pageAnimations',
+  'smoothScrolling',
+  'homeLayout',
+  'syncPlay',
+  'musicAutoplay',
+  'concertLocation',
+] as const satisfies ReadonlyArray<keyof LocalSettings>
+
+const ACCOUNT_KEYS = new Set<string>(ACCOUNT_SETTINGS)
+
+/** The account's part of some settings. */
+export function accountPart(settings: Partial<LocalSettings> | Record<string, unknown>): Partial<LocalSettings> {
+  return Object.fromEntries(Object.entries(settings).filter(([key]) => ACCOUNT_KEYS.has(key))) as Partial<LocalSettings>
+}
+
+/** Sends account settings changed here to the server (set while connected, see account-sync). */
+let accountUploader: { userId: string; send: (patch: Partial<LocalSettings>) => void } | null = null
+
+export function setAccountUploader(next: typeof accountUploader) {
+  accountUploader = next
 }
 
 export const DEFAULT_SETTINGS: LocalSettings = {
@@ -137,6 +185,7 @@ export const DEFAULT_SETTINGS: LocalSettings = {
   videoPrefetch: 1,
   videoCacheGb: 5,
   videoBitrateMbit: 8,
+  concertLocation: null,
 }
 
 const keyFor = (userId: string) => `lumio.settings.${userId}`
@@ -180,7 +229,8 @@ function read(userId: string): LocalSettings {
   return value
 }
 
-function write(userId: string, patch: Partial<LocalSettings>) {
+/** `fromAccount`: the change came from the server, so it isn't sent back there. */
+function write(userId: string, patch: Partial<LocalSettings>, fromAccount = false) {
   const next = JSON.stringify({ ...read(userId), ...patch })
   try {
     localStorage.setItem(keyFor(userId), next)
@@ -189,6 +239,16 @@ function write(userId: string, patch: Partial<LocalSettings>) {
     memory.set(userId, next)
   }
   for (const listener of listeners) listener()
+  if (!fromAccount && accountUploader?.userId === userId) {
+    const shared = accountPart(patch)
+    if (Object.keys(shared).length) accountUploader.send(shared)
+  }
+}
+
+/** Takes over the account's settings from the server (on connecting, and when another device changes one). */
+export function applyAccountSettings(userId: string, data: Record<string, unknown>) {
+  const shared = accountPart(data)
+  if (Object.keys(shared).length) write(userId, shared, true)
 }
 
 function subscribe(listener: () => void) {

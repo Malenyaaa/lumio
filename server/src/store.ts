@@ -4,7 +4,8 @@ import { DatabaseSync } from 'node:sqlite'
 
 /**
  * What the Lumio server keeps (SQLite, one file): the people who used it (name and picture tag as Jellyfin reported
- * them, so others can see who they are), who follows whom, each person's privacy choices, and what they last played.
+ * them, so others can see who they are), who follows whom, each person's privacy choices, what they last played, and
+ * their Lumio settings that follow the account (the app decides which; the server keeps them as one JSON object).
  */
 export interface Privacy {
   /** Others see the person's public playlists on their profile. */
@@ -52,6 +53,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS follows (follower TEXT NOT NULL, followee TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (follower, followee));
       CREATE INDEX IF NOT EXISTS follows_followee ON follows (followee);
       CREATE TABLE IF NOT EXISTS activity (user_id TEXT PRIMARY KEY, payload TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS settings (user_id TEXT PRIMARY KEY, data TEXT NOT NULL, updated INTEGER NOT NULL);
     `)
   }
 
@@ -108,6 +110,26 @@ export class Store {
     return (
       this.db.prepare('SELECT a.followee AS id FROM follows a JOIN follows b ON b.follower = a.followee AND b.followee = a.follower WHERE a.follower = ?').all(id) as Array<{ id: string }>
     ).map((row) => row.id)
+  }
+
+  /** The person's account settings, and when they last changed (0: never saved). */
+  settings(id: string): { data: Record<string, unknown>; updated: number } {
+    const row = this.db.prepare('SELECT data, updated FROM settings WHERE user_id = ?').get(id) as { data: string; updated: number } | undefined
+    return row ? { data: JSON.parse(row.data) as Record<string, unknown>, updated: row.updated } : { data: {}, updated: 0 }
+  }
+
+  /** Merges changed settings in (a null value removes one). */
+  updateSettings(id: string, patch: Record<string, unknown>) {
+    const data = this.settings(id).data
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === null) delete data[key]
+      else data[key] = value
+    }
+    const updated = Date.now()
+    this.db
+      .prepare('INSERT INTO settings (user_id, data, updated) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated = excluded.updated')
+      .run(id, JSON.stringify(data), updated)
+    return { data, updated }
   }
 
   setActivity(id: string, activity: Activity) {

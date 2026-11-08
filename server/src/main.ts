@@ -110,7 +110,7 @@ function cors(request: IncomingMessage, response: ServerResponse) {
   response.setHeader('Access-Control-Allow-Origin', origin)
   response.setHeader('Vary', 'Origin')
   response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type')
-  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
   response.setHeader('Access-Control-Max-Age', '600')
 }
 
@@ -296,6 +296,18 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
   // GET /me: the user's own follows and privacy.
   if (path === '/me' && request.method === 'GET') {
     return send(response, 200, { ...profileFor(me.id, me.id), friends: store.people(store.friends(me.id)) })
+  }
+
+  // GET /me/settings: the user's settings that follow the account (theme of the player, subtitles, concert location …).
+  if (path === '/me/settings' && request.method === 'GET') return send(response, 200, store.settings(me.id))
+
+  // PATCH /me/settings { key: value | null }: changes some; the user's other devices hear of it at once.
+  if (path === '/me/settings' && request.method === 'PATCH') {
+    const patch = await readJson<Record<string, unknown>>(request)
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return send(response, 400, { error: 'Expected an object' })
+    const settings = store.updateSettings(me.id, patch)
+    push(me.id, 'settings', settings)
+    return send(response, 200, settings)
   }
 
   // PUT /me/privacy

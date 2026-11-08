@@ -1,12 +1,13 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
-import { useSyncExternalStore } from 'react'
+import { useEffect } from 'react'
+import { useLocalSettings } from '@/features/settings/local-settings'
 import { lumioGet } from '@/features/social/social'
 import { getLocale } from '@/lib/i18n'
 
 /**
  * Concerts from Ticketmaster's Discovery API (needs `VITE_TICKETMASTER_API_KEY`): an artist's upcoming shows, one
  * event with its line-up and venue, and searches by name or around a place. Where "near you" is comes from the
- * browser's location or a city the user picks (looked up with Open-Meteo's free geocoder); it stays on this device.
+ * browser's location or a city the user picks (looked up with Open-Meteo's free geocoder); it follows the account.
  */
 const KEY = import.meta.env.VITE_TICKETMASTER_API_KEY?.trim()
 export const concertsAvailable = !!KEY
@@ -280,35 +281,37 @@ export interface ConcertLocation {
   lon: number
 }
 
-const LOCATION_KEY = 'lumio.listen.concertLocation'
-let location: ConcertLocation | null = (() => {
+/** Where it was kept before it followed the account (on this device only); taken over once. */
+const LEGACY_LOCATION_KEY = 'lumio.listen.concertLocation'
+
+function legacyLocation(): ConcertLocation | null {
   try {
-    return JSON.parse(localStorage.getItem(LOCATION_KEY) ?? 'null') as ConcertLocation | null
+    return JSON.parse(localStorage.getItem(LEGACY_LOCATION_KEY) ?? 'null') as ConcertLocation | null
   } catch {
     return null
   }
-})()
-const locationListeners = new Set<() => void>()
-
-export function setConcertLocation(next: ConcertLocation | null) {
-  location = next
-  try {
-    if (next) localStorage.setItem(LOCATION_KEY, JSON.stringify(next))
-    else localStorage.removeItem(LOCATION_KEY)
-  } catch {
-    // Only kept for this visit.
-  }
-  for (const listener of locationListeners) listener()
 }
 
-export function useConcertLocation() {
-  return useSyncExternalStore(
-    (listener) => {
-      locationListeners.add(listener)
-      return () => locationListeners.delete(listener)
-    },
-    () => location,
-  )
+/** Where concerts are looked for; an account setting, so the same on every device. */
+export function useConcertLocation(): ConcertLocation | null {
+  const { settings, update } = useLocalSettings()
+  // Moves a location chosen before into the account's settings.
+  useEffect(() => {
+    const legacy = legacyLocation()
+    if (!legacy) return
+    if (!settings.concertLocation) update({ concertLocation: legacy })
+    try {
+      localStorage.removeItem(LEGACY_LOCATION_KEY)
+    } catch {
+      // Taken over again next time.
+    }
+  }, [settings.concertLocation, update])
+  return settings.concertLocation
+}
+
+export function useSetConcertLocation() {
+  const { update } = useLocalSettings()
+  return (next: ConcertLocation | null) => update({ concertLocation: next })
 }
 
 /** Places matching a name, for picking the city concerts should be near (Open-Meteo's geocoder, no key). */

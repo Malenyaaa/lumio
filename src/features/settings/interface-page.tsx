@@ -65,7 +65,7 @@ export function InterfacePage() {
         />
       </Section>
 
-      <Section title={t.previewCards} scope="device">
+      <Section title={t.previewCards} scope="account">
         <SwitchField
           id="hover-preview"
           label={t.hoverPreviewLabel}
@@ -84,7 +84,7 @@ export function InterfacePage() {
         />
       </Section>
 
-      <Section title={t.motion} scope="device">
+      <Section title={t.motion} scope="account">
         <SwitchField
           id="page-animations"
           label={t.pageAnimationsLabel}

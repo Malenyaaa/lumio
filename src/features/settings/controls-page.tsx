@@ -29,7 +29,7 @@ export function ControlsPage() {
 
   return (
     <SettingsPage title={t.title} description={t.description}>
-      <Section title={t.keyboard} scope="device">
+      <Section title={t.keyboard} scope="account">
         <SwitchField
           id="keyboard-shortcuts"
           label={t.shortcutsLabel}
@@ -54,7 +54,7 @@ export function ControlsPage() {
         </div>
       </Section>
 
-      <Section title={t.player} scope="device">
+      <Section title={t.player} scope="account">
         <SelectField
           id="controls-hide"
           label={t.hideLabel}

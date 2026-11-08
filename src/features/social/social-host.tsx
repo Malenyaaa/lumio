@@ -1,11 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { useAuthedSession } from '@/features/auth/session'
+import { onAccountSettingsEvent, useAccountSettingsSync } from '@/features/settings/account-sync'
 import { socialCall, setSocialConnection, setSocialSharing, useSocialMe, useSocialUrl, type FriendActivity } from './social'
 
 /**
  * Connects Lumio to its server while signed in: hands the players the connection (they report what plays), carries
- * over follows Lumio kept before the server existed, and listens for live updates (friends' activity, new followers).
+ * over follows Lumio kept before the server existed, keeps the account's settings in step, and listens for live
+ * updates (friends' activity, new followers, settings changed on another device).
  */
 export function SocialHost() {
   const { session } = useAuthedSession()
@@ -17,6 +19,9 @@ export function SocialHost() {
     setSocialConnection(base ? { base, token: session.accessToken } : null)
     return () => setSocialConnection(null)
   }, [base, session.accessToken])
+
+  // Settings that follow the account.
+  useAccountSettingsSync(base, session.accessToken, session.userId)
 
   useEffect(() => setSocialSharing(!!me.data?.privacy.shareActivity), [me.data?.privacy.shareActivity])
 
@@ -51,8 +56,9 @@ export function SocialHost() {
       void queryClient.invalidateQueries({ queryKey: ['social', 'user', base, update.user.id] })
     })
     events.addEventListener('follow', () => void queryClient.invalidateQueries({ queryKey: ['social', 'me'] }))
+    events.addEventListener('settings', (event) => onAccountSettingsEvent(session.userId, (event as MessageEvent<string>).data))
     return () => events.close()
-  }, [base, session.accessToken, queryClient])
+  }, [base, session.accessToken, session.userId, queryClient])
 
   return null
 }

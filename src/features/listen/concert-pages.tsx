@@ -25,10 +25,10 @@ import {
   concertsAvailable,
   distanceKm,
   NEAR_KM,
-  setConcertLocation,
   useArtistsConcerts,
   useConcert,
   useConcertLocation,
+  useSetConcertLocation,
   useConcerts,
   useConcertSearch,
   usePlaceSearch,
@@ -507,6 +507,7 @@ export function ConcertsPage() {
 export function LocationDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const t = useMessages(messages)
   const current = useConcertLocation()
+  const setConcertLocation = useSetConcertLocation()
   const [query, setQuery] = useState('')
   const [state, setState] = useState<'idle' | 'locating' | 'denied'>('idle')
   const places = usePlaceSearch(query)

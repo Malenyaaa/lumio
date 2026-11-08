@@ -215,6 +215,10 @@ export function PlaybackPage() {
           options={[{ value: 0, label: t.musicOriginal }, ...[320, 256, 192, 128].map((kbps) => ({ value: kbps, label: `${kbps} kbps` }))]}
           onChange={(value) => update({ musicQuality: value || null })}
         />
+      </Section>
+
+      {/* Unlike the quality (which depends on this device's connection), what happens after the queue follows the account. */}
+      <Section title={t.musicBehavior} scope="account">
         <SwitchField
           id="music-autoplay"
           label={t.autoplayMusicLabel}
@@ -316,7 +320,7 @@ export function PlaybackPage() {
         />
       </Section>
 
-      <Section title={t.player} scope="device">
+      <Section title={t.player} scope="account">
         <SelectField
           id="playback-rate"
           label={t.speedLabel}
@@ -359,7 +363,7 @@ export function PlaybackPage() {
         />
       </Section>
 
-      <Section title={t.skip} scope="device">
+      <Section title={t.skip} scope="account">
         <SelectField
           id="skip-forward"
           label={t.skipForward}
@@ -379,7 +383,7 @@ export function PlaybackPage() {
       <Section
         title={t.segments}
         description={t.segmentsDescription}
-        scope="device"
+        scope="account"
       >
         {SEGMENT_KINDS.map((kind) => (
           <SelectField
