@@ -85,6 +85,7 @@ JELLYFIN_URL=https://jellyfin.example.org PORT=8097 DATA_DIR=/var/lib/lumio node
 | `ALLOWED_ORIGINS` | no       | Comma-separated origins allowed to call the API from elsewhere (only for split setups).       |
 | `TICKETMASTER_API_KEY` | no  | The server's own Ticketmaster key for the concert relay (otherwise the app's key is used).    |
 | `LASTFM_API_KEY`  | no       | The server's own Last.fm key for the relay (otherwise the app's key is used).                 |
+| `MUSICBRAINZ_CONTACT` | no  | A URL or e-mail address MusicBrainz can reach the operator at (it throttles anonymous clients). |
 
 The server relays and caches what the app asks Ticketmaster (6 h), Last.fm (artists 90 days, charts 24 h), MusicBrainz
 (artist links and song credits, 180 days) and lrclib (lyrics, 180 days) for, podcast feeds with their chapters and transcripts (6 h / 30 days), and

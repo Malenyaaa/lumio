@@ -71,8 +71,30 @@ export async function lookupCredits(meta: TrackMeta, musicbrainz: MusicBrainz): 
     )
     .sort((a, b) => off(a.length) - off(b.length))[0]
   if (!best || off(best.length) > 15) return null
+  return creditsOfRecording(best.id, meta.album, musicbrainz)
+}
 
-  const recording = (await musicbrainz(`recording/${best.id}`, { inc: 'artist-credits+artist-rels+label-rels+work-rels+work-level-rels+releases+isrcs' })) as {
+/** The candidates for a track on MusicBrainz, for an admin to pick from when the automatic match found none. */
+export async function searchRecordings(title: string, artist: string, musicbrainz: MusicBrainz) {
+  const quote = (value: string) => `"${value.replace(/["\\]/g, ' ')}"`
+  const query = [title && `recording:${quote(title)}`, artist && `artist:${quote(artist)}`].filter(Boolean).join(' AND ')
+  const found = (await musicbrainz('recording', { query, limit: '15' })) as {
+    recordings?: Array<{ id: string; score: number; title: string; length?: number; 'artist-credit'?: Array<{ name: string; joinphrase?: string }>; releases?: Array<{ title: string; date?: string }> }>
+  } | null
+  return (found?.recordings ?? []).map((recording) => ({
+    id: recording.id,
+    score: recording.score,
+    title: recording.title,
+    artist: (recording['artist-credit'] ?? []).map((credit) => credit.name + (credit.joinphrase ?? '')).join(''),
+    seconds: recording.length ? Math.round(recording.length / 1000) : undefined,
+    release: recording.releases?.[0]?.title,
+    year: recording.releases?.[0]?.date?.slice(0, 4),
+  }))
+}
+
+/** A recording's credits by its MusicBrainz id (the album names the release to take the label from). */
+export async function creditsOfRecording(id: string, album: string | undefined, musicbrainz: MusicBrainz): Promise<TrackCredits | null> {
+  const recording = (await musicbrainz(`recording/${id}`, { inc: 'artist-credits+artist-rels+label-rels+work-rels+work-level-rels+releases+isrcs' })) as {
     'artist-credit'?: Array<{ name: string; artist?: { name: string } }>
     relations?: Relation[]
     releases?: Array<{ id: string; title: string; status?: string }>
@@ -81,7 +103,7 @@ export async function lookupCredits(meta: TrackMeta, musicbrainz: MusicBrainz): 
   if (!recording) return null
 
   const credits: TrackCredits = {
-    recording: best.id,
+    recording: id,
     artists: [],
     writers: [],
     composers: [],
@@ -118,7 +140,7 @@ export async function lookupCredits(meta: TrackMeta, musicbrainz: MusicBrainz): 
 
   // The label: from the release this track is on (the album of that name), else its first official one.
   const releases = recording.releases ?? []
-  const release = releases.find((entry) => sameName(entry.title, meta.album)) ?? releases.find((entry) => entry.status === 'Official') ?? releases[0]
+  const release = releases.find((entry) => sameName(entry.title, album)) ?? releases.find((entry) => entry.status === 'Official') ?? releases[0]
   if (release) {
     const details = (await musicbrainz(`release/${release.id}`, { inc: 'labels' }).catch(() => null)) as { 'label-info'?: Array<{ label?: { name: string } }> } | null
     for (const info of details?.['label-info'] ?? []) if (info.label?.name !== '[no label]') add(credits.labels, info.label?.name)

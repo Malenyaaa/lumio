@@ -4,6 +4,7 @@ import { ErrorBoundary, RouteError } from '@/components/error-boundary'
 import { NotFound } from '@/components/not-found'
 import { AppShell, RequireSession } from '@/components/app-shell'
 import { Toaster } from '@/components/ui/sonner'
+import { useToastsWanted } from '@/features/settings/local-settings'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { LoginPage } from '@/features/auth/login-page'
 import { SessionProvider, useSession } from '@/features/auth/session'
@@ -143,13 +144,18 @@ const router = createBrowserRouter(
   ),
 )
 
+/** The notices, unless the user turned them off (Settings → Interface). */
+function WantedToaster() {
+  return useToastsWanted() ? <Toaster /> : null
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <SessionProvider>
         <TooltipProvider>
           <RouterProvider router={router} />
-          <Toaster />
+          <WantedToaster />
         </TooltipProvider>
       </SessionProvider>
     </QueryClientProvider>

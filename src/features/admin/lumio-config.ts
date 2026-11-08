@@ -31,6 +31,8 @@ export interface LumioConfig {
   hoverPreview?: HoverPreviewRules
   /** Raised by an admin to make every device clear the app's cache (files, pictures, kept data) once. */
   cacheVersion?: number
+  /** Libraries the music metadata tasks leave out (e.g. audio plays); by id. */
+  metadataExcludedLibraries?: string[]
 }
 
 export interface ModeBranding {

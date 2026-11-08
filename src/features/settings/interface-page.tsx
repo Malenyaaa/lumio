@@ -100,6 +100,10 @@ export function InterfacePage() {
           onChange={(checked) => update({ smoothScrolling: checked })}
         />
       </Section>
+
+      <Section title={t.notices} scope="account">
+        <SwitchField id="toasts" label={t.toastsLabel} hint={t.toastsHint} checked={settings.toasts} onChange={(checked) => update({ toasts: checked })} />
+      </Section>
     </SettingsPage>
   )
 }

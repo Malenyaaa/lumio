@@ -3,7 +3,7 @@ import { createReadStream } from 'node:fs'
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { extname, join, normalize, resolve, sep } from 'node:path'
-import { lookupCredits, sameName, type Failure, type JobState, type TrackCredits, type TrackMeta } from './credits.ts'
+import { creditsOfRecording, lookupCredits, sameName, searchRecordings, type Failure, type JobState, type TrackCredits, type TrackMeta } from './credits.ts'
 import { DEFAULT_PRIVACY, Store, type Activity, type Person, type Privacy } from './store.ts'
 
 /**
@@ -15,7 +15,8 @@ import { DEFAULT_PRIVACY, Store, type Activity, type Person, type Privacy } from
  *
  * Settings (environment): JELLYFIN_URL (required), PORT (8097), DATA_DIR (./data), WEB_DIR (the built app, ../dist),
  * ALLOWED_ORIGINS (comma-separated; only needed when the app runs elsewhere, e.g. the Vite dev server),
- * TICKETMASTER_API_KEY and LASTFM_API_KEY (optional; otherwise the app's own keys are used).
+ * TICKETMASTER_API_KEY and LASTFM_API_KEY (optional; otherwise the app's own keys are used), MUSICBRAINZ_CONTACT (optional;
+ * how MusicBrainz can reach the operator).
  */
 const JELLYFIN_URL = (process.env.JELLYFIN_URL ?? '').replace(/\/+$/, '')
 const PORT = Number(process.env.PORT ?? 8097)
@@ -37,6 +38,11 @@ const FEED_LIMIT = 15 * 1024 * 1024
 /** What the feed relay passes on: feeds, chapter lists and transcripts (text of some kind), nothing else. */
 const FEED_TYPES = /xml|rss|atom|json|text\/|vtt|srt|subrip/i
 const HOUR = 60 * 60_000
+/**
+ * How the server introduces itself to outside services. MusicBrainz asks for a way to reach whoever runs a client and
+ * turns anonymous ones away sooner; MUSICBRAINZ_CONTACT (a URL or e-mail address) names the operator.
+ */
+const USER_AGENT = `Lumio/1.0 ( ${process.env.MUSICBRAINZ_CONTACT?.trim() || 'https://github.com/PalmarHealer/lumio'} )`
 
 /**
  * The outside services the app asks through this server, which caches their answers on disk for everyone: what one
@@ -87,7 +93,7 @@ const RELAY_SERVICES: Record<string, RelayService> = {
     paths: /^(artist|recording|release)(\/[0-9a-f-]{36})?$/,
     ttl: 180 * 24 * HOUR,
     spacing: 1100,
-    headers: { 'User-Agent': 'Lumio/1.0 (self-hosted Jellyfin client)' },
+    headers: { 'User-Agent': USER_AGENT },
     keep: (status) => status < 400 || status === 404,
   },
   // Deezer: a photo for artists Jellyfin has none for (its search needs no key). Photos rarely change.
@@ -103,7 +109,7 @@ const RELAY_SERVICES: Record<string, RelayService> = {
     paths: /^api\/get$/,
     ttl: (status) => (status === 404 ? 7 * 24 * HOUR : 180 * 24 * HOUR),
     spacing: 100,
-    headers: { 'User-Agent': 'Lumio/1.0 (self-hosted Jellyfin client)' },
+    headers: { 'User-Agent': USER_AGENT },
     keep: (status) => status < 400 || status === 404,
   },
 }
@@ -357,9 +363,15 @@ async function relayGet(name: string, path: string, params: URLSearchParams): Pr
   const fresh = (entry: RelayEntry) => Date.now() - entry.at < (typeof service.ttl === 'number' ? service.ttl : service.ttl(entry.status, path, params))
   if (cached && fresh(cached)) return cached
   try {
-    await relaySlot(name, service.spacing)
     if (service.key && key) query.set(service.key.param, key)
-    const upstream = await fetch(`${service.base}${path}?${query}`, { headers: service.headers, signal: AbortSignal.timeout(15_000) })
+    let upstream: Response
+    // Turned away (too many calls, or the service is busy): everyone waits a little longer, then this is asked again.
+    for (let attempt = 0; ; attempt++) {
+      await relaySlot(name, service.spacing)
+      upstream = await fetch(`${service.base}${path}?${query}`, { headers: service.headers, signal: AbortSignal.timeout(15_000) })
+      if ((upstream.status !== 503 && upstream.status !== 429) || attempt >= 3) break
+      nextSlot.set(name, Math.max(nextSlot.get(name) ?? 0, Date.now()) + 2_000 * (attempt + 1))
+    }
     const entry: RelayEntry = { at: Date.now(), status: upstream.status, type: upstream.headers.get('content-type') ?? 'application/json', body: await upstream.text() }
     if (!(service.keep ?? ((status) => status < 400))(entry.status, entry.body)) {
       if (cached) return cached
@@ -412,7 +424,7 @@ async function serveFeed(response: ServerResponse, source: string | null) {
   const ttl = (entry: RelayEntry) => (/xml|rss|atom/i.test(entry.type) ? 6 * HOUR : 30 * 24 * HOUR)
   if (cached && Date.now() - cached.at < ttl(cached)) return reply(cached)
   try {
-    const upstream = await fetch(target, { headers: { 'User-Agent': 'Lumio/1.0 (self-hosted Jellyfin client)' }, signal: AbortSignal.timeout(20_000) })
+    const upstream = await fetch(target, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(20_000) })
     const type = upstream.headers.get('content-type') ?? 'application/octet-stream'
     const length = Number(upstream.headers.get('content-length') ?? 0)
     if (!upstream.ok || !FEED_TYPES.test(type) || length > FEED_LIMIT) {
@@ -464,7 +476,7 @@ async function epidemicProfile(name: string | null): Promise<ArtistProfile | nul
   try {
     await relaySlot('epidemic', 600)
     const page = await fetch(`https://www.epidemicsound.com/artists/${slug}/`, {
-      headers: { 'User-Agent': 'Lumio/1.0 (self-hosted Jellyfin client)' },
+      headers: { 'User-Agent': USER_AGENT },
       signal: AbortSignal.timeout(15_000),
     })
     let profile: ArtistProfile | null = null
@@ -542,18 +554,25 @@ const jobs: Record<JobName, JobState & { stop?: boolean }> = {
   artists: { running: false, total: 0, done: 0, found: 0, failed: 0, failures: [] },
 }
 
-/** Everything in the library of a kind, read with an administrator's token. */
-async function libraryItems<T>(token: string, userId: string, path: string, query: Record<string, string>): Promise<T[]> {
-  const items: T[] = []
-  for (let start = 0; ; start += 500) {
-    const params = new URLSearchParams({ ...query, StartIndex: String(start), Limit: '500', EnableImages: 'false', EnableUserData: 'false' })
-    const response = await fetch(`${JELLYFIN_URL}${path.replace('{user}', userId)}?${params}`, { headers: { Authorization: `MediaBrowser Token="${token}"` } })
-    if (!response.ok) throw new Error(`Jellyfin ${response.status}`)
-    const page = (await response.json()) as { Items?: T[]; TotalRecordCount?: number }
-    items.push(...(page.Items ?? []))
-    if (!page.Items?.length || items.length >= (page.TotalRecordCount ?? 0)) break
+/**
+ * Everything of a kind in some libraries (all when none are named), read with an administrator's token; each entry
+ * once, even when it is in several of them.
+ */
+async function libraryItems<T extends { Id: string }>(token: string, userId: string, path: string, query: Record<string, string>, libraries?: string[]): Promise<T[]> {
+  const items = new Map<string, T>()
+  for (const parent of libraries?.length ? libraries : [undefined]) {
+    let read = 0
+    for (let start = 0; ; start += 500) {
+      const params = new URLSearchParams({ ...query, ...(parent ? { ParentId: parent } : {}), StartIndex: String(start), Limit: '500', EnableImages: 'false', EnableUserData: 'false' })
+      const response = await fetch(`${JELLYFIN_URL}${path.replace('{user}', userId)}?${params}`, { headers: { Authorization: `MediaBrowser Token="${token}"` } })
+      if (!response.ok) throw new Error(`Jellyfin ${response.status}`)
+      const page = (await response.json()) as { Items?: T[]; TotalRecordCount?: number }
+      for (const item of page.Items ?? []) items.set(item.Id, item)
+      read += page.Items?.length ?? 0
+      if (!page.Items?.length || read >= (page.TotalRecordCount ?? 0)) break
+    }
   }
-  return items
+  return [...items.values()]
 }
 
 /**
@@ -605,11 +624,11 @@ const trackMeta = (track: Track): TrackMeta => ({
 })
 
 /** Looks up the credits of every track that wasn't yet (about three seconds a track, at MusicBrainz's pace). */
-function scanCredits(token: string, userId: string) {
+function scanCredits(token: string, userId: string, libraries?: string[]) {
   return runJob<Track>(
     jobs.credits,
     async () => {
-      const tracks = await libraryItems<Track>(token, userId, '/Users/{user}/Items', { Recursive: 'true', IncludeItemTypes: 'Audio' })
+      const tracks = await libraryItems<Track>(token, userId, '/Users/{user}/Items', { Recursive: 'true', IncludeItemTypes: 'Audio' }, libraries)
       const known = store.trackCredits(tracks.map((track) => track.Id))
       return tracks.filter((track) => !known[track.Id] && track.Name && (track.Artists?.[0] ?? track.AlbumArtist))
     },
@@ -619,46 +638,72 @@ function scanCredits(token: string, userId: string) {
 }
 
 /**
- * Fetches everything the app shows about each artist into the caches, exactly as the app asks for it (so its next
- * look is answered at once): Last.fm's biography (German and English), top tracks and similar artists, the Epidemic
- * Sound profile, the Deezer photo, the MusicBrainz links, and the photos themselves.
+ * Fetches everything the app shows about an artist into the caches, exactly as the app asks for it (so its next look is
+ * answered at once): Last.fm's biography (German and English), top tracks and similar artists, the Epidemic Sound
+ * profile, the Deezer photo, the MusicBrainz links, and the photos themselves. Each service on its own; what failed is
+ * named in `failed`.
  */
-function scanArtists(token: string, userId: string, lastfmKey: string | undefined) {
+async function precacheArtist(artist: Artist, lastfmKey: string | undefined): Promise<{ found: boolean; failed: string[] }> {
   const lastfm = async (params: Record<string, string>) => {
     const entry = await relayGet('lastfm', '', new URLSearchParams({ ...params, ...(lastfmKey ? { api_key: lastfmKey } : {}), format: 'json', autocorrect: '1' }))
-    return JSON.parse(entry.body) as { error?: number; artist?: { bio?: { content?: string } } }
+    return entry.body ? (JSON.parse(entry.body) as { error?: number; artist?: { bio?: { content?: string } } }) : null
   }
-  return runJob<Artist>(
-    jobs.artists,
-    () => libraryItems<Artist>(token, userId, '/Artists', { userId, Fields: 'ProviderIds' }),
-    async (artist) => {
-      const name = artist.Name ?? ''
-      if (!name) return false
-      let found = false
-      if (lastfmKey || process.env.LASTFM_API_KEY) {
+    const name = artist.Name ?? ''
+    if (!name) return { found: false, failed: [] }
+    let found = false
+    const failed: string[] = []
+    // Each service on its own: one that fails doesn't keep the others from being fetched.
+    const step = async (service: string, run: () => Promise<void>) => {
+      try {
+        await run()
+      } catch (error) {
+        failed.push(`${service}: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+    const json = <T,>(entry: RelayEntry) => (entry.body ? (JSON.parse(entry.body) as T) : null)
+    if (lastfmKey || process.env.LASTFM_API_KEY) {
+      await step('Last.fm', async () => {
         const info = await lastfm({ method: 'artist.getinfo', artist: name, lang: 'de' })
-        found ||= !!info.artist?.bio?.content
+        found ||= !!info?.artist?.bio?.content
         await lastfm({ method: 'artist.getinfo', artist: name, lang: 'en' })
         await lastfm({ method: 'artist.gettoptracks', artist: name, limit: '50' })
         await lastfm({ method: 'artist.getsimilar', artist: name, limit: '30' })
-      }
-      const profile = await epidemicProfile(name).catch(() => null)
-      if (profile?.image) await keptImage(profile.image).catch(() => null)
+      })
+    }
+    await step('Epidemic Sound', async () => {
+      const profile = await epidemicProfile(name)
+      if (profile?.image) await keptImage(profile.image)
       found ||= !!profile?.description
-      const deezer = JSON.parse((await relayGet('deezer', 'search/artist', new URLSearchParams({ q: name, limit: '5' }))).body) as {
-        data?: Array<{ name: string; picture_xl?: string; picture_big?: string }>
-      }
-      const match = deezer.data?.find((entry) => sameName(entry.name, name))
+    })
+    await step('Deezer', async () => {
+      const deezer = json<{ data?: Array<{ name: string; picture_xl?: string; picture_big?: string }> }>(
+        await relayGet('deezer', 'search/artist', new URLSearchParams({ q: name, limit: '5' })),
+      )
+      const match = deezer?.data?.find((entry) => sameName(entry.name, name))
       const picture = match?.picture_xl ?? match?.picture_big
-      if (picture && !picture.includes('/artist//')) await keptImage(picture).catch(() => null)
+      if (picture && !picture.includes('/artist//')) await keptImage(picture)
+    })
+    await step('MusicBrainz', async () => {
       let id = artist.ProviderIds?.MusicBrainzArtist
       if (!id) {
-        const search = JSON.parse((await relayGet('musicbrainz', 'artist', new URLSearchParams({ query: `artist:"${name}"`, fmt: 'json', limit: '3' }))).body) as {
-          artists?: Array<{ id: string; name: string; score: number }>
-        }
-        id = search.artists?.find((entry) => entry.score >= 95 && sameName(entry.name, name))?.id
+        const search = json<{ artists?: Array<{ id: string; name: string; score: number }> }>(
+          await relayGet('musicbrainz', 'artist', new URLSearchParams({ query: `artist:"${name}"`, fmt: 'json', limit: '3' })),
+        )
+        id = search?.artists?.find((entry) => entry.score >= 95 && sameName(entry.name, name))?.id
       }
       if (id) await relayGet('musicbrainz', `artist/${id}`, new URLSearchParams({ inc: 'url-rels', fmt: 'json' }))
+    })
+    return { found, failed }
+}
+
+/** Fetches every artist's information into the caches (see precacheArtist). */
+function scanArtists(token: string, userId: string, lastfmKey: string | undefined, libraries?: string[]) {
+  return runJob<Artist>(
+    jobs.artists,
+    () => libraryItems<Artist>(token, userId, '/Artists', { userId, Fields: 'ProviderIds' }, libraries),
+    async (artist) => {
+      const { found, failed } = await precacheArtist(artist, lastfmKey)
+      if (failed.length) throw new Error(failed.join(' · '))
       return found
     },
     (artist) => ({ id: artist.Id, title: artist.Name ?? '' }),
@@ -719,15 +764,105 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
     const job = jobs[jobName]
     if (request.method === 'POST' && !job.running) {
       const token = tokenOf(request, url)!
-      if (jobName === 'credits') void scanCredits(token, me.id)
-      else {
-        const { lastfmKey } = await readJson<{ lastfmKey?: unknown }>(request).catch(() => ({ lastfmKey: undefined }))
-        void scanArtists(token, me.id, typeof lastfmKey === 'string' && /^[0-9a-f]{32}$/i.test(lastfmKey) ? lastfmKey : undefined)
-      }
+      // Which libraries to go through (an admin can leave some out, e.g. audio plays); all when none are named.
+      const body = await readJson<{ lastfmKey?: unknown; libraries?: unknown }>(request).catch(() => ({}) as { lastfmKey?: unknown; libraries?: unknown })
+      const libraries = Array.isArray(body.libraries) ? body.libraries.filter((id): id is string => typeof id === 'string' && /^[0-9a-f-]{32,36}$/i.test(id)) : undefined
+      if (jobName === 'credits') void scanCredits(token, me.id, libraries)
+      else void scanArtists(token, me.id, typeof body.lastfmKey === 'string' && /^[0-9a-f]{32}$/i.test(body.lastfmKey) ? body.lastfmKey : undefined, libraries)
     }
     if (request.method === 'DELETE') job.stop = true
     const { stop: _stop, ...state } = job
     return send(response, 200, state)
+  }
+
+  // POST /admin/credits/search {title, artist}: recordings on MusicBrainz to pick from by hand.
+  if (path === '/admin/credits/search' && request.method === 'POST') {
+    if (!isAdmin(tokenOf(request, url))) return send(response, 403, { error: 'Administrators only' })
+    const body = await readJson<{ title?: unknown; artist?: unknown }>(request).catch(() => null)
+    const title = typeof body?.title === 'string' ? body.title.slice(0, 300).trim() : ''
+    const artist = typeof body?.artist === 'string' ? body.artist.slice(0, 300).trim() : ''
+    if (!title && !artist) return send(response, 400, { error: 'Nothing to search for' })
+    try {
+      return send(response, 200, await searchRecordings(title, artist, musicbrainz))
+    } catch {
+      return send(response, 502, { error: 'MusicBrainz unavailable' })
+    }
+  }
+
+  // POST /admin/credits/fix {id, meta, recording?}: a track looked up again now, or given the recording an admin picked.
+  if (path === '/admin/credits/fix' && request.method === 'POST') {
+    if (!isAdmin(tokenOf(request, url))) return send(response, 403, { error: 'Administrators only' })
+    const body = await readJson<{ id?: unknown; recording?: unknown; meta?: Partial<TrackMeta> }>(request).catch(() => null)
+    const id = typeof body?.id === 'string' && /^[0-9a-f-]{32,36}$/i.test(body.id) ? body.id : null
+    const meta = body?.meta
+    if (!id || typeof meta?.title !== 'string' || typeof meta.artist !== 'string') return send(response, 400, { error: 'Bad track' })
+    const clean: TrackMeta = {
+      title: meta.title.slice(0, 300),
+      artist: meta.artist.slice(0, 300),
+      album: typeof meta.album === 'string' ? meta.album.slice(0, 300) : undefined,
+      albumId: typeof meta.albumId === 'string' && /^[0-9a-f-]{32,36}$/i.test(meta.albumId) ? meta.albumId : undefined,
+      seconds: typeof meta.seconds === 'number' ? meta.seconds : undefined,
+    }
+    const recording = typeof body?.recording === 'string' && /^[0-9a-f-]{36}$/i.test(body.recording) ? body.recording : null
+    try {
+      const credits = recording ? await creditsOfRecording(recording, clean.album, musicbrainz) : await lookupCredits(clean, musicbrainz)
+      store.setTrackCredits(id, credits, { ...clean, ...(recording ? { picked: true } : {}) })
+      jobs.credits.failures = jobs.credits.failures.filter((failure) => failure.id !== id)
+      return send(response, 200, { credits })
+    } catch {
+      return send(response, 502, { error: 'MusicBrainz unavailable' })
+    }
+  }
+
+  // POST /admin/artists/fix {id, name, musicBrainzId?, lastfmKey?}: one artist's information fetched again now.
+  if (path === '/admin/artists/fix' && request.method === 'POST') {
+    if (!isAdmin(tokenOf(request, url))) return send(response, 403, { error: 'Administrators only' })
+    const body = await readJson<{ id?: unknown; name?: unknown; musicBrainzId?: unknown; lastfmKey?: unknown }>(request).catch(() => null)
+    if (typeof body?.id !== 'string' || typeof body.name !== 'string' || !body.name.trim()) return send(response, 400, { error: 'Bad artist' })
+    const artist: Artist = {
+      Id: body.id,
+      Name: body.name.slice(0, 300),
+      ProviderIds: typeof body.musicBrainzId === 'string' && /^[0-9a-f-]{36}$/i.test(body.musicBrainzId) ? { MusicBrainzArtist: body.musicBrainzId } : {},
+    }
+    const result = await precacheArtist(artist, typeof body.lastfmKey === 'string' && /^[0-9a-f]{32}$/i.test(body.lastfmKey) ? body.lastfmKey : undefined)
+    if (!result.failed.length) jobs.artists.failures = jobs.artists.failures.filter((failure) => failure.id !== body.id)
+    return send(response, 200, result)
+  }
+
+  // GET /admin/credits?search=…&offset=…: the looked-up tracks, for browsing.
+  if (path === '/admin/credits' && request.method === 'GET') {
+    if (!isAdmin(tokenOf(request, url))) return send(response, 403, { error: 'Administrators only' })
+    const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0)
+    return send(response, 200, store.creditsPage((url.searchParams.get('search') ?? '').slice(0, 200).trim(), offset, 50))
+  }
+
+  // POST /admin/credits/edit {id, meta, credits}: credits an admin wrote by hand (kept; no lookup replaces them).
+  if (path === '/admin/credits/edit' && request.method === 'POST') {
+    if (!isAdmin(tokenOf(request, url))) return send(response, 403, { error: 'Administrators only' })
+    const body = await readJson<{ id?: unknown; meta?: Record<string, unknown>; credits?: Record<string, unknown> }>(request).catch(() => null)
+    const id = typeof body?.id === 'string' && /^[0-9a-f-]{32,36}$/i.test(body.id) ? body.id : null
+    if (!id || !body?.credits || typeof body.credits !== 'object') return send(response, 400, { error: 'Bad credits' })
+    const names = (value: unknown) =>
+      Array.isArray(value) ? [...new Set(value.filter((name): name is string => typeof name === 'string').map((name) => name.trim().slice(0, 200)).filter(Boolean))].slice(0, 50) : []
+    const given = body.credits
+    const credits: TrackCredits = {
+      recording: typeof given.recording === 'string' ? given.recording.slice(0, 36) : '',
+      artists: names(given.artists),
+      writers: names(given.writers),
+      composers: names(given.composers),
+      lyricists: names(given.lyricists),
+      producers: names(given.producers),
+      mixers: names(given.mixers),
+      engineers: names(given.engineers),
+      publishers: names(given.publishers),
+      labels: names(given.labels),
+      isrc: typeof given.isrc === 'string' && given.isrc.trim() ? given.isrc.trim().slice(0, 15) : undefined,
+    }
+    const meta = body.meta ?? {}
+    const text = (value: unknown) => (typeof value === 'string' ? value.slice(0, 300) : undefined)
+    store.setTrackCredits(id, credits, { title: text(meta.title), artist: text(meta.artist), album: text(meta.album), albumId: text(meta.albumId), edited: true })
+    jobs.credits.failures = jobs.credits.failures.filter((failure) => failure.id !== id)
+    return send(response, 200, { credits })
   }
 
   // GET /admin/credits-missing: the tracks MusicBrainz had nothing for.

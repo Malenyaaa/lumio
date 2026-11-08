@@ -167,6 +167,24 @@ export class Store {
       .run(id, data === null ? null : JSON.stringify(data), Date.now(), JSON.stringify(meta))
   }
 
+  /** Looked-up tracks for browsing, newest first; `search` matches title, artist, album or anyone credited. */
+  creditsPage(search: string, offset: number, limit: number): { total: number; rows: Array<{ id: string; at: number; data: unknown; meta: unknown }> } {
+    const pattern = `%${search.replace(/[\\%_]/g, (char) => `\\${char}`)}%`
+    const where = search ? "WHERE meta LIKE ? ESCAPE '\\' OR data LIKE ? ESCAPE '\\'" : ''
+    const params = search ? [pattern, pattern] : []
+    const { total } = this.db.prepare(`SELECT count(*) AS total FROM track_credits ${where}`).get(...params) as { total: number }
+    const rows = this.db.prepare(`SELECT item_id, at, data, meta FROM track_credits ${where} ORDER BY at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset) as Array<{
+      item_id: string
+      at: number
+      data: string | null
+      meta: string | null
+    }>
+    return {
+      total,
+      rows: rows.map((row) => ({ id: row.item_id, at: row.at, data: row.data ? (JSON.parse(row.data) as unknown) : null, meta: row.meta ? (JSON.parse(row.meta) as unknown) : null })),
+    }
+  }
+
   /** The tracks looked up without a result, most recent first. */
   tracksWithoutCredits(): Array<{ id: string; at: number; meta: unknown }> {
     const rows = this.db.prepare('SELECT item_id, at, meta FROM track_credits WHERE data IS NULL ORDER BY at DESC').all() as Array<{ item_id: string; at: number; meta: string | null }>

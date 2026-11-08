@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 import { useCallback, useSyncExternalStore } from 'react'
-import { useAuthedSession } from '@/features/auth/session'
+import { useAuthedSession, useSession } from '@/features/auth/session'
 
 export type SegmentAction = 'None' | 'AskToSkip' | 'Skip'
 export type SegmentKind = 'Intro' | 'Preview' | 'Recap' | 'Commercial' | 'Outro'
@@ -79,6 +79,8 @@ export interface LocalSettings {
   pauseSpotlightSeconds: number
   /** Animate page changes. */
   pageAnimations: boolean
+  /** Show the short notices in a corner ("Saved", "Added to queue"); off hides them all. */
+  toasts: boolean
   homeLayout: HomeLayout
   syncPlay: SyncPlaySettings
   /** Which of the two apps this device shows; with one only, the switcher disappears. */
@@ -128,6 +130,7 @@ export const ACCOUNT_SETTINGS = [
   'controlsHideSeconds',
   'pauseSpotlightSeconds',
   'pageAnimations',
+  'toasts',
   'smoothScrolling',
   'homeLayout',
   'syncPlay',
@@ -174,6 +177,7 @@ export const DEFAULT_SETTINGS: LocalSettings = {
   controlsHideSeconds: 3,
   pauseSpotlightSeconds: 10,
   pageAnimations: true,
+  toasts: true,
   homeLayout: 'personal',
   syncPlay: DEFAULT_SYNCPLAY,
   apps: 'both',
@@ -263,6 +267,12 @@ function subscribe(listener: () => void) {
 /** The settings outside React (e.g. in timers of providers that also run while signed out). */
 export function readLocalSettings(userId: string): LocalSettings {
   return read(userId)
+}
+
+/** Whether notices (toasts) show; while signed out, they do. */
+export function useToastsWanted(): boolean {
+  const userId = useSession().session?.userId
+  return useSyncExternalStore(subscribe, () => (userId ? read(userId).toasts : true))
 }
 
 export function useLocalSettings() {
