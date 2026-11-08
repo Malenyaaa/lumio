@@ -32,6 +32,7 @@ import { SeekBar } from './seek-bar'
 import type { TrickplayLookup } from './trickplay'
 import type { VideoState } from './use-video-state'
 import type { PictureArea } from './video-fit'
+import { lengthLabel, toggleRemainingTime, useRemainingTime } from '@/lib/remaining-time'
 
 interface PlayerControlsProps {
   state: VideoState
@@ -86,6 +87,7 @@ export function PlayerControls({
   pip,
 }: PlayerControlsProps) {
   const t = useMessages(controlsMessages)
+  const showRemaining = useRemainingTime()
   const silent = state.muted || state.volume === 0
   const BackIcon = BACK_ICONS[skipBackSeconds as keyof typeof BACK_ICONS] ?? IconRewindBackward10
   const ForwardIcon = FORWARD_ICONS[skipForwardSeconds as keyof typeof FORWARD_ICONS] ?? IconRewindForward10
@@ -138,7 +140,11 @@ export function PlayerControls({
         </div>
 
         <span className="ml-3 text-sm tabular-nums text-white/90">
-          {formatClock(state.currentTime)} / {formatClock(state.duration)}
+          {formatClock(state.currentTime)} /{' '}
+          {/* A click switches between the length and the time left (also in the music bar). */}
+          <button type="button" onClick={toggleRemainingTime} title={t.lengthToggle} className="tabular-nums outline-none hover:text-white focus-visible:underline">
+            {lengthLabel(state.currentTime, state.duration, showRemaining)}
+          </button>
         </span>
 
         <div className="flex-1" />

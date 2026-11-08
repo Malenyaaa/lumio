@@ -42,6 +42,7 @@ import { playCircle } from '../play-circle'
 import { endTrackDrag, startTrackDrag, useTrackDrop } from '../track-drag'
 import { TrackContextMenu } from '../track-menu'
 import { usePlayerControls, usePlayerTime } from './player-controls'
+import { lengthLabel, toggleRemainingTime, useRemainingTime } from '@/lib/remaining-time'
 
 /** Listen's player bar along the bottom: the track, the transport with its progress, and queue, lyrics and volume. */
 export function PlayerBar() {
@@ -213,6 +214,7 @@ function Progress() {
   const t = useMessages(playerBarMessages)
   const { seek } = usePlayerControls()
   const { position, duration } = usePlayerTime()
+  const showRemaining = useRemainingTime()
   const track = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<number | null>(null)
   const fractionAt = (event: PointerEvent) => {
@@ -260,7 +262,10 @@ function Progress() {
           style={{ left: `${shown * 100}%` }}
         />
       </div>
-      <span className="w-10">{formatClock(duration)}</span>
+      {/* A click switches between the length and the time left (also in the video player). */}
+      <button type="button" onClick={toggleRemainingTime} title={t.lengthToggle} className="w-10 text-left outline-none hover:text-foreground focus-visible:underline">
+        {lengthLabel(drag !== null ? drag * duration : position, duration, showRemaining)}
+      </button>
     </div>
   )
 }

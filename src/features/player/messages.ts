@@ -43,6 +43,7 @@ export const segmentSkipLabels = defineMessages({
 
 export const controlsMessages = defineMessages({
   de: {
+    lengthToggle: 'Länge oder verbleibende Zeit anzeigen',
     play: 'Abspielen',
     pause: 'Pause',
     skipBack: (seconds: number) => `${seconds} Sekunden zurück`,
@@ -60,6 +61,7 @@ export const controlsMessages = defineMessages({
     position: 'Position',
   },
   en: {
+    lengthToggle: 'Show length or time left',
     play: 'Play',
     pause: 'Pause',
     skipBack: (seconds: number) => `Back ${seconds} seconds`,
