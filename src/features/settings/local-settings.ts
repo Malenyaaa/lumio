@@ -79,6 +79,8 @@ export interface LocalSettings {
   pauseSpotlightSeconds: number
   /** Lumio's Android app: leaving it while a video plays shrinks the video into a floating window. */
   autoPip: boolean
+  /** Lumio's Android app: swiping up and down in the video player sets the brightness (left) and the volume (right). */
+  playerGestures: boolean
   /** Animate page changes. */
   pageAnimations: boolean
   /** Show the short notices in a corner ("Saved", "Added to queue"); off hides them all. */
@@ -193,6 +195,7 @@ export const DEFAULT_SETTINGS: LocalSettings = {
   controlsHideSeconds: 3,
   pauseSpotlightSeconds: 10,
   autoPip: true,
+  playerGestures: true,
   pageAnimations: true,
   toasts: true,
   homeLayout: 'personal',

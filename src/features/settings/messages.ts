@@ -62,6 +62,8 @@ export const controlsMessages = defineMessages({
     app: 'App',
     autoPipLabel: 'Bild im Bild beim Verlassen',
     autoPipHint: 'Läuft ein Video und du wechselst zu einer anderen App, spielt es in einem kleinen Fenster weiter.',
+    gesturesLabel: 'Wischgesten im Video-Player',
+    gesturesHint: 'Auf der linken Hälfte nach oben oder unten wischen ändert die Helligkeit, auf der rechten die Lautstärke.',
   },
   en: {
     title: 'Controls',
@@ -94,6 +96,8 @@ export const controlsMessages = defineMessages({
     app: 'App',
     autoPipLabel: 'Picture in picture when leaving',
     autoPipHint: 'When you switch to another app while a video plays, it keeps playing in a small window.',
+    gesturesLabel: 'Swipe gestures in the video player',
+    gesturesHint: 'Swiping up or down on the left half sets the brightness, on the right half the volume.',
   },
 })
 

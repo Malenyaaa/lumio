@@ -32,6 +32,7 @@ import { EpisodePanel } from './episode-panel'
 import { LoadingIndicator } from './loading-indicator'
 import { PauseSpotlight } from './pause-spotlight'
 import { PlayerControls, TouchTransport } from './player-controls'
+import { SwipeLevel, useSwipeGestures } from './swipe-gestures'
 import { playerMessages, segmentSkipLabels } from './messages'
 import { initialChoice, usePlayback, useStreamOptions, type PlaybackChoice } from './playback'
 import { reportActivity } from '@/features/social/social'
@@ -680,6 +681,9 @@ function Player({ id }: { id: string }) {
   // Fingers: a tap shows or hides the controls; a second tap on the left or right side skips back or ahead (and the
   // first tap's show/hide is undone), as in phone video apps.
   const touch = useTouch()
+  // Lumio's Android app: swiping up and down sets the brightness (left) and the volume (right).
+  const gesturesOn = inCapacitor() && touch && !isAudio && settings.playerGestures
+  const gestures = useSwipeGestures(gesturesOn)
   const lastTap = useRef<{ at: number; side: 'back' | 'forward' | null; wasAwake: boolean } | null>(null)
   const [skipHint, setSkipHint] = useState<{ side: 'back' | 'forward'; seconds: number; key: number } | null>(null)
   const onTouchTap = (event: React.PointerEvent) => {
@@ -951,10 +955,13 @@ function Player({ id }: { id: string }) {
         </div>
       )}
 
-      {/* Click surface: mouse toggles playback, touch toggles the controls. */}
+      {/* Click surface: mouse toggles playback, touch toggles the controls (in Lumio's app, swipes set brightness/volume). */}
       <div
-        className="absolute inset-0 touch-manipulation"
+        className={cn('absolute inset-0', gesturesOn ? 'touch-none' : 'touch-manipulation')}
+        {...gestures.handlers}
         onPointerUp={(event) => {
+          // A swipe (brightness, volume) is no tap.
+          if (gestures.consumed()) return
           if (panelOpen) {
             setSettingsOpen(false)
             setEpisodesOpen(false)
@@ -964,6 +971,8 @@ function Player({ id }: { id: string }) {
         // A finger's double tap skips (onTouchTap); only a mouse's double click toggles fullscreen.
         onDoubleClick={inApp || touch ? undefined : toggleFullscreen}
       />
+
+      <SwipeLevel level={gestures.level} />
 
       {skipHint && (
         <div

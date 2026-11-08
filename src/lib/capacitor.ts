@@ -56,3 +56,14 @@ export function onPipEvents(onMode: (inPip: boolean) => void, onAction: (action:
     window.removeEventListener('lumiopipaction', action)
   }
 }
+
+interface SystemControlsPlugin {
+  getVolume(): Promise<{ value: number }>
+  setVolume(options: { value: number }): Promise<void>
+  getBrightness(): Promise<{ value: number }>
+  setBrightness(options: { value: number }): Promise<void>
+  resetBrightness(): Promise<void>
+}
+
+/** The device's media volume and the brightness of Lumio's window, 0..1 (the video player's swipe gestures). */
+export const SystemControls = registerPlugin<SystemControlsPlugin>('LumioSystemControls')

@@ -78,6 +78,13 @@ export function ControlsPage() {
       {inCapacitor() && (
         <Section title={t.app} scope="device">
           <SwitchField id="auto-pip" label={t.autoPipLabel} hint={t.autoPipHint} checked={settings.autoPip} onChange={(checked) => update({ autoPip: checked })} />
+          <SwitchField
+            id="player-gestures"
+            label={t.gesturesLabel}
+            hint={t.gesturesHint}
+            checked={settings.playerGestures}
+            onChange={(checked) => update({ playerGestures: checked })}
+          />
         </Section>
       )}
 
