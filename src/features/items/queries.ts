@@ -497,7 +497,8 @@ export function useNextItem(item: BaseItemDto | undefined) {
   return episodes.data ?? null
 }
 
-const BROWSE_TYPES = [BaseItemKind.Movie, BaseItemKind.Series, BaseItemKind.BoxSet, BaseItemKind.MusicAlbum, BaseItemKind.Book]
+/** What the watchlist holds: Watch's own kinds. Saved albums belong to Listen's library, not here. */
+const BROWSE_TYPES = [BaseItemKind.Movie, BaseItemKind.Series, BaseItemKind.BoxSet, BaseItemKind.Book]
 
 export function useFavorites(limit?: number) {
   const { api, session } = useAuthedSession()

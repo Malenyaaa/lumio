@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { lumioGet } from '@/features/social/social'
 
 /**
  * Downloads, as Spotify's: albums, playlists and podcast episodes kept on this device for good, in their own quality,
@@ -96,6 +97,16 @@ async function reconcile() {
   void run()
 }
 
+/**
+ * Fetches a download: library songs straight from Jellyfin; podcast episodes through the Lumio server (most podcast
+ * hosts don't let browsers read their files), straight from the host only without it.
+ */
+async function fetchAudio(id: string, url: string) {
+  if (!id.startsWith('podcast:')) return fetch(url)
+  const relayed = await lumioGet(`/podcast-audio?url=${encodeURIComponent(url)}`).catch(() => null)
+  return relayed?.ok ? relayed : fetch(url)
+}
+
 /** Downloads the pending songs one after another; stops when offline and goes on once back. */
 async function run() {
   if (running || !source || !downloadsAvailable) return
@@ -108,7 +119,7 @@ async function run() {
       try {
         const url = urlFor(id, quality)
         if (!url) throw new Error('No source')
-        const response = await fetch(url)
+        const response = await fetchAudio(id, url)
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
         const blob = await response.blob()
         // The quality may have changed meanwhile: then this file is stale.

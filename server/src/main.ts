@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { lookup } from 'node:dns/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { isIP } from 'node:net'
+import { Readable } from 'node:stream'
 import { extname, join, normalize, resolve, sep } from 'node:path'
 import { creditsOfRecording, lookupCredits, sameName, searchRecordings, type Failure, type JobState, type TrackCredits, type TrackMeta } from './credits.ts'
 import { DEFAULT_PRIVACY, Store, type Activity, type Person, type Privacy } from './store.ts'
@@ -440,6 +443,70 @@ async function serveFeed(response: ServerResponse, source: string | null) {
   } catch {
     if (cached) return reply(cached)
     send(response, 502, { error: 'Feed unavailable' })
+  }
+}
+
+/** Whether an address is inside a private network (or this machine), which the audio relay never fetches from. */
+async function isPrivateHost(hostname: string) {
+  const host = hostname.replace(/^\[|\]$/g, '')
+  if (/^(localhost|.*\.local|.*\.internal)$/i.test(host)) return true
+  let addresses: string[]
+  try {
+    addresses = isIP(host) ? [host] : (await lookup(host, { all: true })).map((entry) => entry.address)
+  } catch {
+    return true
+  }
+  return addresses.some((address) =>
+    /^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|0\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(address) ||
+    /^(::1$|::$|f[cd]|fe80:|::ffff:(127|10|192\.168)\.)/i.test(address),
+  )
+}
+
+/** Largest podcast episode relayed (bytes). */
+const EPISODE_LIMIT = 1024 * 1024 * 1024
+
+/**
+ * GET /api/podcast-audio?url=…: a podcast episode's audio file, passed through (not kept), for downloading it: most
+ * podcast hosts don't let browsers read their files, and some still serve plain http. Signed-in users only, audio only,
+ * size-limited, and never into private networks (each redirect is checked).
+ */
+async function servePodcastAudio(request: IncomingMessage, response: ServerResponse, source: string | null) {
+  let target: URL
+  try {
+    target = new URL(source ?? '')
+  } catch {
+    return send(response, 400, { error: 'Bad url' })
+  }
+  try {
+    let upstream: Response | null = null
+    // Podcast links usually go through a few tracking redirects; each hop is checked before it is followed.
+    for (let hop = 0; hop < 8; hop++) {
+      if ((target.protocol !== 'https:' && target.protocol !== 'http:') || (await isPrivateHost(target.hostname))) return send(response, 403, { error: 'Not allowed' })
+      const answer = await fetch(target, { headers: { 'User-Agent': USER_AGENT }, redirect: 'manual', signal: AbortSignal.timeout(30_000) })
+      const next = answer.status >= 300 && answer.status < 400 ? answer.headers.get('location') : null
+      if (!next) {
+        upstream = answer
+        break
+      }
+      target = new URL(next, target)
+    }
+    if (!upstream?.ok || !upstream.body) return send(response, 502, { error: 'Episode unavailable' })
+    const type = upstream.headers.get('content-type') ?? ''
+    const length = Number(upstream.headers.get('content-length') ?? 0)
+    if (!/^(audio\/|video\/mp4|application\/octet-stream)/i.test(type) || length > EPISODE_LIMIT) return send(response, 502, { error: 'Not an episode' })
+    response.writeHead(200, { 'Content-Type': type, ...(length ? { 'Content-Length': String(length) } : {}), 'Cache-Control': 'private, no-store' })
+    let sent = 0
+    const stream = Readable.fromWeb(upstream.body as import('node:stream/web').ReadableStream<Uint8Array>)
+    request.on('close', () => stream.destroy())
+    for await (const chunk of stream) {
+      sent += (chunk as Buffer).length
+      if (sent > EPISODE_LIMIT) break
+      response.write(chunk)
+    }
+    response.end()
+  } catch {
+    if (!response.headersSent) send(response, 502, { error: 'Episode unavailable' })
+    else response.destroy()
   }
 }
 
@@ -928,6 +995,9 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
     if (!isAdmin(tokenOf(request, url))) return send(response, 403, { error: 'Administrators only' })
     return send(response, 200, store.tracksWithoutCredits())
   }
+
+  // GET /podcast-audio?url=…: a podcast episode's audio, passed through for downloading it.
+  if (path === '/podcast-audio' && request.method === 'GET') return servePodcastAudio(request, response, url.searchParams.get('url'))
 
   // GET /feed?url=…: podcast feeds and the files they point to.
   if (path === '/feed' && request.method === 'GET') return serveFeed(response, url.searchParams.get('url'))
