@@ -32,7 +32,11 @@ export const jellyfin = new Jellyfin({
   deviceInfo: { name: browserName(), id: getDeviceId() },
 })
 
-export const DEFAULT_SERVER_URL = import.meta.env.VITE_JELLYFIN_URL ?? ''
+/** The media server: as set at build time; "/" means this very address (Lumio in front of Jellyfin, see the server's proxy). */
+export const DEFAULT_SERVER_URL = (() => {
+  const configured = import.meta.env.VITE_JELLYFIN_URL ?? ''
+  return configured.trim() === '/' && typeof window !== 'undefined' ? window.location.origin : configured
+})()
 
 export function createApi(serverUrl: string, accessToken?: string): Api {
   return jellyfin.createApi(serverUrl.replace(/\/+$/, ''), accessToken)

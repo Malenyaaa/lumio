@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { IconCheck, IconCopy, IconDeviceMobile, IconKey, IconLoader2 } from '@tabler/icons-react'
+import { IconCheck, IconCopy, IconDeviceMobile, IconKey, IconLoader2, IconLogin2 } from '@tabler/icons-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,47 @@ import { isQuickConnectEnabled, useQuickConnect } from './use-quick-connect'
 import { useBranding } from '@/features/admin/branding'
 import { markAppReady } from '@/lib/boot'
 import { config } from '@/lib/config'
+import { usePublicConfig } from '@/lib/public-config'
+
+/** Where to go after signing in: back to the page that asked (`?next=`), a jellyfin-web admin page included. */
+function nextPath() {
+  const next = new URLSearchParams(window.location.search).get('next') ?? ''
+  return next.startsWith('/') && !next.startsWith('//') ? next : '/'
+}
+
+/** jellyfin-web's stored sign-in, when it is for this server. */
+function jellyfinWebToken(serverUrl: string): { AccessToken: string; UserId?: string } | null {
+  try {
+    const stored = JSON.parse(localStorage.getItem('jellyfin_credentials') ?? 'null') as { Servers?: Array<{ AccessToken?: string; ManualAddress?: string; UserId?: string }> } | null
+    const trim = (value: string) => value.replace(/\/+$/, '')
+    const server = stored?.Servers?.find((entry) => entry.AccessToken && (!entry.ManualAddress || trim(entry.ManualAddress) === trim(serverUrl)))
+    return server?.AccessToken ? { AccessToken: server.AccessToken, UserId: server.UserId } : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Takes over a sign-in made in jellyfin-web on this same address (the SSO plugin finishes its sign-ins there; Lumio
+ * fronting Jellyfin sends those here): its token, checked with the server.
+ */
+function useAdoptJellyfinSignIn(serverUrl: string) {
+  const { session, completeSignIn } = useSession()
+  const [adopting, setAdopting] = useState(() => !session && !!jellyfinWebToken(serverUrl))
+  useEffect(() => {
+    const stored = jellyfinWebToken(serverUrl)
+    if (session || !stored) return
+    void fetch(`${serverUrl}/Users/Me`, { headers: { Authorization: `MediaBrowser Token="${stored.AccessToken}"` } })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Rejected')
+        const user = (await response.json()) as { Id: string; Name: string }
+        completeSignIn(serverUrl, { AccessToken: stored.AccessToken, User: { Id: user.Id, Name: user.Name } })
+      })
+      .catch(() => localStorage.removeItem('jellyfin_credentials'))
+      .finally(() => setAdopting(false))
+  }, [serverUrl, session, completeSignIn])
+  return adopting
+}
 
 export function LoginPage() {
   const { session } = useSession()
@@ -23,6 +64,10 @@ export function LoginPage() {
   const [mode, setMode] = useState<'quick-connect' | 'password'>('quick-connect')
   const t = useMessages(loginMessages)
   const { appName, logo } = useBranding()
+  const publicConfig = usePublicConfig().data
+  // SSO goes through Jellyfin's plugin, on this address (Lumio in front of Jellyfin).
+  const sso = publicConfig?.proxy && serverUrl === window.location.origin ? publicConfig.sso : []
+  const adopting = useAdoptJellyfinSignIn(serverUrl)
 
   const quickConnectEnabled = useQuery({
     queryKey: ['quick-connect-enabled', serverUrl],
@@ -36,7 +81,21 @@ export function LoginPage() {
     if (!session) markAppReady()
   }, [session])
 
-  if (session) return <Navigate to="/" replace />
+  if (session) {
+    const next = nextPath()
+    // Back to a jellyfin-web admin page: outside the app.
+    if (next.startsWith('/web/')) {
+      window.location.replace(next)
+      return null
+    }
+    return <Navigate to={next} replace />
+  }
+  if (adopting)
+    return (
+      <main className="flex min-h-svh items-center justify-center gap-2 text-sm text-muted-foreground">
+        <IconLoader2 className="size-4 animate-spin" /> {t.adopting}
+      </main>
+    )
 
   const showPassword = mode === 'password' || quickConnectEnabled.data === false
 
@@ -54,6 +113,19 @@ export function LoginPage() {
             <div className="grid gap-2">
               <Label htmlFor="server">{t.server}</Label>
               <Input id="server" type="url" required value={serverUrl} onChange={(e) => setServerUrl(e.target.value)} />
+            </div>
+          )}
+
+          {sso.length > 0 && (
+            <div className="grid gap-2">
+              {sso.map((provider) => (
+                <Button key={provider.id} size="lg" onClick={() => window.location.assign(`${serverUrl}/sso/OID/start/${encodeURIComponent(provider.id)}`)}>
+                  <IconLogin2 /> {provider.label}
+                </Button>
+              ))}
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <Separator className="flex-1" /> {t.or} <Separator className="flex-1" />
+              </div>
             </div>
           )}
 

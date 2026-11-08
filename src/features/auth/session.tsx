@@ -110,6 +110,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // The server may already consider the token gone (or be unreachable); signing out locally is what matters.
     } finally {
       saveSession(null)
+      // jellyfin-web (the administration, when Lumio fronts Jellyfin) shares this address: signed out there too, or
+      // Lumio would take its sign-in over again.
+      try {
+        localStorage.removeItem('jellyfin_credentials')
+      } catch {
+        // Storage unavailable.
+      }
       queryClient.clear()
       // The data kept for quick starts belongs to the account that signed out.
       void clearPersistedQueries()

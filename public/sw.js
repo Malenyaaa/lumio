@@ -36,11 +36,15 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url)
 
   if (url.origin === self.location.origin) {
+    // When Lumio fronts Jellyfin, jellyfin-web (the administration) and the SSO plugin's pages are Jellyfin's own.
+    if (/^\/(web|sso)(\/|$)/i.test(url.pathname)) return
     if (request.mode === 'navigate') event.respondWith(networkFirst(SHELL, new Request('/index.html'), request))
     else if (url.pathname.startsWith('/assets/')) event.respondWith(cacheFirst(SHELL, request, request))
     else if (/\.(svg|png|ico|webmanifest|woff2?)$/.test(url.pathname)) event.respondWith(staleWhileRevalidate(SHELL, request, request))
     // Pictures relayed by the Lumio server (podcast covers): their address never changes.
     else if (url.pathname === '/api/image') event.respondWith(cacheFirst(IMAGES, request, request))
+    // Jellyfin's pictures, when Lumio fronts it (same address): kept like those from elsewhere.
+    else if (request.destination === 'image') event.respondWith(url.searchParams.has('tag') ? cacheFirst(IMAGES, request, request) : staleWhileRevalidate(IMAGES, request, request))
     return
   }
 

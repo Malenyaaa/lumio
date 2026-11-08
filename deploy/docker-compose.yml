@@ -1,0 +1,44 @@
+# Lumio in front of Jellyfin: Lumio is the only public face (the app, plus Jellyfin's API, WebSockets and its
+# administration passed through); Jellyfin itself is reachable inside the stack only.
+# Point your reverse proxy (TLS) at lumio:8097 instead of jellyfin:8096. See docs/SETUP.md.
+
+services:
+  lumio:
+    image: ghcr.io/palmarhealer/lumio:latest
+    container_name: lumio
+    restart: unless-stopped
+    depends_on:
+      - jellyfin
+    environment:
+      # Jellyfin inside the stack (not its public address).
+      JELLYFIN_URL: http://jellyfin:8096
+      # Pass everything of Jellyfin's through (API, WebSockets, /web for the administration, /sso).
+      PROXY_JELLYFIN: "true"
+      # Optional: buttons on the sign-in page for the Jellyfin SSO plugin's providers ("name:Label", comma-separated).
+      # SSO_PROVIDERS: "authentik:Sign in with Authentik"
+      # Optional: how MusicBrainz can reach you (it throttles anonymous clients).
+      # MUSICBRAINZ_CONTACT: "admin@example.org"
+      # Optional: the server's own keys for the relays (else the app's keys are used).
+      # LASTFM_API_KEY: ""
+      # TICKETMASTER_API_KEY: ""
+    volumes:
+      - lumio-data:/data
+    # Only your reverse proxy needs to reach it; publish the port only without one.
+    # ports:
+    #   - "8097:8097"
+
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    restart: unless-stopped
+    environment:
+      # The address people use: Lumio's.
+      JELLYFIN_PublishedServerUrl: https://media.example.org
+    volumes:
+      - ./jellyfin/config:/config
+      - ./jellyfin/cache:/cache
+      - /path/to/media:/media:ro
+    # No ports: only Lumio talks to Jellyfin.
+
+volumes:
+  lumio-data:

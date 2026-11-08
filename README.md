@@ -3,6 +3,10 @@
 A from-scratch Jellyfin web client with a shadcn/ui-inspired, cinematic interface. It talks to a stock Jellyfin
 server (tested against 10.11) and needs no server plugin of its own.
 
+## Setup
+
+Lumio runs as one container in front of Jellyfin and becomes its public face (Jellyfin's API, apps and administration keep working through it). See **[docs/SETUP.md](docs/SETUP.md)** for the bare minimum and the recommended setup (SSO, Meilisearch, Intro Skipper, keys).
+
 ## Screenshots
 
 Taken against the public [Jellyfin demo server](https://demo.jellyfin.org/stable) (freely licensed films and music).

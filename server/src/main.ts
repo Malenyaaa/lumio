@@ -3,9 +3,10 @@ import { createReadStream } from 'node:fs'
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { lookup } from 'node:dns/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { isIP } from 'node:net'
+import { isIP, type Socket } from 'node:net'
 import { Readable } from 'node:stream'
 import { extname, join, normalize, resolve, sep } from 'node:path'
+import { isJellyfinRequest, proxyToJellyfin, proxyUpgrade } from './proxy.ts'
 import { creditsOfRecording, lookupCredits, sameName, searchRecordings, type Failure, type JobState, type TrackCredits, type TrackMeta } from './credits.ts'
 import { DEFAULT_PRIVACY, Store, type Activity, type Person, type Privacy } from './store.ts'
 
@@ -19,9 +20,21 @@ import { DEFAULT_PRIVACY, Store, type Activity, type Person, type Privacy } from
  * Settings (environment): JELLYFIN_URL (required), PORT (8097), DATA_DIR (./data), WEB_DIR (the built app, ../dist),
  * ALLOWED_ORIGINS (comma-separated; only needed when the app runs elsewhere, e.g. the Vite dev server),
  * TICKETMASTER_API_KEY and LASTFM_API_KEY (optional; otherwise the app's own keys are used), MUSICBRAINZ_CONTACT (optional;
- * how MusicBrainz can reach the operator).
+ * how MusicBrainz can reach the operator), PROXY_JELLYFIN (true: Lumio is the public face and passes everything of
+ * Jellyfin's through, see proxy.ts), SSO_PROVIDERS (the SSO plugin's providers for the sign-in page, as
+ * `name:Button label` separated by commas, e.g. `authentik:Sign in with Nauren`).
  */
 const JELLYFIN_URL = (process.env.JELLYFIN_URL ?? '').replace(/\/+$/, '')
+const PROXY_JELLYFIN = /^(1|true|yes)$/i.test(process.env.PROXY_JELLYFIN ?? '')
+const SSO_PROVIDERS = (process.env.SSO_PROVIDERS ?? '')
+  .split(',')
+  .map((entry) => entry.trim())
+  .filter(Boolean)
+  .map((entry) => {
+    const [id = '', ...label] = entry.split(':')
+    return { id: id.trim(), label: label.join(':').trim() || id.trim() }
+  })
+  .filter((provider) => /^[\w.-]+$/.test(provider.id))
 const PORT = Number(process.env.PORT ?? 8097)
 const DATA_DIR = process.env.DATA_DIR ?? './data'
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '').split(',').map((origin) => origin.trim()).filter(Boolean)
@@ -240,6 +253,14 @@ const TYPES: Record<string, string> = {
 }
 
 /** A file of the built app; every other address gets index.html (the app routes itself). */
+/** Whether the built app has a file at this path (not just its page, which every app address is). */
+async function isAppFile(pathname: string) {
+  if (pathname === '/' || pathname.endsWith('/')) return false
+  const file = normalize(join(WEB_DIR, decodeURIComponent(pathname)))
+  if (!file.startsWith(WEB_DIR + sep)) return false
+  return stat(file).then((info) => info.isFile()).catch(() => false)
+}
+
 async function serveApp(request: IncomingMessage, response: ServerResponse, pathname: string) {
   if (request.method !== 'GET' && request.method !== 'HEAD') return send(response, 405)
   const requested = normalize(join(WEB_DIR, decodeURIComponent(pathname)))
@@ -797,12 +818,18 @@ function scanArtists(token: string, userId: string, lastfmKey: string | undefine
 async function handle(request: IncomingMessage, response: ServerResponse) {
   const url = new URL(request.url ?? '/', 'http://localhost')
   // Everything outside /api is the app.
-  if (!url.pathname.startsWith('/api/') && url.pathname !== '/api') return serveApp(request, response, url.pathname)
+  if (!url.pathname.startsWith('/api/') && url.pathname !== '/api') {
+    // In front of Jellyfin: what is Jellyfin's goes through to it, the rest is the app.
+    if (PROXY_JELLYFIN && isJellyfinRequest(request, url.pathname, await isAppFile(url.pathname))) return proxyToJellyfin(JELLYFIN_URL, request, response, url)
+    return serveApp(request, response, url.pathname)
+  }
 
   cors(request, response)
   if (request.method === 'OPTIONS') return send(response, 204)
   const path = url.pathname.slice(4).replace(/\/+$/, '') || '/'
   if (path === '/health') return send(response, 200, { ok: true })
+  // What the sign-in page needs before anyone is signed in: the SSO providers, and whether Lumio fronts Jellyfin.
+  if (path === '/public' && request.method === 'GET') return send(response, 200, { sso: SSO_PROVIDERS, proxy: PROXY_JELLYFIN })
   // Pictures load from <img> tags, which carry no token; the host list keeps this to podcast covers.
   if (path === '/image' && request.method === 'GET') return serveImage(response, url.searchParams.get('url'))
 
@@ -1109,10 +1136,17 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
   send(response, 404, { error: 'Not found' })
 }
 
-createServer((request, response) => {
+const server = createServer((request, response) => {
   handle(request, response).catch((error: unknown) => {
     console.error(error)
     if (!response.headersSent) send(response, 500, { error: 'Server error' })
     else response.end()
   })
-}).listen(PORT, () => console.log(`Lumio on :${PORT} (app from ${WEB_DIR}), Jellyfin at ${JELLYFIN_URL}`))
+})
+// Jellyfin's WebSockets (live updates, remote control) go through too when Lumio fronts it.
+server.on('upgrade', (request, socket, head) => {
+  const pathname = new URL(request.url ?? '/', 'http://localhost').pathname
+  if (PROXY_JELLYFIN && !pathname.startsWith('/api/')) proxyUpgrade(JELLYFIN_URL, request, socket as Socket, head)
+  else socket.destroy()
+})
+server.listen(PORT, () => console.log(`Lumio on :${PORT} (app from ${WEB_DIR}), Jellyfin at ${JELLYFIN_URL}${PROXY_JELLYFIN ? ' (proxied)' : ''}`))
