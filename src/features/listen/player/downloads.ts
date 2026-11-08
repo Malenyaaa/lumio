@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { lumioGet } from '@/features/social/social'
+import { remindPersistentStorage } from '@/lib/persistent-storage'
 
 /**
  * Downloads, as Spotify's: albums, playlists and podcast episodes kept on this device for good, in their own quality,
@@ -221,6 +222,8 @@ export async function setDownloadQuality(quality: number | null) {
 
 /** Downloads a collection (or updates what it holds). */
 export function downloadCollection(key: string, name: string, ids: string[], urls?: Record<string, string>, group?: string) {
+  // Without persistent storage the browser may delete downloads again: said once more when starting one.
+  if (!index.collections[key]) remindPersistentStorage()
   index.collections[key] = { name, ids: [...new Set(ids)], urls, group, added: index.collections[key]?.added ?? Date.now() }
   void reconcile()
 }

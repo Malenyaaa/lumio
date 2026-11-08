@@ -7,8 +7,11 @@ import { queryClient } from './lib/query-client'
 import { initTheme } from './lib/theme'
 import { loadServices } from './lib/services'
 import { installOfflineLibrary } from './features/listen/offline-library'
+import { initPersistentStorage } from './lib/persistent-storage'
 
 initTheme()
+// Downloads and the offline library need the browser to keep the site's storage: checked and asked for at once.
+initPersistentStorage()
 // Without a network, Jellyfin's answers come from the downloads (see offline-library).
 installOfflineLibrary()
 

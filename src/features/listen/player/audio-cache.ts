@@ -113,7 +113,6 @@ export function prefetchAudio(key: string, url: string, limits: CacheLimits, pla
       await cache.put(requestFor(key), new Response(blob, { headers: { 'Content-Type': blob.type || 'audio/mpeg', 'Content-Length': String(blob.size) } }))
       index[key] = { bytes: blob.size, plays, lastPlayed: Date.now(), added: Date.now() }
       saveIndex()
-      void requestPersistence()
       await trim(limits, key)
     } catch {
       // Offline, storage full or the server said no: the song simply streams as usual.
@@ -163,22 +162,6 @@ async function trim(limits: CacheLimits, keep?: string) {
   saveIndex()
 }
 
-let persistenceAsked = false
-
-/**
- * Asks the browser to keep this site's storage for good. Without that, the browser may clear it by itself when the
- * disk runs low; with it, only the user can (or Lumio's clear button). Browsers decide on their own (Chrome grants it
- * to sites used often or installed, Firefox may ask).
- */
-async function requestPersistence() {
-  if (persistenceAsked || !navigator.storage?.persist) return
-  persistenceAsked = true
-  try {
-    if (!(await navigator.storage.persisted())) await navigator.storage.persist()
-  } catch {
-    // Not offered by this browser.
-  }
-}
 
 /** What the browser allows this site to store, and whether it keeps it for good. */
 export function useStorageInfo() {

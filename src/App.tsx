@@ -3,6 +3,7 @@ import { createBrowserRouter, createRoutesFromElements, Navigate, Outlet, Route,
 import { ErrorBoundary, RouteError } from '@/components/error-boundary'
 import { NotFound } from '@/components/not-found'
 import { AppShell, RequireSession } from '@/components/app-shell'
+import { StorageNotice } from '@/components/storage-notice'
 import { Toaster } from '@/components/ui/sonner'
 import { useToastsWanted } from '@/features/settings/local-settings'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -165,6 +166,7 @@ export default function App() {
         <TooltipProvider>
           <RouterProvider router={router} />
           <WantedToaster />
+          <StorageNotice />
         </TooltipProvider>
       </SessionProvider>
     </QueryClientProvider>
