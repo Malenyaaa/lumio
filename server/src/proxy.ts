@@ -137,7 +137,8 @@ export function proxyUpgrade(base: string, request: IncomingMessage, socket: Soc
  * - everything else (its home, its player, leaving the dashboard) goes back to Lumio;
  * - someone signed in to Lumio but not here is signed in with Lumio's session (no second sign-in);
  * - a sign-in made here (the SSO plugin finishes in jellyfin-web) is taken over by Lumio;
- * - signed in nowhere, the admin pages first send to Lumio's sign-in, and come back after.
+ * - signed in nowhere, the admin pages first send to Lumio's sign-in, and come back after;
+ * - inside a frame (the SSO plugin's sign-in page loads jellyfin-web hidden, to set up its storage) it does nothing.
  */
 export const ADMIN_SCRIPT = `(function () {
   var ADMIN = /^#!?\\/(dashboard|metadata|configurationpage|edititemmetadata|dashboardgeneral|scheduledtasks|plugins|devices|users|useredit|userprofiles|networking|apikeys|log|notificationsettings|encodingsettings|librarysettings|library|livetvsettings|livetvstatus|playbackconfiguration|streamingsettings|serveractivity)(?:[/.?]|$)/i;
@@ -152,6 +153,9 @@ export const ADMIN_SCRIPT = `(function () {
     }] }));
   }
   function check() {
+    // Inside a frame jellyfin-web is someone's helper, not a page to leave: the SSO plugin loads it in a hidden frame to
+    // set up its storage before finishing a sign-in.
+    if (window.top !== window.self) return;
     var hash = location.hash || '';
     var lumio = read('lumio.session');
     if (ADMIN.test(hash)) {
