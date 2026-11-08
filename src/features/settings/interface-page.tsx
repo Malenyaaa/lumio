@@ -13,6 +13,8 @@ const LANGUAGES: Array<{ value: LanguagePreference; label: string }> = [
   { value: 'en', label: 'English' },
 ]
 
+const RESET_KEYS = ['hoverPreview', 'hoverDelayMs', 'pageAnimations', 'smoothScrolling', 'toasts'] as const
+
 export function InterfacePage() {
   const { settings, update } = useLocalSettings()
   const [language, setLanguage] = useLanguagePreference()
@@ -22,7 +24,7 @@ export function InterfacePage() {
   const hoverDelays = HOVER_DELAYS.map((ms) => ({ value: ms, label: seconds.format(ms / 1000) }))
 
   return (
-    <SettingsPage title={t.title} description={t.description}>
+    <SettingsPage title={t.title} description={t.description} resetKeys={RESET_KEYS}>
       <Section title={t.appearance} scope="device">
         <SelectField
           id="theme"

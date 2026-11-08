@@ -14,6 +14,9 @@ export const fieldMessages = defineMessages({
     administration: 'Administration',
     anyLanguage: 'Beliebige Sprache',
     seconds: (n: number) => `${n} Sekunden`,
+    reset: 'Zurücksetzen',
+    resetHint: 'Die Einstellungen dieser Seite auf die Standardwerte setzen',
+    resetDone: 'Auf Standard zurückgesetzt',
   },
   en: {
     scopeAccount: 'Account · all apps',
@@ -27,6 +30,9 @@ export const fieldMessages = defineMessages({
     administration: 'Administration',
     anyLanguage: 'Any language',
     seconds: (n: number) => (n === 1 ? '1 second' : `${n} seconds`),
+    reset: 'Reset',
+    resetHint: "Set this page's settings back to their defaults",
+    resetDone: 'Reset to defaults',
   },
 })
 

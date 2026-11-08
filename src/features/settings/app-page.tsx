@@ -74,7 +74,7 @@ export function AppPage() {
   const { settings, update } = useLocalSettings()
   const app = inLumioApp()
   return (
-    <SettingsPage title={app ? t.appTitle : t.aboutTitle} description={app ? t.appDescription : t.aboutDescription}>
+    <SettingsPage title={app ? t.appTitle : t.aboutTitle} description={app ? t.appDescription : t.aboutDescription} resetKeys={inCapacitor() ? ['autoUpdate', 'autoPip'] : undefined}>
       {/* Only Lumio's Android app updates itself this way and shrinks a video into a floating window on its own. */}
       {inCapacitor() && (
         <Section title={t.android} scope="device">

@@ -103,6 +103,8 @@ function SubtitlePreview({ settings }: { settings: LocalSettings }) {
   )
 }
 
+const RESET_KEYS = ['subtitleStyle', 'subtitleSize', 'subtitleWeight', 'subtitleFont', 'subtitleColor', 'subtitleShadow', 'subtitleLine'] as const
+
 export function SubtitlesPage() {
   const user = useUserConfiguration()
   const config = user.data?.Configuration
@@ -125,7 +127,7 @@ export function SubtitlesPage() {
   const custom = settings.subtitleStyle === 'custom'
 
   return (
-    <SettingsPage title={t.title} description={t.description}>
+    <SettingsPage title={t.title} description={t.description} resetKeys={RESET_KEYS}>
       <Section title={t.selection} scope="account">
         <SelectField
           id="subtitle-language"

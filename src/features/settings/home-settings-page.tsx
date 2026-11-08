@@ -54,7 +54,7 @@ export function HomeSettingsPage() {
   }
 
   return (
-    <SettingsPage title={t.title} description={t.description}>
+    <SettingsPage title={t.title} description={t.description} resetKeys={['homeLayout']}>
       <Section title={t.layout} scope="account">
         <SelectField
           id="home-layout"

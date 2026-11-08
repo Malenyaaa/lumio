@@ -10,7 +10,7 @@ import { appCacheBytes, clearAppCaches } from '@/lib/app-cache'
 import { getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
 import { networkTypeKnown, useCellular } from '@/lib/network'
 import { Section, SelectField, SettingsPage, SwitchField } from './fields'
-import { useLocalSettings } from './local-settings'
+import { DEFAULT_SETTINGS, useLocalSettings } from './local-settings'
 import { playbackMessages } from './messages'
 
 const MB = 1024 * 1024
@@ -21,6 +21,9 @@ function useSize() {
   const number = new Intl.NumberFormat(getLocaleTag(useLocale()), { maximumFractionDigits: 1 })
   return (bytes: number) => (bytes >= GB ? `${number.format(bytes / GB)} GB` : `${number.format(Math.max(bytes, 0) / MB)} MB`)
 }
+
+// The download qualities stay: changing them downloads everything again.
+const RESET_KEYS = ['downloadsWifiOnly', 'videoPrefetch', 'videoCacheGb', 'videoBitrateMbit', 'musicPrefetch', 'musicCacheMb', 'musicKeepOften'] as const
 
 /**
  * Everything kept on this device: first what it all takes, then the downloads (their quality, removing them) and the
@@ -35,7 +38,13 @@ export function DownloadsPage() {
     [video && <VideoCacheSection key="video-cache" />, audioCacheAvailable && <MusicCacheSection key="music-cache" />],
   ]
   return (
-    <SettingsPage title={t.downloadsTitle} description={t.downloadsDescription}>
+    <SettingsPage title={t.downloadsTitle} description={t.downloadsDescription} resetKeys={RESET_KEYS}
+      onReset={() => {
+        // Smaller limits take effect right away.
+        trimAudioCache({ maxBytes: DEFAULT_SETTINGS.musicCacheMb * MB, keepOftenPlayed: DEFAULT_SETTINGS.musicKeepOften })
+        void trimVideos(DEFAULT_SETTINGS.videoCacheGb * GB)
+      }}
+    >
       {(audioCacheAvailable || videoCacheAvailable) && (
         <Section title={t.storage} description={t.storageDescription} scope="device">
           <StorageOverview />

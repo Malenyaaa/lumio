@@ -54,6 +54,8 @@ const musicMessages = defineMessages({
 
 const QUALITIES = [320, 256, 192, 128]
 
+const RESET_KEYS = ['musicAutoplay', 'musicNormalization', 'musicQuality', 'musicQualityCellular'] as const
+
 export function MusicPage() {
   const t = useMessages(musicMessages)
   const p = useMessages(playbackMessages)
@@ -63,7 +65,16 @@ export function MusicPage() {
   const qualityOptions = [{ value: 0, label: p.musicOriginal }, ...QUALITIES.map((kbps) => ({ value: kbps, label: `${kbps} kbps` }))]
 
   return (
-    <SettingsPage title={t.title} description={t.description}>
+    <SettingsPage
+      title={t.title}
+      description={t.description}
+      resetKeys={RESET_KEYS}
+      onReset={(before) => {
+        music.renormalize()
+        // The cache held the old quality.
+        if (before.musicQuality !== null) void clearAudioCache()
+      }}
+    >
       <Section title={t.playback} scope="account">
         <SwitchField
           id="music-autoplay"

@@ -21,6 +21,8 @@ function Key({ children }: { children: string }) {
   return <kbd className="rounded-md border bg-muted px-1.5 py-0.5 font-mono text-xs">{children}</kbd>
 }
 
+const RESET_KEYS = ['keyboardShortcuts', 'controlsHideSeconds', 'pauseSpotlightSeconds', 'playerGestures'] as const
+
 export function ControlsPage() {
   const { settings, update } = useLocalSettings()
   const t = useMessages(controlsMessages)
@@ -29,7 +31,7 @@ export function ControlsPage() {
   const spotlightOptions = [{ value: 0, label: t.never }, ...[5, 10, 20, 30].map((value) => ({ value, label: t.afterSeconds(value) }))]
 
   return (
-    <SettingsPage title={t.title} description={t.description}>
+    <SettingsPage title={t.title} description={t.description} resetKeys={RESET_KEYS}>
       <Section title={t.keyboard} scope="account">
         <SwitchField
           id="keyboard-shortcuts"

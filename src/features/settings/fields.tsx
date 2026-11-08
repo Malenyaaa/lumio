@@ -6,17 +6,56 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Slider } from '@/components/ui/slider'
 import { useMessages } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
+import { IconRestore } from '@tabler/icons-react'
+import { toast } from 'sonner'
+import { DEFAULT_SETTINGS, useLocalSettings, type LocalSettings } from './local-settings'
 import { fieldMessages } from './messages'
 
-export function SettingsPage({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+interface SettingsPageProps {
+  title: string
+  description?: string
+  /** Lumio's own settings on this page, which "Reset" brings back to their defaults (Jellyfin's stay as they are). */
+  resetKeys?: ReadonlyArray<keyof LocalSettings>
+  /** Runs after a reset (e.g. to clear what the old values filled). */
+  onReset?: (before: LocalSettings) => void
+  children: ReactNode
+}
+
+export function SettingsPage({ title, description, resetKeys, onReset, children }: SettingsPageProps) {
   return (
     <div className="min-w-0 flex-1 space-y-8">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        {description && <p className="text-sm text-muted-foreground">{description}</p>}
+      <header className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          {description && <p className="text-sm text-muted-foreground">{description}</p>}
+        </div>
+        {resetKeys && <ResetButton keys={resetKeys} onReset={onReset} />}
       </header>
       {children}
     </div>
+  )
+}
+
+/** Brings a page's settings back to their defaults; greyed out while they are. */
+function ResetButton({ keys, onReset }: { keys: ReadonlyArray<keyof LocalSettings>; onReset?: (before: LocalSettings) => void }) {
+  const t = useMessages(fieldMessages)
+  const { settings, update } = useLocalSettings()
+  const changed = keys.filter((key) => JSON.stringify(settings[key]) !== JSON.stringify(DEFAULT_SETTINGS[key]))
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="shrink-0 text-muted-foreground"
+      disabled={!changed.length}
+      title={t.resetHint}
+      onClick={() => {
+        update(Object.fromEntries(changed.map((key) => [key, DEFAULT_SETTINGS[key]])) as Partial<LocalSettings>)
+        onReset?.(settings)
+        toast.success(t.resetDone)
+      }}
+    >
+      <IconRestore /> {t.reset}
+    </Button>
   )
 }
 

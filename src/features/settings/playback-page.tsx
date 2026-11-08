@@ -16,6 +16,20 @@ const SEGMENT_ACTIONS: SegmentAction[] = ['None', 'AskToSkip', 'Skip']
 
 const SEGMENT_KINDS: SegmentKind[] = ['Intro', 'Preview', 'Recap', 'Commercial', 'Outro']
 
+const RESET_KEYS = [
+  'playbackRate',
+  'videoFit',
+  'skipForwardSeconds',
+  'skipBackSeconds',
+  'segmentActions',
+  'startAfterIntro',
+  'maxBitrate',
+  'maxBitrateCellular',
+  'maxAudioChannels',
+  'preloadNextEpisode',
+  'preloadTrickplay',
+] as const
+
 /**
  * How films and series play. What follows the account comes first (tracks, the player, segments), what belongs to this
  * device last (quality and preloading).
@@ -55,7 +69,7 @@ export function PlaybackPage() {
   const audioLanguage = config.AudioLanguagePreference ?? ''
 
   return (
-    <SettingsPage title={t.title} description={t.description}>
+    <SettingsPage title={t.title} description={t.description} resetKeys={RESET_KEYS}>
       <Section title={t.tracks} scope="account">
         <SelectField
           id="audio-language"
