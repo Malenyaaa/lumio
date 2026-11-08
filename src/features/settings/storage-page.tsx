@@ -8,6 +8,7 @@ import { clearVideoDownloads, useVideoDownloadStats } from '@/features/player/vi
 import { useAppMode } from '@/lib/app-mode'
 import { appCacheBytes, clearAppCaches } from '@/lib/app-cache'
 import { getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
+import { networkTypeKnown, useCellular } from '@/lib/network'
 import { Section, SelectField, SettingsPage, SwitchField } from './fields'
 import { useLocalSettings } from './local-settings'
 import { playbackMessages } from './messages'
@@ -40,8 +41,22 @@ export function DownloadsPage() {
           <StorageOverview />
         </Section>
       )}
+      {networkTypeKnown() && <MobileDataSection />}
       {pairs.flatMap(([videoPart, musicPart]) => (listen ? [musicPart, videoPart] : [videoPart, musicPart]))}
     </SettingsPage>
+  )
+}
+
+/** Where the device tells its network (Android): downloads only over Wi-Fi. */
+function MobileDataSection() {
+  const { settings, update } = useLocalSettings()
+  const t = useMessages(playbackMessages)
+  const cellular = useCellular()
+  return (
+    <Section title={t.mobileData} scope="device">
+      <SwitchField id="downloads-wifi-only" label={t.wifiOnlyLabel} hint={t.wifiOnlyHint} checked={settings.downloadsWifiOnly} onChange={(checked) => update({ downloadsWifiOnly: checked })} />
+      {cellular && settings.downloadsWifiOnly && <p className="px-4 py-3 text-sm text-muted-foreground">{t.waitingForWifi}</p>}
+    </Section>
   )
 }
 

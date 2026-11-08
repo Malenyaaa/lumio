@@ -1,3 +1,4 @@
+import { setWifiOnlyDownloads } from '@/lib/network'
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
 import { FriendActivityButton } from '@/features/social/social-ui'
 import { DownloadManagerButton, OfflineBadge } from '@/features/listen/download-manager'
@@ -221,6 +222,7 @@ export function SettingsEffects() {
     document.documentElement.classList.toggle('no-page-animations', !settings.pageAnimations)
     return () => document.documentElement.classList.remove('no-page-animations')
   }, [settings.pageAnimations])
+  useEffect(() => setWifiOnlyDownloads(settings.downloadsWifiOnly), [settings.downloadsWifiOnly])
   return null
 }
 

@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 import { useCallback, useSyncExternalStore } from 'react'
 import { useAuthedSession, useSession } from '@/features/auth/session'
+import { onCellular } from '@/lib/network'
 
 export type SegmentAction = 'None' | 'AskToSkip' | 'Skip'
 export type SegmentKind = 'Intro' | 'Preview' | 'Recap' | 'Commercial' | 'Outro'
@@ -47,6 +48,8 @@ export interface LocalSettings {
   maxAudioChannels: number
   /** Default streaming limit in bit/s; null = automatic. */
   maxBitrate: number | null
+  /** The same on mobile data; -1 = as on Wi-Fi. */
+  maxBitrateCellular: number | null
   skipForwardSeconds: number
   skipBackSeconds: number
   segmentActions: Record<SegmentKind, SegmentAction>
@@ -93,6 +96,10 @@ export interface LocalSettings {
   apps: 'both' | 'watch' | 'listen'
   /** Highest music quality in kbps (above it the server converts to MP3); null = the original file where possible. */
   musicQuality: number | null
+  /** The same on mobile data; -1 = as on Wi-Fi. */
+  musicQualityCellular: number | null
+  /** Downloads (and preparing episodes) wait for Wi-Fi instead of using mobile data. */
+  downloadsWifiOnly: boolean
   /** Quality downloads are kept in, in kbps; null = the original file. Changing it fetches every download again. */
   musicDownloadQuality: number | null
   /** How many of the next tracks are downloaded ahead into the cache while one plays (0 = none). */
@@ -178,6 +185,7 @@ export function setAccountUploader(next: typeof accountUploader) {
 export const DEFAULT_SETTINGS: LocalSettings = {
   maxAudioChannels: -1,
   maxBitrate: null,
+  maxBitrateCellular: -1,
   skipForwardSeconds: 30,
   skipBackSeconds: 10,
   segmentActions: { Intro: 'AskToSkip', Preview: 'None', Recap: 'None', Commercial: 'None', Outro: 'AskToSkip' },
@@ -208,6 +216,8 @@ export const DEFAULT_SETTINGS: LocalSettings = {
   syncPlay: DEFAULT_SYNCPLAY,
   apps: 'both',
   musicQuality: null,
+  musicQualityCellular: -1,
+  downloadsWifiOnly: true,
   musicDownloadQuality: null,
   musicPrefetch: 2,
   musicCacheMb: 1024,
@@ -220,6 +230,19 @@ export const DEFAULT_SETTINGS: LocalSettings = {
   videoDownloadMbit: 8,
   concertLocation: null,
   tasteExclusions: { artists: [], albums: [], tracks: [], playlists: [] },
+}
+
+/** "As on Wi-Fi" for the mobile-data qualities. */
+export const SAME_AS_WIFI = -1
+
+/** The music quality to stream in now: the mobile-data one while on mobile data (if set). */
+export function streamingMusicQuality(settings: Pick<LocalSettings, 'musicQuality' | 'musicQualityCellular'>) {
+  return onCellular() && settings.musicQualityCellular !== SAME_AS_WIFI ? settings.musicQualityCellular : settings.musicQuality
+}
+
+/** The video bitrate limit now: the mobile-data one while on mobile data (if set). */
+export function streamingMaxBitrate(settings: Pick<LocalSettings, 'maxBitrate' | 'maxBitrateCellular'>) {
+  return onCellular() && settings.maxBitrateCellular !== SAME_AS_WIFI ? settings.maxBitrateCellular : settings.maxBitrate
 }
 
 const keyFor = (userId: string) => `lumio.settings.${userId}`

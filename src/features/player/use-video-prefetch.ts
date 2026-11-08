@@ -3,6 +3,7 @@ import { getShowApi } from '@jellyfin/sdk/lib/utils/api/show-api'
 import { useEffect } from 'react'
 import { useAuthedSession } from '@/features/auth/session'
 import { useLocalSettings } from '@/features/settings/local-settings'
+import { downloadsWaitForWifi } from '@/lib/network'
 import { downloadVideo, videoCacheAvailable } from './video-cache'
 
 const MBIT = 1_000_000
@@ -23,7 +24,7 @@ export function useVideoPrefetch(item: BaseItemDto | undefined, active: boolean,
   const itemId = item?.Id
 
   useEffect(() => {
-    if (!active || !count || !seriesId || !itemId || !videoCacheAvailable) return
+    if (!active || !count || !seriesId || !itemId || !videoCacheAvailable || downloadsWaitForWifi()) return
     let cancelled = false
     void (async () => {
       const episodes =

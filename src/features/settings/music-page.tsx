@@ -7,7 +7,8 @@ import { music } from '@/features/listen/player/music-player'
 import { TasteExclusionsSection } from '@/features/listen/taste'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import { Row, Section, SelectField, SettingsPage, SwitchField } from './fields'
-import { useLocalSettings } from './local-settings'
+import { SAME_AS_WIFI, useLocalSettings } from './local-settings'
+import { networkTypeKnown } from '@/lib/network'
 import { playbackMessages } from './messages'
 
 const musicMessages = defineMessages({
@@ -101,6 +102,16 @@ export function MusicPage() {
             if ((value || null) !== settings.musicQuality) void clearAudioCache()
           }}
         />
+        {networkTypeKnown() && (
+          <SelectField
+            id="music-quality-cellular"
+            label={p.musicQualityCellularLabel}
+            hint={p.musicQualityCellularHint}
+            value={settings.musicQualityCellular ?? 0}
+            options={[{ value: SAME_AS_WIFI, label: p.sameAsWifi }, ...qualityOptions]}
+            onChange={(value) => update({ musicQualityCellular: value || null })}
+          />
+        )}
       </Section>
 
       <Section title={t.concerts} scope="account">

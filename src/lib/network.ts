@@ -106,3 +106,58 @@ export function useOffline() {
     isOffline,
   )
 }
+
+// ---- Wi-Fi or mobile data (Settings: a quality of its own on mobile data, downloads only over Wi-Fi) ----
+
+interface NetworkInformation extends EventTarget {
+  type?: string
+}
+
+const connectionInfo = () => (typeof navigator === 'undefined' ? undefined : (navigator as { connection?: NetworkInformation }).connection)
+
+/**
+ * Whether this device tells what kind of network it is on. Chrome on Android (and the Android app's WebView) does;
+ * desktop browsers, Firefox and Safari don't, so the mobile-data settings only show where they can work.
+ */
+export const networkTypeKnown = () => typeof connectionInfo()?.type === 'string'
+
+/** On mobile data right now (false where it can't be told). */
+export const onCellular = () => connectionInfo()?.type === 'cellular'
+
+let wifiOnlyDownloads = false
+const downloadListeners = new Set<() => void>()
+
+/** Set from the settings: downloads (and preparing episodes) wait for Wi-Fi. */
+export function setWifiOnlyDownloads(on: boolean) {
+  if (on === wifiOnlyDownloads) return
+  wifiOnlyDownloads = on
+  for (const listener of downloadListeners) listener()
+}
+
+/** Downloads have to wait: only over Wi-Fi is set and this is mobile data. */
+export const downloadsWaitForWifi = () => wifiOnlyDownloads && onCellular()
+
+/** Called when downloads may go on again or have to stop (the network changed, the setting changed). */
+export function onDownloadsAllowedChange(listener: () => void) {
+  downloadListeners.add(listener)
+  return () => {
+    downloadListeners.delete(listener)
+  }
+}
+
+connectionInfo()?.addEventListener('change', () => {
+  for (const listener of downloadListeners) listener()
+})
+
+/** Whether this is mobile data, following changes. */
+export function useCellular() {
+  return useSyncExternalStore(
+    (listener) => {
+      const info = connectionInfo()
+      info?.addEventListener('change', listener)
+      return () => info?.removeEventListener('change', listener)
+    },
+    onCellular,
+    () => false,
+  )
+}

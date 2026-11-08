@@ -1,6 +1,7 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
 import { useItem } from '@/features/items/queries'
-import { useLocalSettings } from '@/features/settings/local-settings'
+import { streamingMusicQuality, useLocalSettings } from '@/features/settings/local-settings'
+import { useCellular } from '@/lib/network'
 import { externalOf } from '@/lib/external-items'
 
 /**
@@ -79,5 +80,6 @@ export function useTrackQuality(track: BaseItemDto | undefined) {
   const external = !!externalOf(track)
   // The single-item request carries the media sources (codec, bit depth, sample rate).
   const item = useItem(track?.Id ?? '', !!track?.Id && !external)
-  return external ? undefined : describeQuality(item.data, settings.musicQuality)
+  useCellular()
+  return external ? undefined : describeQuality(item.data, streamingMusicQuality(settings))
 }

@@ -4,6 +4,7 @@ import type { Api } from '@jellyfin/sdk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { useAuthedSession } from '@/features/auth/session'
+import { streamingMaxBitrate, type LocalSettings } from '@/features/settings/local-settings'
 import { useLocale } from '@/lib/i18n'
 import { audioLabel, labelStreams, subtitleLabel } from '@/lib/track-labels'
 import { cachedVideo } from './video-cache'
@@ -90,7 +91,7 @@ export interface PlaybackChoice {
  * Shared with preloading the next episode, whose cache entry must match exactly what the player will request.
  */
 export function initialChoice(
-  settings: { maxBitrate: number | null; maxAudioChannels: number },
+  settings: Pick<LocalSettings, 'maxBitrate' | 'maxBitrateCellular' | 'maxAudioChannels'>,
   startTicks: number,
   audio?: number,
   subtitle?: number,
@@ -99,7 +100,7 @@ export function initialChoice(
     startTicks,
     audio,
     subtitle,
-    maxBitrate: settings.maxBitrate ?? undefined,
+    maxBitrate: streamingMaxBitrate(settings) ?? undefined,
     maxAudioChannels: settings.maxAudioChannels > 0 ? settings.maxAudioChannels : undefined,
   }
 }

@@ -1,5 +1,6 @@
 import { Section, SelectField, SettingsPage, SettingsPending, SwitchField, withCurrent } from './fields'
-import { useLocalSettings, type SegmentAction, type SegmentKind } from './local-settings'
+import { SAME_AS_WIFI, useLocalSettings, type SegmentAction, type SegmentKind } from './local-settings'
+import { networkTypeKnown } from '@/lib/network'
 import { fitLabels, SPEEDS, speedLabel, VIDEO_FITS } from '@/features/player/labels'
 import { getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
 import { fieldMessages, playbackMessages } from './messages'
@@ -155,6 +156,16 @@ export function PlaybackPage() {
           options={bitrateOptions}
           onChange={(value) => update({ maxBitrate: value || null })}
         />
+        {networkTypeKnown() && (
+          <SelectField
+            id="max-bitrate-cellular"
+            label={t.bitrateCellularLabel}
+            hint={t.bitrateCellularHint}
+            value={settings.maxBitrateCellular ?? 0}
+            options={[{ value: SAME_AS_WIFI, label: t.sameAsWifi }, ...bitrateOptions]}
+            onChange={(value) => update({ maxBitrateCellular: value || null })}
+          />
+        )}
         <SelectField
           id="max-audio-channels"
           label={t.channelsLabel}

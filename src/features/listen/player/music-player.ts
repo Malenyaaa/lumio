@@ -5,7 +5,7 @@ import { getLibraryApi } from '@jellyfin/sdk/lib/utils/api/library-api'
 import { useSyncExternalStore } from 'react'
 import { externalOf } from '@/lib/external-items'
 import { secondsToTicks, ticksToSeconds } from '@/lib/format'
-import { readLocalSettings } from '@/features/settings/local-settings'
+import { readLocalSettings, streamingMusicQuality } from '@/features/settings/local-settings'
 import { jellyfin } from '@/lib/jellyfin'
 import { podcastProgress, recordPodcastProgress } from '../podcasts'
 import { reportActivity } from '@/features/social/social'
@@ -193,7 +193,7 @@ export function connectMusicPlayer(next: typeof connection) {
     next
       ? async (id, blob, quality) => {
           const settings = readLocalSettings(next.userId)
-          const stream = settings.musicQuality
+          const stream = streamingMusicQuality(settings)
           const goodEnough = quality === null || (stream !== null && quality >= stream)
           if (!goodEnough) return
           await adoptIntoCache(`${id}|${stream ?? 'original'}`, blob, { maxBytes: settings.musicCacheMb * 1024 * 1024, keepOftenPlayed: settings.musicKeepOften })
@@ -294,7 +294,7 @@ function streamUrl(item: BaseItemDto, sessionId = playSessionId) {
   // Podcast episodes play straight from their host.
   const external = externalOf(item)
   if (external) return external.url
-  return libraryAudioUrl(item.Id!, readLocalSettings(connection!.userId).musicQuality, sessionId)
+  return libraryAudioUrl(item.Id!, streamingMusicQuality(readLocalSettings(connection!.userId)), sessionId)
 }
 
 /** A library song's audio in a quality (kbps; null = the original file where the browser can play it). */
@@ -595,7 +595,7 @@ export function playableOffline(item: BaseItemDto) {
 /** The cache key of a library track: its id and the quality it plays in (a different limit is a different file). */
 function cacheKey(item: BaseItemDto) {
   if (externalOf(item) || !item.Id || !connection) return null
-  return `${item.Id}|${readLocalSettings(connection.userId).musicQuality ?? 'original'}`
+  return `${item.Id}|${streamingMusicQuality(readLocalSettings(connection.userId)) ?? 'original'}`
 }
 
 /** Bumped on every track change, so a running round of downloads stops when the queue moved on. */

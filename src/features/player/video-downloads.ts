@@ -1,3 +1,4 @@
+import { downloadsWaitForWifi, onDownloadsAllowedChange } from '@/lib/network'
 import type { Api } from '@jellyfin/sdk'
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
 import { getLibraryApi } from '@jellyfin/sdk/lib/utils/api/library-api'
@@ -128,7 +129,8 @@ async function run() {
   if (running || !source || !videoCacheAvailable) return
   running = true
   try {
-    while (pending.length && source) {
+    // On mobile data with "only over Wi-Fi" set: waits until Wi-Fi is back.
+    while (pending.length && source && !downloadsWaitForWifi()) {
       const id = pending[0]!
       const { api, session, bitrate } = source
       try {
@@ -194,6 +196,7 @@ async function run() {
 }
 
 if (typeof window !== 'undefined') window.addEventListener('online', () => void run())
+onDownloadsAllowedChange(() => void run())
 
 /** Set while signed in (see VideoDownloadsHost): where downloads come from, in which quality. Starts what is pending. */
 export function setVideoDownloadSource(next: Source | null) {

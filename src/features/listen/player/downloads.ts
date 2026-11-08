@@ -1,3 +1,4 @@
+import { downloadsWaitForWifi, onDownloadsAllowedChange } from '@/lib/network'
 import { useSyncExternalStore } from 'react'
 import { lumioGet } from '@/features/social/social'
 import { remindPersistentStorage } from '@/lib/persistent-storage'
@@ -136,7 +137,8 @@ async function run() {
   running = true
   try {
     const cache = await caches.open(CACHE_NAME)
-    while (pending.length && source) {
+    // On mobile data with "only over Wi-Fi" set: waits until Wi-Fi is back.
+    while (pending.length && source !== null && !downloadsWaitForWifi()) {
       const id = pending[0]!
       const quality = index.quality
       try {
@@ -196,6 +198,7 @@ async function readWithProgress(id: string, response: Response): Promise<Blob> {
 }
 
 if (typeof window !== 'undefined') window.addEventListener('online', () => void run())
+onDownloadsAllowedChange(() => void run())
 
 /** Set by the player when signed in: where songs are downloaded from. Starts what is pending. */
 export function setDownloadSource(next: typeof source) {
