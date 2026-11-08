@@ -68,6 +68,7 @@ import { TrackContextMenu } from './track-menu'
 import { ContextMenu } from '@base-ui/react/context-menu'
 import { PodcastMenuItems } from './library-menu'
 import { DownloadButton } from './download-ui'
+import { useHeldByDownload } from './download-ui'
 
 const messages = defineMessages({
   de: {
@@ -733,13 +734,16 @@ function PodcastAbout({ show, info }: { show: Podcast; info: ReturnType<typeof u
 function SaveEpisodeButton({ episode, className }: { episode: Episode; className?: string }) {
   const t = useMessages(messages)
   const saved = useEpisodeSaved(episode.guid)
+  // A downloaded episode stays in "Your episodes".
+  const hold = useHeldByDownload(`episode:${episode.guid}`)
+  const locked = saved && hold.held
   return (
     <button
       type="button"
       aria-pressed={saved}
-      aria-label={saved ? t.unsave : t.save}
-      title={saved ? t.unsave : t.save}
-      onClick={() => toggleSavedEpisode(episode.item)}
+      aria-label={locked ? hold.hint : saved ? t.unsave : t.save}
+      title={locked ? hold.hint : saved ? t.unsave : t.save}
+      onClick={() => !locked && toggleSavedEpisode(episode.item)}
       className={cn('grid place-items-center rounded-full transition-colors', saved ? 'text-listen' : 'text-muted-foreground hover:text-foreground', className)}
     >
       {saved ? <IconCircleCheckFilled className="size-full" /> : <IconCirclePlus className="size-full" />}

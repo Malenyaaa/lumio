@@ -1,5 +1,6 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
 import { FriendActivityButton } from '@/features/social/social-ui'
+import { DownloadManagerButton, OfflineBadge } from '@/features/listen/download-manager'
 import { getImageApi } from '@jellyfin/sdk/lib/utils/api/image-api'
 import {
   IconArrowLeft,
@@ -314,6 +315,9 @@ export function HeaderActions({ search = true }: { search?: boolean }) {
       <div className="flex shrink-0 items-center gap-1">
         <PluginSlot name="header:end" className="flex items-center gap-1" />
         {search && !hideSearch && <HeaderSearch />}
+        {/* Offline, and what downloads: only while there is something to tell. */}
+        <OfflineBadge />
+        <DownloadManagerButton />
         <FriendActivityButton />
         {!hideSyncPlay && <SyncPlayMenu />}
         {!hideCast && <DeviceMenu />}

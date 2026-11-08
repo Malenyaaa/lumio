@@ -10,7 +10,8 @@ import { podcastProgress, recordPodcastProgress } from '../podcasts'
 import { reportActivity } from '@/features/social/social'
 import { flushPlayback, rememberPlayback } from '@/lib/playback-outbox'
 import { recordRecent } from '../recent'
-import { adoptIntoCache, audioCacheAvailable, cachedAudioUrl, prefetchAudio, recordCachedPlay } from './audio-cache'
+import { adoptIntoCache, audioCacheAvailable, cachedAudioUrl, isCached, prefetchAudio, recordCachedPlay } from './audio-cache'
+import { isOffline } from '@/lib/network'
 import { downloadedAudioUrl, downloadId, isDownloaded, setDownloadQuality, setDownloadSource, setReleaseHandler } from './downloads'
 import { DIRECT_FORMATS } from './quality'
 
@@ -399,6 +400,13 @@ function report(kind: 'start' | 'progress' | 'stopped', item = currentTrack()) {
 /** Plays the queue's track at `index`, from `startAt` or else from where it was left (long tracks, podcasts). */
 async function go(index: number, startAt?: number) {
   if (!audio || !connection) return
+  // Offline, songs that need the network are skipped: on to the next one that is here (downloaded or cached).
+  if (isOffline() && state.queue[index] && !playableOffline(state.queue[index])) {
+    const next = state.queue.findIndex((entry, position) => position > index && playableOffline(entry))
+    if (next < 0) return setState({ playing: false, buffering: false })
+    index = next
+    startAt = undefined
+  }
   const item = state.queue[index]
   if (!item) return
   startAt ??= resumePoint(item)
@@ -493,6 +501,14 @@ function shareActivity(playing: boolean) {
 }
 
 // ---- downloading ahead ----
+
+/** Whether a track can play without a connection: downloaded, or in the cache (in the current quality). */
+export function playableOffline(item: BaseItemDto) {
+  const external = externalOf(item)
+  if (isDownloaded(downloadId(item, external?.guid))) return true
+  const key = cacheKey(item)
+  return !!key && isCached(key)
+}
 
 /** The cache key of a library track: its id and the quality it plays in (a different limit is a different file). */
 function cacheKey(item: BaseItemDto) {

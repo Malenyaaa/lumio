@@ -322,6 +322,21 @@ export function useDownloadedKeys(): Set<string> {
   return new Set(Object.entries(index.collections).flatMap(([key, collection]) => (collection.group ? [key, collection.group] : [key])))
 }
 
+/** What is downloading now (how far) and what waits, in order; each with the collection it belongs to. */
+export function useDownloadQueue() {
+  useSyncExternalStore(subscribe, () => version)
+  const collectionOf = (id: string) => Object.values(index.collections).find((collection) => collection.ids.includes(id))?.name
+  return {
+    current: current ? { id: current.id, share: shareOf(current), received: current.received, total: current.total, collection: collectionOf(current.id) } : null,
+    pending: pending.filter((id) => id !== current?.id).map((id) => ({ id, collection: collectionOf(id) })),
+  }
+}
+
+/** The downloaded collections and the songs each holds (for the offline library). */
+export function downloadedCollections() {
+  return Object.entries(index.collections).map(([key, collection]) => ({ key, ids: collection.ids }))
+}
+
 /** Everything downloaded, each with its size and how far it is (newest first). */
 export function useDownloadList() {
   useSyncExternalStore(subscribe, () => version)

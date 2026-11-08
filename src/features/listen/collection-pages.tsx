@@ -41,6 +41,7 @@ import { PlaylistShareDialog, usePlaylistAdds } from './playlist-share-dialog'
 import { AddToPlaylist } from './library-menu'
 import { TasteMenuItem } from './taste'
 import { DownloadButton, DownloadMenuItem } from './download-ui'
+import { useHeldByDownload } from './download-ui'
 
 const messages = defineMessages({
   de: {
@@ -279,13 +280,16 @@ function SaveButton({ id }: { id: string }) {
   const t = useMessages(messages)
   const library = useListenLibrary()
   const saved = library.isSaved(id)
+  // A downloaded playlist stays in the library.
+  const hold = useHeldByDownload(id.startsWith('official:') ? id : `playlist:${id}`)
+  const locked = saved && hold.held
   return (
     <button
       type="button"
       aria-pressed={saved}
-      aria-label={saved ? t.saved : t.save}
-      title={saved ? t.saved : t.save}
-      onClick={() => library.toggle(id)}
+      aria-label={locked ? hold.hint : saved ? t.saved : t.save}
+      title={locked ? hold.hint : saved ? t.saved : t.save}
+      onClick={() => !locked && library.toggle(id)}
       className={cn('grid size-10 place-items-center rounded-full transition-colors', saved ? 'text-listen' : 'text-muted-foreground hover:text-foreground')}
     >
       {saved ? <IconCircleCheckFilled className="size-8" /> : <IconCirclePlus className="size-8" />}
@@ -378,7 +382,7 @@ export function PlaylistPage() {
         actions={
           <>
             {!mine && <SaveButton id={id} />}
-            <DownloadButton downloadKey={`playlist:${id}`} name={item?.Name ?? ''} items={tracks.data} />
+            <DownloadButton downloadKey={`playlist:${id}`} name={item?.Name ?? ''} items={tracks.data} collection={item} />
             <DropdownMenu>
               <DropdownMenuTrigger aria-label={t.more} className="grid size-10 place-items-center rounded-full text-muted-foreground outline-none hover:text-foreground">
                 <IconDots className="size-7" />
@@ -388,7 +392,7 @@ export function PlaylistPage() {
                   <IconPlaylistAdd /> {t.addToQueue}
                 </DropdownMenuItem>
                 <AddToPlaylist tracks={async () => list} label={t.addToOtherPlaylist} exclude={id} />
-                <DownloadMenuItem downloadKey={`playlist:${id}`} name={item?.Name ?? ''} items={tracks.data} />
+                <DownloadMenuItem downloadKey={`playlist:${id}`} name={item?.Name ?? ''} items={tracks.data} collection={item} />
                 <TasteMenuItem kind="playlists" id={id} />
                 {mine && (
                   <>

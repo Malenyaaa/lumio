@@ -31,6 +31,7 @@ import { NowPlaying } from './now-playing'
 import { SourceLink } from './queue-source'
 import { QueueDrop } from './player-bar'
 import { TrackArtists } from '../track-artists'
+import { useUnavailable } from '../availability'
 
 const messages = defineMessages({
   de: {
@@ -709,6 +710,8 @@ function QueueRow({ uid, item, index, kind, current }: { uid: string; item: Base
   const { api } = useAuthedSession()
   const t = useMessages(messages)
   const cover = portraitImageUrl(api, item, { fillHeight: 96 })
+  // Offline, songs that need the network are greyed out (the player skips them).
+  const unavailable = useUnavailable(item)
   const [mark, setMark] = useState<'before' | 'after' | null>(null)
   const takes = (event: DragEvent) => event.dataTransfer.types.includes(QUEUE_TYPE)
   // On the current track only "after" makes sense (nothing goes before what is playing).
@@ -753,6 +756,7 @@ function QueueRow({ uid, item, index, kind, current }: { uid: string; item: Base
         }}
         className={cn(
           'group relative flex items-center gap-3 rounded-md p-1.5 hover:bg-muted data-popup-open:bg-muted',
+          unavailable && 'opacity-40',
           // Where the dragged song would land: a line between the rows.
           mark && 'after:pointer-events-none after:absolute after:inset-x-1 after:h-0.5 after:rounded-full after:bg-listen',
           mark === 'before' ? 'after:-top-px' : mark === 'after' ? 'after:-bottom-px' : '',

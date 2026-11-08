@@ -29,6 +29,7 @@ import { useFollowedArtists, useListenLibrary, usePlaylistActions, usePlaylists,
 import { useArtistRadio } from './radio'
 import { TasteMenuItem } from './taste'
 import { useEditablePlaylists } from './profiles'
+import { useHeldByDownload } from './download-ui'
 
 const messages = defineMessages({
   de: {
@@ -206,9 +207,10 @@ export function AlbumMenuItems({ album }: { album: BaseItemDto }) {
   const favorite = useSetFavorite(album.Id!)
   const tracks = () => queryClient.fetchQuery(albumTracksOptions(api, session.userId, album.Id!))
   const saved = useSavedAlbums().data?.some((other) => other.Id === album.Id) ?? !!album.UserData?.IsFavorite
+  const hold = useHeldByDownload(`album:${album.Id}`)
   return (
     <>
-      <DropdownMenuItem onClick={() => favorite.mutate(!saved)}>
+      <DropdownMenuItem disabled={saved && hold.held} title={saved && hold.held ? hold.hint : undefined} onClick={() => favorite.mutate(!saved)}>
         {saved ? <IconCircleCheckFilled className="text-listen" /> : <IconCirclePlus />} {saved ? t.removeFromLibrary : t.addToLibrary}
       </DropdownMenuItem>
       <DropdownMenuItem
@@ -261,9 +263,10 @@ export function OfficialMenuItems({ playlist }: { playlist: OfficialPlaylist }) 
   const t = useMessages(messages)
   const library = useListenLibrary()
   const saved = library.isSaved(`official:${playlist.slug}`)
+  const hold = useHeldByDownload(`official:${playlist.slug}`)
   return (
     <>
-      <DropdownMenuItem onClick={() => library.toggle(`official:${playlist.slug}`)}>
+      <DropdownMenuItem disabled={saved && hold.held} title={saved && hold.held ? hold.hint : undefined} onClick={() => library.toggle(`official:${playlist.slug}`)}>
         {saved ? <IconCircleCheckFilled className="text-listen" /> : <IconCirclePlus />} {saved ? t.removeFromLibrary : t.addToLibrary}
       </DropdownMenuItem>
       <DropdownMenuItem

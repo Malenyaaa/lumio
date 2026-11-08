@@ -1,10 +1,17 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
 import { IconCheck } from '@tabler/icons-react'
+import { ItemFields } from '@jellyfin/sdk/lib/generated-client/models'
+import { getLibraryApi } from '@jellyfin/sdk/lib/utils/api/library-api'
 import { useEffect } from 'react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { useAuthedSession } from '@/features/auth/session'
+import { useSetFavorite } from '@/features/items/queries'
 import { externalOf } from '@/lib/external-items'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
+import { rememberItems } from './offline-library'
+import { useListenLibrary } from './playlists'
+import { isEpisodeSaved, toggleSavedEpisode } from './podcasts'
 import { downloadCollection, downloadId, downloadsAvailable, removeDownload, syncDownload, useDownloadState, useTrackDownload } from './player/downloads'
 
 const messages = defineMessages({
@@ -16,6 +23,7 @@ const messages = defineMessages({
     downloaded: 'Heruntergeladen',
     loading: (percent: number) => `Wird heruntergeladen: ${percent} %`,
     queued: 'Wartet auf den Download',
+    held: 'Heruntergeladen: Entferne zuerst den Download, um es aus der Bibliothek zu nehmen.',
   },
   en: {
     download: 'Download',
@@ -25,6 +33,7 @@ const messages = defineMessages({
     downloaded: 'Downloaded',
     loading: (percent: number) => `Downloading: ${percent}%`,
     queued: 'Waiting to download',
+    held: 'Downloaded: remove the download first to take it out of the library.',
   },
 })
 
@@ -42,22 +51,62 @@ function entriesOf(items: BaseItemDto[]) {
   return { ids, urls: Object.keys(urls).length ? urls : undefined }
 }
 
-/** Downloading (or removing) an album, playlist or episode; keeps a downloaded one in step with its songs. */
-function useDownload(downloadKey: string, name: string, items: BaseItemDto[] | undefined, group?: string) {
+/**
+ * Downloading (or removing) an album, playlist or episode. Downloading puts it into the library (it stays there while
+ * downloaded) and keeps what is needed to find it offline (its items and artists, see offline-library); a downloaded
+ * playlist stays in step with its songs.
+ */
+function useDownload(downloadKey: string, name: string, items: BaseItemDto[] | undefined, group?: string, collection?: BaseItemDto) {
+  const { api, session } = useAuthedSession()
+  const library = useListenLibrary()
+  const kind = downloadKey.slice(0, downloadKey.indexOf(':'))
+  const id = downloadKey.slice(downloadKey.indexOf(':') + 1)
+  const favorite = useSetFavorite(kind === 'album' ? id : '')
   const state = useDownloadState(downloadKey)
   const ids = items ? entriesOf(items).ids.join(',') : null
   // A downloaded playlist follows its songs: added ones are fetched, removed ones dropped.
   useEffect(() => {
-    if (state.saved && ids !== null) syncDownload(downloadKey, ids ? ids.split(',') : [])
-  }, [downloadKey, ids, state.saved])
+    if (!state.saved || ids === null) return
+    syncDownload(downloadKey, ids ? ids.split(',') : [])
+    rememberItems([collection, ...(items ?? [])])
+  }, [downloadKey, ids, state.saved, collection, items])
+
+  /** The items and their artists, for the offline library. */
+  const remember = async (list: BaseItemDto[]) => {
+    rememberItems([collection, ...list])
+    const artistIds = [...new Set(list.flatMap((item) => [...(item.ArtistItems ?? []), ...(item.AlbumArtists ?? [])].map((artist) => artist.Id ?? '')).filter(Boolean))]
+    if (!artistIds.length) return
+    const artists = await getLibraryApi(api)
+      .getItems({ userId: session.userId, ids: artistIds, fields: [ItemFields.PrimaryImageAspectRatio, ItemFields.Genres, ItemFields.Overview] })
+      .then((response) => response.data.Items ?? [])
+      .catch(() => [])
+    rememberItems(artists)
+  }
+
+  /** What is downloaded belongs to the library. */
+  const addToLibrary = () => {
+    if (kind === 'album' && !collection?.UserData?.IsFavorite) favorite.mutate(true)
+    else if (kind === 'playlist' && collection?.CanDelete === false && !library.isSaved(id)) library.toggle(id)
+    else if (kind === 'official' && !library.isSaved(downloadKey)) library.toggle(downloadKey)
+    else if (kind === 'episode' && items?.[0] && !isEpisodeSaved(externalOf(items[0])?.guid)) toggleSavedEpisode(items[0])
+  }
+
   const toggle = () => {
     if (state.saved) removeDownload(downloadKey)
     else if (items) {
       const { ids: list, urls } = entriesOf(items)
       downloadCollection(downloadKey, name, list, urls, group)
+      addToLibrary()
+      void remember(items)
     }
   }
   return { state, toggle }
+}
+
+/** Whether something can't leave the library because it is downloaded (remove the download first), and why. */
+export function useHeldByDownload(downloadKey: string) {
+  const t = useMessages(messages)
+  return { held: useDownloadState(downloadKey).saved, hint: t.held }
 }
 
 /**
@@ -69,17 +118,20 @@ export function DownloadButton({
   name,
   items,
   group,
+  collection,
   className,
 }: {
   downloadKey: string
   name: string
   items: BaseItemDto[] | undefined
+  /** The album or playlist itself (kept for offline use). */
+  collection?: BaseItemDto
   /** What it belongs to in the library (an episode's podcast), for the "Downloaded" filter. */
   group?: string
   className?: string
 }) {
   const t = useMessages(messages)
-  const { state, toggle } = useDownload(downloadKey, name, items, group)
+  const { state, toggle } = useDownload(downloadKey, name, items, group, collection)
   if (!downloadsAvailable) return null
   const done = state.saved && state.done >= state.total
   // The song coming in now, by name, with how far it is.
@@ -147,9 +199,9 @@ function DownloadGlyph({ state, share = 0, className }: { state: 'none' | 'queue
 }
 
 /** "Download" in a menu, with a check once downloaded (choosing it again removes the download). */
-export function DownloadMenuItem({ downloadKey, name, items }: { downloadKey: string; name: string; items: BaseItemDto[] | undefined }) {
+export function DownloadMenuItem({ downloadKey, name, items, collection }: { downloadKey: string; name: string; items: BaseItemDto[] | undefined; collection?: BaseItemDto }) {
   const t = useMessages(messages)
-  const { state, toggle } = useDownload(downloadKey, name, items)
+  const { state, toggle } = useDownload(downloadKey, name, items, undefined, collection)
   if (!downloadsAvailable) return null
   return (
     <DropdownMenuItem onClick={toggle} disabled={!items?.length && !state.saved}>

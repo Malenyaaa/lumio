@@ -5,8 +5,11 @@ import App from './App.tsx'
 import { persistQueryCache, restoreQueryCache, RESTORE_TIMEOUT_MS } from './lib/query-persist'
 import { queryClient } from './lib/query-client'
 import { initTheme } from './lib/theme'
+import { installOfflineLibrary } from './features/listen/offline-library'
 
 initTheme()
+// Without a network, Jellyfin's answers come from the downloads (see offline-library).
+installOfflineLibrary()
 
 // The data from last time comes back first (briefly, never holding the start up for long), then the app renders and
 // refreshes it in the background.

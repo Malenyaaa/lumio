@@ -294,6 +294,11 @@ export function useEpisodeSaved(guid: string) {
   return useStore().saved.some((item) => externalOf(item)?.guid === guid)
 }
 
+/** Whether an episode is in "Your episodes" (outside React). */
+export function isEpisodeSaved(guid: string | undefined) {
+  return !!guid && saved.some((entry) => externalOf(entry)?.guid === guid)
+}
+
 /** Saves an episode to "Your episodes", or takes it out again. */
 export function toggleSavedEpisode(item: BaseItemDto) {
   const guid = externalOf(item)?.guid

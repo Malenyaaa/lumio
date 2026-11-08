@@ -34,6 +34,8 @@ import { TrackArtists } from './track-artists'
 import { AddToPlaylist } from './library-menu'
 import { TasteMenuItem } from './taste'
 import { DownloadButton, DownloadMenuItem } from './download-ui'
+import { useHeldByDownload } from './download-ui'
+import { useUnavailable } from './availability'
 
 const messages = defineMessages({
   de: {
@@ -100,6 +102,7 @@ function kindOf(trackCount: number, t: (typeof messages)['de'], isBook: boolean)
  * (type, big title, artist, year, songs, length), a row of round actions, the track table, and more by the artist.
  */
 export function AlbumView({ item }: { item: BaseItemDto }) {
+  const hold = useHeldByDownload(`album:${item.Id}`)
   const { api } = useAuthedSession()
   const t = useMessages(messages)
   const tracks = useAlbumTracks(item.Id)
@@ -178,16 +181,18 @@ export function AlbumView({ item }: { item: BaseItemDto }) {
         </button>
         <ShuffleToggle source={source} />
         <RoundAction
-          label={isSaved ? t.saved : t.save}
+          label={isSaved && hold.held ? hold.hint : isSaved ? t.saved : t.save}
           active={isSaved}
           onClick={() => {
+            // A downloaded album stays in the library.
+            if (isSaved && hold.held) return
             setSaved(!isSaved)
             favorite.mutate(!isSaved)
           }}
         >
           {isSaved ? <IconCircleCheckFilled className="size-8" /> : <IconCirclePlus className="size-8" />}
         </RoundAction>
-        <DownloadButton downloadKey={`album:${item.Id}`} name={item.Name ?? ''} items={tracks.data} />
+        <DownloadButton downloadKey={`album:${item.Id}`} name={item.Name ?? ''} items={tracks.data} collection={item} />
         <DropdownMenu>
           <DropdownMenuTrigger aria-label={t.more(item.Name ?? '')} className="grid size-10 place-items-center rounded-full text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
             <IconDots className="size-7" />
@@ -200,7 +205,7 @@ export function AlbumView({ item }: { item: BaseItemDto }) {
               <IconTextPlus /> {t.playNext}
             </DropdownMenuItem>
             <AddToPlaylist tracks={async () => list} label={t.addToPlaylist} />
-            <DownloadMenuItem downloadKey={`album:${item.Id}`} name={item.Name ?? ''} items={tracks.data} />
+            <DownloadMenuItem downloadKey={`album:${item.Id}`} name={item.Name ?? ''} items={tracks.data} collection={item} />
             <TasteMenuItem kind="albums" id={item.Id} />
             {mainArtist?.id && (
               <DropdownMenuItem render={<Link to={titlePath('MusicArtist', mainArtist.id)} />}>
@@ -301,6 +306,8 @@ export function TrackTableRow({
   const { api } = useAuthedSession()
   const state = useMusic()
   const isCurrent = currentTrack(state)?.Id === track.Id
+  // Offline, songs that need the network are greyed out (the player skips them).
+  const unavailable = useUnavailable(track)
   const image = cover ? portraitImageUrl(api, track, { fillHeight: 80 }) : undefined
   return (
     <TrackContextMenu track={track} onRemove={onRemove}>
@@ -322,6 +329,7 @@ export function TrackTableRow({
         className={cn(
           // Stays lit while its right-click menu is open.
           'group/track grid cursor-default items-center gap-4 rounded-md px-4 py-2 outline-none hover:bg-foreground/10 focus-visible:bg-foreground/10 data-popup-open:bg-foreground/10',
+          unavailable && 'opacity-40',
           extra !== undefined ? 'grid-cols-[2rem_minmax(0,1fr)_6rem_2rem] sm:grid-cols-[2rem_minmax(0,1fr)_9rem_6rem_2rem]' : TRACK_GRID,
         )}
       >
