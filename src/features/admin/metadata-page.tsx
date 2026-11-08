@@ -10,17 +10,18 @@ import { Section, SettingsPage, SwitchField } from '@/features/settings/fields'
 import { lumioGet, lumioSend } from '@/features/social/social'
 import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
 import { useLumioConfig } from './branding'
+import { LanguageDialog } from './language-dialog'
 import { ArtistMetadataDialog, TrackMetadataDialog, type TrackCredits, type TrackMetaInfo } from './metadata-dialogs'
 import { useIsAdmin, useSaveConfig } from './use-admin-config'
-import { ownKey } from '@/lib/services'
+import { hasService, ownKey } from '@/lib/services'
 
 const messages = defineMessages({
   de: {
-    title: 'Musik-Metadaten',
+    title: 'Metadaten',
     description:
       'Lumio ergänzt die Bibliothek um Angaben von außen. Was gespielt oder geöffnet wird, schlägt Lumio von selbst nach; hier lässt sich alles auf einmal erledigen. Die Aufgaben laufen auf dem Lumio-Server weiter, auch wenn du die Seite verlässt.',
     adminOnly: 'Nur für Administrator*innen.',
-    libraries: 'Bibliotheken',
+    libraries: 'Musikbibliotheken',
     exclusions: 'Ausschließen',
     exclusionsHint:
       'Songs dieser Künstler*innen oder Genres schlägt Lumio nie nach, weder in den Aufgaben noch beim Abspielen. Gut für Hörspiele oder Hörbücher in der Musikbibliothek.',
@@ -59,13 +60,27 @@ const messages = defineMessages({
     more: 'Mehr laden',
     noCredits: 'nicht gefunden',
     edited: 'von Hand',
+    videoLibraries: 'Film- und Serienbibliotheken',
+    videoLibrariesHint: 'Welche Bibliotheken die Aufgabe für zwei Sprachen durchgeht.',
+    languages: 'Filme und Serien in zwei Sprachen',
+    languagesHint:
+      'Erkennt, ob Titel und Beschreibung in Jellyfin deutsch oder englisch sind (an Wörtern, die es nur in einer der Sprachen gibt), und holt die andere Sprache von TMDb, dazu Poster und Logos mit Schrift in der anderen Sprache. Lumio zeigt dann die Sprache der Oberfläche. Neue Titel werden auch beim Öffnen ergänzt. Etwa eine Sekunde pro Film, einige pro Serie.',
+    languagesStart: 'Sprachen ergänzen',
+    noTmdb: 'Ohne TMDb-Schlüssel (TMDB_API_KEY am Lumio-Server) werden die Texte nur eingeordnet; die andere Sprache kommt nach, sobald es einen gibt.',
+    review: 'Sprachen prüfen',
+    reviewHint:
+      'Was die Aufgabe gefunden hat. Bei „unklar“ kommen Wörter beider Sprachen vor oder zu wenige; Lumio zeigt dort den Jellyfin-Text. Ein Klick öffnet Texte und Sprache zum Festlegen.',
+    reviewSearch: 'Titel oder Serie',
+    labelFilter: (label: string) => ({ unclear: 'Unklar', de: 'Deutsch', en: 'Englisch', none: 'Ohne Text', all: 'Alle' })[label] ?? label,
+    titleCount: (n: number) => (n === 1 ? '1 Eintrag' : `${n} Einträge`),
+    typeName: (type: string) => ({ Movie: 'Film', Series: 'Serie', Season: 'Staffel', Episode: 'Folge' })[type] ?? type,
   },
   en: {
-    title: 'Music metadata',
+    title: 'Metadata',
     description:
       'Lumio adds information from outside to the library. What plays or is opened is looked up on its own; here everything can be done at once. The tasks keep running on the Lumio server when you leave this page.',
     adminOnly: 'Administrators only.',
-    libraries: 'Libraries',
+    libraries: 'Music libraries',
     exclusions: 'Leave out',
     exclusionsHint: "Lumio never looks up songs by these artists or in these genres, in the tasks or while they play. Handy for audio plays or audiobooks in the music library.",
     excludedArtists: 'Artists',
@@ -103,6 +118,20 @@ const messages = defineMessages({
     more: 'Load more',
     noCredits: 'not found',
     edited: 'by hand',
+    videoLibraries: 'Film and series libraries',
+    videoLibrariesHint: 'Which libraries the two-language task goes through.',
+    languages: 'Films and series in two languages',
+    languagesHint:
+      "Finds out whether Jellyfin's titles and overviews are German or English (by words only one of the languages has) and fetches the other language from TMDb, along with posters and logos with writing in the other language. Lumio then shows the interface language. New titles are also filled in when opened. About a second a film, a few for a series.",
+    languagesStart: 'Fill in languages',
+    noTmdb: 'Without a TMDb key (TMDB_API_KEY on the Lumio server) the texts are only labelled; the other language follows once there is one.',
+    review: 'Check languages',
+    reviewHint:
+      'What the task found. "Unclear" means words of both languages, or too few; Lumio shows the Jellyfin text there. Click one to open its texts and set the language.',
+    reviewSearch: 'Title or series',
+    labelFilter: (label: string) => ({ unclear: 'Unclear', de: 'German', en: 'English', none: 'No text', all: 'All' })[label] ?? label,
+    titleCount: (n: number) => (n === 1 ? '1 entry' : `${n} entries`),
+    typeName: (type: string) => ({ Movie: 'Film', Series: 'Series', Season: 'Season', Episode: 'Episode' })[type] ?? type,
   },
 })
 
@@ -134,10 +163,13 @@ interface Stored {
   data?: TrackCredits | null
 }
 
-type JobName = 'credits' | 'artists'
+type JobName = 'credits' | 'artists' | 'languages'
 
-/** What the popup shows: a song's metadata, or an artist whose information failed. */
-type Opened = { kind: 'track'; id: string; meta: TrackMetaInfo; error?: string } | { kind: 'artist'; id: string; name: string; error?: string }
+/** What the popup shows: a song's metadata, an artist whose information failed, or a film's or series' texts. */
+type Opened =
+  | { kind: 'track'; id: string; meta: TrackMetaInfo; error?: string }
+  | { kind: 'artist'; id: string; name: string; error?: string }
+  | { kind: 'title'; id: string }
 
 /**
  * A list of names to leave out, as removable chips, with a field that suggests from what the library has (Enter, or
@@ -221,6 +253,8 @@ function ExclusionPicker({
 
 /** The music libraries the tasks can go through (not films or series). */
 const MUSIC_TYPES = new Set(['music', 'audiobooks', 'books', 'musicvideos', 'mixed'])
+/** The libraries the two-language task can go through. */
+const VIDEO_TYPES = new Set(['movies', 'tvshows', 'mixed'])
 
 /** An entry in the lists; opens its popup. */
 function EntryRow({ title, line, onClick }: { title?: string; line?: string; onClick: () => void }) {
@@ -282,8 +316,9 @@ function JobSection({
   const state = useJob(name, true)
   const control = useMutation({
     mutationFn: async (method: 'POST' | 'DELETE') => {
-      // The artist task asks Last.fm with the app's key, unless the server has its own.
-      const body = method === 'POST' ? { libraries, ...exclusions, ...(name === 'artists' ? { lastfmKey: ownKey('lastfm') } : {}) } : undefined
+      // The artist task asks Last.fm with the app's key, the language task TMDb, unless the server has its own.
+      const keys = name === 'artists' ? { lastfmKey: ownKey('lastfm') } : name === 'languages' ? { tmdbKey: ownKey('tmdb') } : {}
+      const body = method === 'POST' ? { libraries, ...exclusions, ...keys } : undefined
       const response = await lumioSend(method, `/admin/jobs/${name}`, body)
       if (!response?.ok) throw new Error('Unavailable')
       return (await response.json()) as JobState
@@ -335,7 +370,9 @@ function JobSection({
                   onOpen(
                     name === 'artists'
                       ? { kind: 'artist', id: entry.id, name: entry.title, error: entry.error }
-                      : { kind: 'track', id: entry.id, meta: { title: entry.title, artist: entry.artist, album: entry.album, albumId: entry.albumId }, error: entry.error },
+                      : name === 'languages'
+                        ? { kind: 'title', id: entry.id }
+                        : { kind: 'track', id: entry.id, meta: { title: entry.title, artist: entry.artist, album: entry.album, albumId: entry.albumId }, error: entry.error },
                   )
                 }
               />
@@ -402,6 +439,90 @@ function BrowseSection({ onOpen }: { onOpen: (opened: Opened) => void }) {
   )
 }
 
+type LabelFilter = 'unclear' | 'de' | 'en' | 'none' | 'all'
+
+interface LocalizedRow {
+  id: string
+  label: 'de' | 'en' | 'unclear' | 'none'
+  meta: { name: string; type: string; series?: string; year?: number; season?: number; episode?: number }
+  at: number
+}
+
+/** The two-language entries by label (the unclear ones first), searchable; each opens its texts. */
+function LanguageReviewSection({ running, onOpen }: { running: boolean; onOpen: (opened: Opened) => void }) {
+  const t = useMessages(messages)
+  const [label, setLabel] = useState<LabelFilter>('unclear')
+  const [term, setTerm] = useState('')
+  const [search, setSearch] = useState('')
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearch(term.trim()), 300)
+    return () => window.clearTimeout(timer)
+  }, [term])
+  const pages = useInfiniteQuery({
+    queryKey: ['admin-localized', label, search],
+    initialPageParam: 0,
+    // Grows while the task runs.
+    refetchInterval: running ? 10_000 : false,
+    queryFn: async ({ pageParam }) => {
+      const response = await lumioGet(`/admin/localized?${new URLSearchParams({ label: label === 'all' ? '' : label, search, offset: String(pageParam) })}`)
+      if (!response?.ok) throw new Error('Unavailable')
+      return (await response.json()) as { total: number; rows: LocalizedRow[]; counts: Partial<Record<LocalizedRow['label'], number>> }
+    },
+    getNextPageParam: (last, all) => {
+      const loaded = all.reduce((sum, page) => sum + page.rows.length, 0)
+      return loaded < last.total ? loaded : undefined
+    },
+  })
+  const rows = pages.data?.pages.flatMap((page) => page.rows) ?? []
+  const counts = pages.data?.pages[0]?.counts ?? {}
+  const total = pages.data?.pages[0]?.total
+  const all = Object.values(counts).reduce((sum, n) => sum + (n ?? 0), 0)
+  if (pages.isSuccess && !all) return null
+  return (
+    <Section title={t.review} description={t.reviewHint}>
+      <div className="flex flex-wrap gap-2 border-b p-3">
+        {(['unclear', 'de', 'en', 'none', 'all'] as const).map((value) => (
+          <Button key={value} size="sm" variant={label === value ? 'default' : 'outline'} onClick={() => setLabel(value)}>
+            {t.labelFilter(value)} ({value === 'all' ? all : (counts[value] ?? 0)})
+          </Button>
+        ))}
+      </div>
+      <div className="flex items-center gap-3 border-b p-3">
+        <div className="relative flex-1">
+          <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input value={term} onChange={(event) => setTerm(event.target.value)} placeholder={t.reviewSearch} aria-label={t.reviewSearch} className="pl-8" />
+        </div>
+        {total !== undefined && <span className="shrink-0 text-sm text-muted-foreground">{t.titleCount(total)}</span>}
+      </div>
+      <div className="max-h-[32rem] divide-y overflow-y-auto">
+        {rows.map((row) => (
+          <EntryRow
+            key={row.id}
+            title={row.meta.name}
+            line={[
+              t.typeName(row.meta.type),
+              row.meta.series,
+              row.meta.season !== undefined && row.meta.episode !== undefined ? `S${row.meta.season} · E${row.meta.episode}` : undefined,
+              row.meta.year,
+              label === 'all' ? t.labelFilter(row.label) : undefined,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+            onClick={() => onOpen({ kind: 'title', id: row.id })}
+          />
+        ))}
+        {pages.hasNextPage && (
+          <div className="p-3 text-center">
+            <Button variant="ghost" size="sm" disabled={pages.isFetchingNextPage} onClick={() => void pages.fetchNextPage()}>
+              {t.more}
+            </Button>
+          </div>
+        )}
+      </div>
+    </Section>
+  )
+}
+
 /** Administration: the tasks that fill in the library from outside (they run on the Lumio server), and their results. */
 export function MetadataPage() {
   const t = useMessages(messages)
@@ -409,7 +530,12 @@ export function MetadataPage() {
   const isAdmin = useIsAdmin()
   const config = useLumioConfig().data ?? {}
   const save = useSaveConfig()
-  const views = (useUserViews().data ?? []).filter((view) => MUSIC_TYPES.has(view.CollectionType ?? 'mixed'))
+  const allViews = useUserViews().data ?? []
+  const views = allViews.filter((view) => MUSIC_TYPES.has(view.CollectionType ?? 'mixed'))
+  const videoViews = allViews.filter((view) => VIDEO_TYPES.has(view.CollectionType ?? 'mixed'))
+  const videoExcluded = config.languageExcludedLibraries ?? []
+  const videoLibraries = videoViews.filter((view) => !videoExcluded.includes(view.Id!)).map((view) => view.Id!)
+  const languagesJob = useJob('languages', isAdmin)
   const excluded = config.metadataExcludedLibraries ?? []
   const libraries = views.filter((view) => !excluded.includes(view.Id!)).map((view) => view.Id!)
   const exclusions = { excludeArtists: config.metadataExcludedArtists ?? [], excludeGenres: config.metadataExcludedGenres ?? [] }
@@ -495,6 +621,37 @@ export function MetadataPage() {
 
       <BrowseSection onOpen={setOpened} />
 
+      <Section title={t.videoLibraries} description={t.videoLibrariesHint}>
+        {videoViews.map((view) => (
+          <SwitchField
+            key={view.Id}
+            id={`language-library-${view.Id}`}
+            label={view.Name ?? ''}
+            checked={!videoExcluded.includes(view.Id!)}
+            disabled={save.isPending}
+            onChange={(included) =>
+              save.mutate((current) => {
+                const list = new Set(current.languageExcludedLibraries ?? [])
+                if (included) list.delete(view.Id!)
+                else list.add(view.Id!)
+                return { ...current, languageExcludedLibraries: [...list] }
+              })
+            }
+          />
+        ))}
+      </Section>
+      <JobSection
+        name="languages"
+        title={t.languages}
+        hint={hasService('tmdb') ? t.languagesHint : `${t.languagesHint} ${t.noTmdb}`}
+        start={t.languagesStart}
+        secondsEach={1}
+        libraries={videoLibraries}
+        exclusions={exclusions}
+        onOpen={setOpened}
+      />
+      <LanguageReviewSection running={!!languagesJob.data?.running} onOpen={setOpened} />
+
       <TrackMetadataDialog
         key={opened?.kind === 'track' ? opened.id : 'track'}
         id={opened?.kind === 'track' ? opened.id : null}
@@ -502,6 +659,7 @@ export function MetadataPage() {
         error={opened?.kind === 'track' ? opened.error : undefined}
         onClose={() => setOpened(null)}
       />
+      <LanguageDialog id={opened?.kind === 'title' ? opened.id : null} onClose={() => setOpened(null)} />
       <ArtistMetadataDialog
         key={opened?.kind === 'artist' ? opened.id : 'artist'}
         id={opened?.kind === 'artist' ? opened.id : null}

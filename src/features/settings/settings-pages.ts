@@ -17,7 +17,7 @@ const labels = defineMessages({
     display: 'Darstellung',
     branding: 'Branding',
     plugins: 'Plugins',
-    metadata: 'Musik-Metadaten',
+    metadata: 'Metadaten',
     stats: 'Wiedergabe-Statistik',
   },
   en: {
@@ -32,7 +32,7 @@ const labels = defineMessages({
     display: 'Display',
     branding: 'Branding',
     plugins: 'Plugins',
-    metadata: 'Music metadata',
+    metadata: 'Metadata',
     stats: 'Playback statistics',
   },
 })

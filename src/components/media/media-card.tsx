@@ -17,6 +17,7 @@ import { cardMessages } from './messages'
 import { landscapeImageUrl, portraitImageUrl } from '@/lib/images'
 import { artistsOf, itemHref, SQUARE_TYPES } from '@/lib/item-links'
 import { cn } from '@/lib/utils'
+import { useLocalizedItem } from '@/lib/localized'
 
 export type CardShape = 'poster' | 'landscape'
 
@@ -76,8 +77,10 @@ if (typeof window !== 'undefined') {
   )
 }
 
-export function MediaCard({ item, shape = 'poster', fluid, current }: MediaCardProps) {
+export function MediaCard({ item: jellyfinItem, shape = 'poster', fluid, current }: MediaCardProps) {
   const { api, session } = useAuthedSession()
+  // In the interface's language.
+  const item = useLocalizedItem(jellyfinItem)
   const queryClient = useQueryClient()
   const { settings } = useLocalSettings()
   const t = useMessages(cardMessages)

@@ -9,6 +9,7 @@ import { extname, join, normalize, resolve, sep } from 'node:path'
 import { isJellyfinRequest, proxyToJellyfin, proxyUpgrade } from './proxy.ts'
 import { creditsOfRecording, lookupCredits, sameName, searchRecordings, type Failure, type JobState, type TrackCredits, type TrackMeta } from './credits.ts'
 import { DEFAULT_PRIVACY, Store, type Activity, type Person, type Privacy } from './store.ts'
+import { LANGS, detectLanguage, localizeTitle, type Lang, type LanguageDeps, type LocalImage, type LocalImageKind, type Localized, type LocalizedMeta, type Texts, type VideoItem } from './languages.ts'
 
 /**
  * The Lumio server. It serves the Lumio web app itself and, under /api, what Jellyfin doesn't let users share with
@@ -50,11 +51,18 @@ const WEB_DIR = resolve(process.env.WEB_DIR ?? join(import.meta.dirname, '../../
 const TOKEN_TTL_MS = 5 * 60_000
 /** Largest request body accepted (bytes). */
 const BODY_LIMIT = 16 * 1024
-/** Hosts whose pictures the image relay fetches (podcast covers from Apple, artist photos from Deezer); nothing else, so it is no open proxy. */
-const IMAGE_HOSTS = /(^|\.)(mzstatic\.com|dzcdn\.net|epidemicsound\.com)$/
+/**
+ * Hosts whose pictures the image relay fetches (podcast covers from Apple, artist photos from Deezer, posters and logos
+ * in another language from TMDb, fanart.tv and TheTVDB); nothing else, so it is no open proxy.
+ */
+const IMAGE_HOSTS = /(^|\.)(mzstatic\.com|dzcdn\.net|epidemicsound\.com|image\.tmdb\.org|fanart\.tv|thetvdb\.com)$/
 /** Largest picture relayed (bytes). */
 const IMAGE_LIMIT = 8 * 1024 * 1024
 const IMAGE_DIR = join(DATA_DIR, 'images')
+/** Pictures administrators uploaded for one language of a film or series. */
+const UPLOAD_DIR = join(DATA_DIR, 'localized-images')
+/** Largest text body (an item's texts in both languages). */
+const TEXT_BODY_LIMIT = 64 * 1024
 const RELAY_DIR = join(DATA_DIR, 'relay')
 /** Largest podcast feed, chapter list or transcript relayed (bytes). */
 const FEED_LIMIT = 15 * 1024 * 1024
@@ -99,10 +107,11 @@ const RELAY_SERVICES: Record<string, RelayService> = {
     spacing: 220,
     keep: (status) => status < 400 || status === 404,
   },
-  // TMDb: a film's or series' rating, and a film collection's parts. Ratings move slowly.
+  // TMDb: a film's or series' rating, a film collection's parts, and texts and pictures in both languages (a season
+  // brings its episodes). Ratings move slowly.
   tmdb: {
     base: 'https://api.themoviedb.org/3/',
-    paths: /^(movie|tv|collection)\/\d+$/,
+    paths: /^(movie\/\d+(\/images)?|tv\/\d+(\/images|\/season\/\d+)?|collection\/\d+)$/,
     key: { param: 'api_key', value: process.env.TMDB_API_KEY?.trim() },
     ttl: 7 * 24 * HOUR,
     spacing: 50,
@@ -206,15 +215,19 @@ function send(response: ServerResponse, status: number, body?: unknown) {
   response.end(body === undefined ? undefined : JSON.stringify(body))
 }
 
-async function readJson<T>(request: IncomingMessage): Promise<T> {
+async function readBody(request: IncomingMessage, limit: number): Promise<Buffer> {
   let size = 0
   const chunks: Buffer[] = []
   for await (const chunk of request) {
     size += (chunk as Buffer).length
-    if (size > BODY_LIMIT) throw new Error('Body too large')
+    if (size > limit) throw new Error('Body too large')
     chunks.push(chunk as Buffer)
   }
-  return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') as T
+  return Buffer.concat(chunks)
+}
+
+async function readJson<T>(request: IncomingMessage, limit = BODY_LIMIT): Promise<T> {
+  return JSON.parse((await readBody(request, limit)).toString('utf8') || '{}') as T
 }
 
 function cors(request: IncomingMessage, response: ServerResponse) {
@@ -347,8 +360,12 @@ async function keptImage(source: string | null): Promise<{ body: Buffer; type: s
 }
 
 async function serveImage(response: ServerResponse, source: string | null) {
+  return serveKept(response, () => keptImage(source))
+}
+
+async function serveKept(response: ServerResponse, load: () => Promise<{ body: Buffer; type: string }>) {
   try {
-    const { body, type } = await keptImage(source)
+    const { body, type } = await load()
     response.writeHead(200, {
       'Content-Type': type,
       'Content-Length': body.length,
@@ -650,12 +667,13 @@ async function creditsFor(id: string, meta: TrackMeta): Promise<TrackCredits | n
   return lookup
 }
 
-type JobName = 'credits' | 'artists'
+type JobName = 'credits' | 'artists' | 'languages'
 
 /** The administrators' tasks on the library, each running on its own (one run at a time). */
 const jobs: Record<JobName, JobState & { stop?: boolean }> = {
   credits: { running: false, total: 0, done: 0, found: 0, failed: 0, failures: [] },
   artists: { running: false, total: 0, done: 0, found: 0, failed: 0, failures: [] },
+  languages: { running: false, total: 0, done: 0, found: 0, failed: 0, failures: [] },
 }
 
 /**
@@ -831,6 +849,116 @@ function scanArtists(token: string, userId: string, lastfmKey: string | undefine
   )
 }
 
+// ---- films and series in two languages (see languages.ts) ----
+
+/** TMDb and Jellyfin as the language task reads them, with the caller's token (and the app's TMDb key, if it has one). */
+function languageDeps(token: string, userId: string, tmdbKey: string | undefined): LanguageDeps {
+  return {
+    canTmdb: !!(RELAY_SERVICES.tmdb?.key?.value || tmdbKey),
+    tmdb: async (path, params) => {
+      const entry = await relayGet('tmdb', path, new URLSearchParams({ ...params, ...(tmdbKey ? { api_key: tmdbKey } : {}) }))
+      return entry.status === 404 ? null : (JSON.parse(entry.body) as unknown)
+    },
+    jellyfin: async <T,>(path: string, query: Record<string, string>) => {
+      const params = new URLSearchParams(Object.entries(query).map(([key, value]) => [key, value.replace('{user}', userId)]))
+      const response = await fetch(`${JELLYFIN_URL}${path.replace('{user}', userId)}?${params}`, { headers: { Authorization: `MediaBrowser Token="${token}"` } })
+      if (!response.ok) throw new Error(`Jellyfin ${response.status}`)
+      return (await response.json()) as T
+    },
+    get: (ids) => store.localized(ids),
+    put: (id, data, meta) => store.setLocalized(id, data, meta),
+  }
+}
+
+/** Fills in every film and series not done yet in both languages (a few TMDb calls per film, two per season). */
+function scanLanguages(token: string, userId: string, tmdbKey: string | undefined, libraries: string[] | undefined) {
+  const deps = languageDeps(token, userId, tmdbKey)
+  return runJob<VideoItem>(
+    jobs.languages,
+    () => libraryItems<VideoItem>(token, userId, '/Users/{user}/Items', { Recursive: 'true', IncludeItemTypes: 'Movie,Series', Fields: 'Overview,Taglines,ProviderIds' }, libraries),
+    async (title) => !!(await localizeTitle(title, deps, true)),
+    (title) => ({ id: title.Id, title: title.Name ?? '' }),
+  )
+}
+
+const titleLookups = new Map<string, Promise<boolean | null>>()
+
+/** The film or series an item belongs to, filled in now if it wasn't (when someone opens it). */
+async function lookupTitle(token: string, userId: string, itemId: string, tmdbKey: string | undefined) {
+  const deps = languageDeps(token, userId, tmdbKey)
+  const item = await deps.jellyfin<VideoItem>(`/Users/{user}/Items/${itemId}`, {})
+  const title = item.Type === 'Movie' || item.Type === 'Series' ? item : item.SeriesId ? await deps.jellyfin<VideoItem>(`/Users/{user}/Items/${item.SeriesId}`, {}) : null
+  if (!title) return null
+  const running = titleLookups.get(title.Id)
+  if (running) return running
+  const lookup = localizeTitle(title, deps, true).finally(() => titleLookups.delete(title.Id))
+  titleLookups.set(title.Id, lookup)
+  return lookup
+}
+
+/** An item's entry, made from what Jellyfin says when there is none yet (for an administrator's first change). */
+async function ensureLocalized(token: string, userId: string, id: string): Promise<{ data: Localized; meta: LocalizedMeta }> {
+  const known = store.localized([id])[id]
+  const meta = store.localizedMeta(id)
+  if (known && meta) return { data: known, meta }
+  const item = await languageDeps(token, userId, undefined).jellyfin<VideoItem>(`/Users/{user}/Items/${id}`, {})
+  return {
+    data: { label: detectLanguage(item.Overview), tmdb: {}, edited: {}, images: {} },
+    meta: { name: item.Name ?? '', type: item.Type ?? '', series: item.SeriesName, year: item.ProductionYear },
+  }
+}
+
+/**
+ * What the app gets of an entry: texts, and the pictures to show per language, by when they changed (their address is
+ * fixed, see /localized-image). An automatic picture only counts where Jellyfin's text, and so presumably its
+ * pictures, are in the other language; an administrator's choice always does (null: Jellyfin's).
+ */
+function publicLocalized(entry: Localized) {
+  const images: Partial<Record<Lang, Partial<Record<LocalImageKind, number | null>>>> = {}
+  const otherLanguage = (lang: Lang) => isLang(entry.label) && entry.label !== lang
+  for (const [lang, kinds] of Object.entries(entry.images) as Array<[Lang, Localized['images'][Lang]]>) {
+    const shown = Object.entries(kinds ?? {}).filter(([, image]) => image === null || image?.manual || otherLanguage(lang))
+    if (shown.length) images[lang] = Object.fromEntries(shown.map(([kind, image]) => [kind, image ? image.at : null]))
+  }
+  return { label: entry.label, tmdb: entry.tmdb, edited: entry.edited, images }
+}
+
+async function uploadedImage(name: string): Promise<{ body: Buffer; type: string }> {
+  if (!/^[0-9a-f]{64}$/.test(name)) throw new ImageError(404, 'Not found')
+  try {
+    const file = join(UPLOAD_DIR, name)
+    const [body, type] = await Promise.all([readFile(file), readFile(`${file}.type`, 'utf8')])
+    return { body, type }
+  } catch {
+    throw new ImageError(404, 'Not found')
+  }
+}
+
+const isLang = (value: unknown): value is Lang => LANGS.includes(value as Lang)
+const isItemId = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f-]{32,36}$/i.test(value)
+const isTmdbKey = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{32}$/i.test(value)
+
+/** Texts an administrator wrote, trimmed and bounded; empty fields are left out. */
+function cleanTexts(value: unknown): Partial<Record<Lang, Texts>> {
+  const result: Partial<Record<Lang, Texts>> = {}
+  if (!value || typeof value !== 'object') return result
+  for (const lang of LANGS) {
+    const given = (value as Record<string, unknown>)[lang]
+    if (!given || typeof given !== 'object') continue
+    const field = (key: keyof Texts, max: number) => {
+      const entry = (given as Record<string, unknown>)[key]
+      return typeof entry === 'string' && entry.trim() ? entry.trim().slice(0, max) : undefined
+    }
+    const texts: Texts = {}
+    for (const [key, max] of [['name', 300], ['tagline', 500], ['overview', 10_000]] as const) {
+      const entry = field(key, max)
+      if (entry) texts[key] = entry
+    }
+    if (Object.keys(texts).length) result[lang] = texts
+  }
+  return result
+}
+
 async function handle(request: IncomingMessage, response: ServerResponse) {
   const url = new URL(request.url ?? '/', 'http://localhost')
   // Everything outside /api is the app.
@@ -852,6 +980,14 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
   }
   // Pictures load from <img> tags, which carry no token; the host list keeps this to podcast covers.
   if (path === '/image' && request.method === 'GET') return serveImage(response, url.searchParams.get('url'))
+  // GET /localized-image/<item>/<lang>/<kind>: a film's or series' picture for one language (also from <img> tags, as
+  // Jellyfin's own pictures are).
+  const localImage = path.match(/^\/localized-image\/([0-9a-f-]{32,36})\/(de|en)\/(Primary|Logo|Thumb|Banner)$/)
+  if (localImage && request.method === 'GET') {
+    const image = store.localized([localImage[1]!])[localImage[1]!]?.images[localImage[2] as Lang]?.[localImage[3] as LocalImageKind]
+    if (!image) return send(response, 404, { error: 'No picture' })
+    return serveKept(response, () => (image.src.startsWith('upload:') ? uploadedImage(image.src.slice('upload:'.length)) : keptImage(image.src)))
+  }
 
   const me = await authenticate(tokenOf(request, url))
   if (!me) return send(response, 401, { error: 'Not signed in' })
@@ -921,16 +1057,109 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
     }
   }
 
-  // /admin/jobs/<credits|artists>: an admin's task on the whole library (POST starts, DELETE stops, GET tells how far it
-  // is): looking up every track's credits, or fetching every artist's information into the caches.
-  const jobName = path.match(/^\/admin\/jobs\/(credits|artists)$/)?.[1] as JobName | undefined
+  // POST /localized {ids}: films', series', seasons' and episodes' texts in both languages and which pictures differ
+  // by language (left out: not filled in yet).
+  if (path === '/localized' && request.method === 'POST') {
+    const { ids } = await readJson<{ ids?: unknown }>(request).catch(() => ({ ids: undefined }))
+    if (!Array.isArray(ids) || ids.length > 300 || !ids.every(isItemId)) return send(response, 400, { error: 'Bad ids' })
+    return send(response, 200, Object.fromEntries(Object.entries(store.localized(ids)).map(([id, entry]) => [id, publicLocalized(entry)])))
+  }
+
+  // POST /localized/lookup {id, tmdbKey?}: the film or series of an item filled in now, if it wasn't.
+  if (path === '/localized/lookup' && request.method === 'POST') {
+    const body = await readJson<{ id?: unknown; tmdbKey?: unknown }>(request).catch(() => null)
+    if (!isItemId(body?.id)) return send(response, 400, { error: 'Bad item' })
+    try {
+      await lookupTitle(tokenOf(request, url)!, me.id, body.id, isTmdbKey(body.tmdbKey) ? body.tmdbKey : undefined)
+      const entry = store.localized([body.id])[body.id]
+      return send(response, 200, { entry: entry ? publicLocalized(entry) : null })
+    } catch (error) {
+      return send(response, 502, { error: error instanceof Error ? error.message : 'Lookup failed' })
+    }
+  }
+
+  // GET /admin/localized?label=…&search=…&offset=…: the entries for review (e.g. the unclear ones), with counts per label.
+  if (path === '/admin/localized' && request.method === 'GET') {
+    if (!isAdmin(tokenOf(request, url))) return send(response, 403, { error: 'Administrators only' })
+    const label = url.searchParams.get('label')
+    const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0)
+    const page = store.localizedPage(label === 'de' || label === 'en' || label === 'unclear' || label === 'none' ? label : null, (url.searchParams.get('search') ?? '').slice(0, 200).trim(), offset, 50)
+    return send(response, 200, { ...page, counts: store.localizedCounts() })
+  }
+
+  // GET /admin/localized/<id>: an item's full entry. POST {label?, edited?}: an administrator's label (de, en, or null
+  // to find it again) and texts (replacing the written ones; TMDb's stay).
+  const localizedId = path.match(/^\/admin\/localized\/([0-9a-f-]{32,36})$/)?.[1]
+  if (localizedId && (request.method === 'GET' || request.method === 'POST')) {
+    const token = tokenOf(request, url)
+    if (!isAdmin(token)) return send(response, 403, { error: 'Administrators only' })
+    try {
+      const { data, meta } = await ensureLocalized(token!, me.id, localizedId)
+      if (request.method === 'GET') return send(response, 200, { ...publicLocalized(data), labelManual: !!data.labelManual, meta })
+      const body = await readJson<{ label?: unknown; edited?: unknown }>(request, TEXT_BODY_LIMIT).catch(() => null)
+      if (!body) return send(response, 400, { error: 'Bad body' })
+      const next: Localized = { ...data }
+      if (isLang(body.label)) Object.assign(next, { label: body.label, labelManual: true })
+      else if (body.label === null) {
+        const item = await languageDeps(token!, me.id, undefined).jellyfin<VideoItem>(`/Users/{user}/Items/${localizedId}`, {})
+        next.label = detectLanguage(item.Overview)
+        delete next.labelManual
+      }
+      if ('edited' in body) next.edited = cleanTexts(body.edited)
+      store.setLocalized(localizedId, next, meta)
+      return send(response, 200, { ...publicLocalized(next), labelManual: !!next.labelManual, meta })
+    } catch (error) {
+      return send(response, 502, { error: error instanceof Error ? error.message : 'Failed' })
+    }
+  }
+
+  // /admin/localized-image/<id>/<lang>/<kind>: POST an image (its bytes, as image/…) or {url} (a provider's picture)
+  // for one language; DELETE: Jellyfin's picture for that language (no automatic one either).
+  const imageTarget = path.match(/^\/admin\/localized-image\/([0-9a-f-]{32,36})\/(de|en)\/(Primary|Logo|Thumb|Banner)$/)
+  if (imageTarget && (request.method === 'POST' || request.method === 'DELETE')) {
+    const token = tokenOf(request, url)
+    if (!isAdmin(token)) return send(response, 403, { error: 'Administrators only' })
+    const id = imageTarget[1]!
+    const lang = imageTarget[2] as Lang
+    const kind = imageTarget[3] as LocalImageKind
+    try {
+      const { data, meta } = await ensureLocalized(token!, me.id, id)
+      let image: LocalImage | null = null
+      if (request.method === 'POST') {
+        const type = request.headers['content-type'] ?? ''
+        if (type.startsWith('image/')) {
+          const body = await readBody(request, IMAGE_LIMIT)
+          const name = createHash('sha256').update(body).digest('hex')
+          await mkdir(UPLOAD_DIR, { recursive: true })
+          await Promise.all([writeFile(join(UPLOAD_DIR, name), body), writeFile(join(UPLOAD_DIR, `${name}.type`), type)])
+          image = { src: `upload:${name}`, manual: true, at: Date.now() }
+        } else {
+          const given = await readJson<{ url?: unknown }>(request).catch(() => null)
+          if (typeof given?.url !== 'string') return send(response, 400, { error: 'Bad picture' })
+          // Fetched now: an address the relay won't serve is turned away at once.
+          await keptImage(given.url)
+          image = { src: given.url, manual: true, at: Date.now() }
+        }
+      }
+      const next: Localized = { ...data, images: { ...data.images, [lang]: { ...data.images[lang], [kind]: image } } }
+      store.setLocalized(id, next, meta)
+      return send(response, 200, publicLocalized(next))
+    } catch (error) {
+      return send(response, error instanceof ImageError ? error.status : 502, { error: error instanceof Error ? error.message : 'Failed' })
+    }
+  }
+
+  // /admin/jobs/<credits|artists|languages>: an admin's task on the whole library (POST starts, DELETE stops, GET tells
+  // how far it is): looking up every track's credits, fetching every artist's information into the caches, or filling
+  // in films and series in both languages.
+  const jobName = path.match(/^\/admin\/jobs\/(credits|artists|languages)$/)?.[1] as JobName | undefined
   if (jobName) {
     if (!isAdmin(tokenOf(request, url))) return send(response, 403, { error: 'Administrators only' })
     const job = jobs[jobName]
     if (request.method === 'POST' && !job.running) {
       const token = tokenOf(request, url)!
       // What to go through: an admin can leave libraries, artists and genres out (e.g. audio plays).
-      type Body = { lastfmKey?: unknown; libraries?: unknown; excludeArtists?: unknown; excludeGenres?: unknown }
+      type Body = { lastfmKey?: unknown; tmdbKey?: unknown; libraries?: unknown; excludeArtists?: unknown; excludeGenres?: unknown }
       const body = await readJson<Body>(request).catch(() => ({}) as Body)
       const texts = (value: unknown, pattern?: RegExp) =>
         Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string' && (!pattern || pattern.test(entry))).map((entry) => entry.slice(0, 200)).slice(0, 500) : []
@@ -940,6 +1169,7 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
         genres: texts(body.excludeGenres),
       }
       if (jobName === 'credits') void scanCredits(token, me.id, scope)
+      else if (jobName === 'languages') void scanLanguages(token, me.id, isTmdbKey(body.tmdbKey) ? body.tmdbKey : undefined, scope.libraries)
       else void scanArtists(token, me.id, typeof body.lastfmKey === 'string' && /^[0-9a-f]{32}$/i.test(body.lastfmKey) ? body.lastfmKey : undefined, scope)
     }
     if (request.method === 'DELETE') job.stop = true

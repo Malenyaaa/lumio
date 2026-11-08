@@ -17,6 +17,7 @@ import { formatRuntime, plainText } from '@/lib/format'
 import { useMessages } from '@/lib/i18n'
 import { backdropImageUrl, landscapeImageUrl, logoImageUrl, portraitImageUrl } from '@/lib/images'
 import { itemHref, playHref, WATCHLIST_TYPES } from '@/lib/item-links'
+import { useLocalizedItem } from '@/lib/localized'
 import { AlbumView } from '@/features/listen/album-view'
 import { ArtistPage } from '@/features/listen/artist-page'
 import { cn } from '@/lib/utils'
@@ -33,7 +34,9 @@ export function DetailPage() {
   const { id = '' } = useParams()
   const [search] = useSearchParams()
   const { api } = useAuthedSession()
-  const { data: item, isLoading, isError } = useItem(id)
+  const { data: jellyfinItem, isLoading, isError } = useItem(id)
+  // In the interface's language; a title not filled in yet is looked up now.
+  const item = useLocalizedItem(jellyfinItem, true)
   const [tracks, setTracks] = useState<TrackChoice>({})
   const t = useMessages(detailMessages)
   const location = useLocation()
@@ -273,7 +276,7 @@ function SeasonsSection({ series, seriesId, initialSeasonId, highlightId }: Seas
         <div className="flex flex-wrap items-center gap-2">
           {orderedSeasons.map((season) => (
             <Button key={season.Id} size="sm" variant={season.Id === seasonId ? 'default' : 'outline'} onClick={() => setPicked(season.Id!)}>
-              {season.Name}
+              <SeasonName season={season} />
             </Button>
           ))}
           <SeasonDownloadButton
@@ -303,8 +306,13 @@ function SeasonsSection({ series, seriesId, initialSeasonId, highlightId }: Seas
   )
 }
 
+function SeasonName({ season }: { season: BaseItemDto }) {
+  return useLocalizedItem(season).Name
+}
+
 /** An episode in the season's list; offline, one without a stored copy is greyed out and can't be opened. */
-function EpisodeItem({ episode, highlighted, context, ref }: { episode: BaseItemDto; highlighted: boolean; context: BaseItemDto[]; ref?: Ref<HTMLLIElement> }) {
+function EpisodeItem({ episode: jellyfinEpisode, highlighted, context, ref }: { episode: BaseItemDto; highlighted: boolean; context: BaseItemDto[]; ref?: Ref<HTMLLIElement> }) {
+  const episode = useLocalizedItem(jellyfinEpisode)
   const { api } = useAuthedSession()
   const t = useVideoDownloadMessages()
   const unavailable = useVideoUnavailable(episode.Id)

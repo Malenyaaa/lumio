@@ -12,6 +12,7 @@ import { backdropImageUrl, logoImageUrl } from '@/lib/images'
 import { itemHref, playHref } from '@/lib/item-links'
 import { cn } from '@/lib/utils'
 import { homeMessages } from './messages'
+import { useLocalizedItem } from '@/lib/localized'
 
 interface HeroProps {
   /** The titles to feature (the first few are shown in turn). */
@@ -142,8 +143,10 @@ export function Hero({ items, loading }: HeroProps) {
   )
 }
 
-function Slide({ item, visible }: { item: BaseItemDto; visible: boolean }) {
+function Slide({ item: jellyfinItem, visible }: { item: BaseItemDto; visible: boolean }) {
   const { api } = useAuthedSession()
+  // In the interface's language.
+  const item = useLocalizedItem(jellyfinItem)
   const t = useMessages(homeMessages)
   const [logoFailed, setLogoFailed] = useState(false)
 

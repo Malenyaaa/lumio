@@ -3,7 +3,7 @@ import { getImageApi } from '@jellyfin/sdk/lib/utils/api/image-api'
 import { getItemLookupApi } from '@jellyfin/sdk/lib/utils/api/item-lookup-api'
 import { getLibraryApi } from '@jellyfin/sdk/lib/utils/api/library-api'
 import { getRemoteImageApi } from '@jellyfin/sdk/lib/utils/api/remote-image-api'
-import { IconExternalLink, IconPhoto, IconRefresh, IconSearch, IconSettings, IconTrash, IconUpload, IconWand } from '@tabler/icons-react'
+import { IconExternalLink, IconLanguage, IconPhoto, IconRefresh, IconSearch, IconSettings, IconTrash, IconUpload, IconWand } from '@tabler/icons-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
@@ -12,8 +12,11 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { useAuthedSession } from '@/features/auth/session'
-import { defineMessages, useMessages } from '@/lib/i18n'
+import { lumioSend, lumioUpload } from '@/features/social/social'
+import { defineMessages, LOCALES, useMessages, type Locale } from '@/lib/i18n'
+import { LOCALIZABLE, localizedImageUrl, type LocalImageKind, type LocalizedEntry } from '@/lib/localized'
 import { cn } from '@/lib/utils'
+import { LanguageDialog, useAdminLocalized, useLocalizedChanged } from './language-dialog'
 import { useIsAdmin } from './use-admin-config'
 
 const messages = defineMessages({
@@ -58,6 +61,14 @@ const messages = defineMessages({
     typeBanner: 'Banner',
     typeArt: 'Clearart',
     typeDisc: 'Disc',
+    languages: 'Texte und Sprachen',
+    forAll: 'Alle Sprachen',
+    forLanguage: (lang: Locale) => ({ de: 'Nur Deutsch', en: 'Nur Englisch' })[lang],
+    languageHint: (lang: Locale) =>
+      `Bilder, die nur auf ${lang === 'de' ? 'Deutsch' : 'Englisch'} gezeigt werden, etwa Poster oder Logos mit Schrift. Ohne eigenes Bild gilt das für alle Sprachen.`,
+    sameAsAll: 'Wie für alle Sprachen',
+    useShared: 'Bild für alle Sprachen nehmen',
+    language: (code: string) => `Sprache: ${code}`,
   },
   en: {
     manage: 'Manage',
@@ -100,6 +111,14 @@ const messages = defineMessages({
     typeBanner: 'Banner',
     typeArt: 'Clear art',
     typeDisc: 'Disc',
+    languages: 'Texts and languages',
+    forAll: 'All languages',
+    forLanguage: (lang: Locale) => ({ de: 'German only', en: 'English only' })[lang],
+    languageHint: (lang: Locale) =>
+      `Images shown only in ${lang === 'de' ? 'German' : 'English'}, such as posters or logos with writing on them. Without one, the image for all languages is used.`,
+    sameAsAll: 'Same as all languages',
+    useShared: 'Use the image for all languages',
+    language: (code: string) => `Language: ${code}`,
   },
 })
 
@@ -263,6 +282,119 @@ function ImageKind({ item, type, infos, onChanged }: { item: BaseItemDto; type: 
   )
 }
 
+const LOCAL_KINDS = new Set<string>(['Primary', 'Logo', 'Thumb', 'Banner'])
+
+/**
+ * One image kind for one language only (kept by the Lumio server): the image chosen for it, or the one for all
+ * languages; searching the providers (that language's images first), uploading, or going back to the shared one.
+ */
+function LocalImageKindSection({ item, type, lang, entry, shared }: { item: BaseItemDto; type: LocalImageKind; lang: Locale; entry: LocalizedEntry | undefined; shared: ImageInfo | undefined }) {
+  const t = useMessages(messages)
+  const { api } = useAuthedSession()
+  const changed = useLocalizedChanged()
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [searching, setSearching] = useState(false)
+  const remote = useQuery({
+    queryKey: ['remote-images', item.Id, type, true],
+    enabled: searching,
+    queryFn: async () => (await getRemoteImageApi(api).getRemoteImages({ itemId: item.Id!, type: type as ImageType, includeAllLanguages: true, limit: 120 })).data.Images ?? [],
+  })
+  // This language's images first, then those without writing, then the rest.
+  const rank = (image: RemoteImageInfo) => (image.Language === lang ? 0 : !image.Language ? 1 : 2)
+  const found = [...(remote.data ?? [])].sort((a, b) => rank(a) - rank(b))
+  const change = useMutation({
+    mutationFn: async (action: { url: string } | { file: File } | 'shared') => {
+      const path = `/admin/localized-image/${item.Id}/${lang}/${type}`
+      const response = action === 'shared' ? await lumioSend('DELETE', path) : 'file' in action ? await lumioUpload(path, action.file) : await lumioSend('POST', path, action)
+      if (!response?.ok) throw new Error('Failed')
+      return (await response.json()) as LocalizedEntry
+    },
+    onSuccess: (next) => {
+      setSearching(false)
+      toast.success(t.saved)
+      changed(item.Id!, next)
+    },
+    onError: () => toast.error(t.failed),
+  })
+  const own = entry?.images[lang]?.[type]
+  const wide = type !== 'Primary'
+  const busy = change.isPending
+  return (
+    <section className="space-y-2 border-b pb-4 last:border-0">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="mr-auto text-sm font-semibold">{t[`type${type}` as const]}</h3>
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => setSearching(!searching)}>
+          <IconSearch /> {t.search}
+        </Button>
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => fileInput.current?.click()}>
+          <IconUpload /> {t.upload}
+        </Button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            if (file) change.mutate({ file })
+            event.target.value = ''
+          }}
+        />
+      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className={cn('relative overflow-hidden rounded-md bg-muted', wide ? 'h-24 w-40' : 'h-36 w-24')}>
+          {own ? (
+            <img src={localizedImageUrl(item.Id!, lang, type, own)} alt="" className={cn('size-full', type === 'Logo' ? 'object-contain p-1' : 'object-cover')} />
+          ) : shared ? (
+            <img
+              src={`${api.basePath}/Items/${item.Id}/Images/${type}/0?tag=${shared.ImageTag}&fillHeight=200`}
+              alt=""
+              className={cn('size-full opacity-50', type === 'Logo' ? 'object-contain p-1' : 'object-cover')}
+            />
+          ) : (
+            <p className="p-2 text-xs text-muted-foreground">{t.noImage}</p>
+          )}
+        </div>
+        {own ? (
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => change.mutate('shared')}>
+            <IconTrash /> {t.useShared}
+          </Button>
+        ) : (
+          <p className="text-xs text-muted-foreground">{t.sameAsAll}</p>
+        )}
+      </div>
+      {searching && (
+        <div className="space-y-2 rounded-lg border p-3">
+          {remote.isLoading && <p className="text-sm text-muted-foreground">{t.searching}</p>}
+          {remote.data && !remote.data.length && <p className="text-sm text-muted-foreground">{t.noResults}</p>}
+          <div className="grid max-h-80 grid-cols-[repeat(auto-fill,minmax(7rem,1fr))] gap-2 overflow-y-auto">
+            {found.map((image) => (
+              <button
+                key={image.Url}
+                type="button"
+                disabled={busy}
+                onClick={() => change.mutate({ url: image.Url! })}
+                title={[image.ProviderName, image.Width && `${image.Width}×${image.Height}`, image.Language && t.language(image.Language)].filter(Boolean).join(' · ')}
+                className="group overflow-hidden rounded-md bg-muted text-left outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <img
+                  src={image.ThumbnailUrl ?? image.Url ?? ''}
+                  alt=""
+                  loading="lazy"
+                  className={cn('w-full transition-opacity group-hover:opacity-80', wide ? 'aspect-video' : 'aspect-[2/3]', type === 'Logo' ? 'object-contain' : 'object-cover')}
+                />
+                <span className={cn('block truncate px-1.5 py-1 text-[10px]', image.Language === lang ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
+                  {[image.Language?.toUpperCase(), image.ProviderName, image.Width && `${image.Width}×${image.Height}`].filter(Boolean).join(' · ')}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
 function ImagesDialog({ item, open, onOpenChange }: { item: BaseItemDto; open: boolean; onOpenChange: (open: boolean) => void }) {
   const t = useMessages(messages)
   const { api } = useAuthedSession()
@@ -272,6 +404,10 @@ function ImagesDialog({ item, open, onOpenChange }: { item: BaseItemDto; open: b
     enabled: open,
     queryFn: async () => (await getImageApi(api).getItemImageInfos({ itemId: item.Id! })).data,
   })
+  // Films and series can have images for one language only (kept by the Lumio server).
+  const localizable = LOCALIZABLE.has(item.Type ?? '')
+  const [scope, setScope] = useState<'all' | Locale>('all')
+  const entry = useAdminLocalized(open && localizable && scope !== 'all' ? item.Id! : null)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[calc(100svh-2rem)] flex-col gap-4 overflow-hidden p-6 sm:max-w-3xl">
@@ -279,10 +415,32 @@ function ImagesDialog({ item, open, onOpenChange }: { item: BaseItemDto; open: b
           <DialogTitle className="text-xl font-bold">
             {t.imagesTitle}: {item.Name}
           </DialogTitle>
-          <DialogDescription>{t.imagesHint}</DialogDescription>
+          <DialogDescription>{scope === 'all' ? t.imagesHint : t.languageHint(scope)}</DialogDescription>
         </div>
+        {localizable && (
+          <div className="flex flex-wrap gap-2">
+            {(['all', ...LOCALES] as const).map((value) => (
+              <Button key={value} size="sm" variant={scope === value ? 'default' : 'outline'} onClick={() => setScope(value)}>
+                {value === 'all' ? t.forAll : t.forLanguage(value)}
+              </Button>
+            ))}
+          </div>
+        )}
         <div className="-mx-6 -mb-6 min-h-0 space-y-4 overflow-y-auto px-6 pb-6">
-          {imageTypesFor(item).map((type) => (
+          {scope !== 'all' &&
+            imageTypesFor(item)
+              .filter((type) => LOCAL_KINDS.has(type))
+              .map((type) => (
+                <LocalImageKindSection
+                  key={`${scope}-${type}`}
+                  item={item}
+                  type={type as LocalImageKind}
+                  lang={scope}
+                  entry={entry.data}
+                  shared={(infos.data ?? []).find((info) => info.ImageType === type)}
+                />
+              ))}
+          {scope === 'all' && imageTypesFor(item).map((type) => (
             <ImageKind
               key={type}
               item={item}
@@ -492,7 +650,7 @@ export function MediaAdminMenu({ item, className }: { item: BaseItemDto | undefi
   const t = useMessages(messages)
   const isAdmin = useIsAdmin()
   const { session } = useAuthedSession()
-  const [open, setOpen] = useState<'images' | 'identify' | 'refresh' | null>(null)
+  const [open, setOpen] = useState<'images' | 'languages' | 'identify' | 'refresh' | null>(null)
   if (!isAdmin || !item?.Id) return null
   const sameOrigin = session.serverUrl.replace(/\/+$/, '') === window.location.origin
   const editorUrl = `${sameOrigin ? '' : session.serverUrl}/web/#/metadata?id=${item.Id}`
@@ -510,6 +668,11 @@ export function MediaAdminMenu({ item, className }: { item: BaseItemDto | undefi
           <DropdownMenuItem onClick={() => setOpen('images')}>
             <IconPhoto /> {t.images}
           </DropdownMenuItem>
+          {LOCALIZABLE.has(item.Type ?? '') && (
+            <DropdownMenuItem onClick={() => setOpen('languages')}>
+              <IconLanguage /> {t.languages}
+            </DropdownMenuItem>
+          )}
           {IDENTIFIABLE.has(item.Type ?? '') && (
             <DropdownMenuItem onClick={() => setOpen('identify')}>
               <IconWand /> {t.identify}
@@ -525,6 +688,7 @@ export function MediaAdminMenu({ item, className }: { item: BaseItemDto | undefi
         </DropdownMenuContent>
       </DropdownMenu>
       {open === 'images' && <ImagesDialog item={item} open onOpenChange={(next) => !next && setOpen(null)} />}
+      {open === 'languages' && <LanguageDialog id={item.Id} onClose={() => setOpen(null)} />}
       {open === 'identify' && <IdentifyDialog item={item} open onOpenChange={(next) => !next && setOpen(null)} />}
       {open === 'refresh' && <RefreshDialog item={item} open onOpenChange={(next) => !next && setOpen(null)} />}
     </>

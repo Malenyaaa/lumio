@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { episodeMessages } from './messages'
 import { usePanelFocus } from './panel-focus'
 import { useVideoDownloadMessages, useVideoUnavailable, VideoDownloadMark } from './video-download-ui'
+import { useLocalizedItem } from '@/lib/localized'
 
 interface EpisodePanelProps {
   /** The item being played; a series episode shows its season's episodes, an audio track its album. */
@@ -144,7 +145,8 @@ interface EpisodeRowProps {
   onSelect: (id: string) => void
 }
 
-function EpisodeRow({ episode, current, onSelect }: EpisodeRowProps) {
+function EpisodeRow({ episode: jellyfinEpisode, current, onSelect }: EpisodeRowProps) {
+  const episode = useLocalizedItem(jellyfinEpisode)
   const t = useMessages(episodeMessages)
   const { api } = useAuthedSession()
   const setPlayed = useSetPlayed(episode.Id!)

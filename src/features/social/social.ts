@@ -88,6 +88,16 @@ export async function lumioSend(method: 'POST' | 'DELETE', path: string, body?: 
   })
 }
 
+/** A file to the Lumio server (its bytes as the body, its type as the content type); null when there is no connection yet. */
+export async function lumioUpload(path: string, file: Blob): Promise<Response | null> {
+  if (!connection) return null
+  return fetch(`${connection.base}${path}`, {
+    method: 'POST',
+    headers: { Authorization: `MediaBrowser Token="${connection.token}"`, 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  })
+}
+
 /**
  * Asks an outside service through the Lumio server, which caches the answers for everyone (see the server's relay);
  * straight from the service while there is no connection, or when the server can't help.

@@ -39,6 +39,8 @@ export interface LumioConfig {
   metadataExcludedArtists?: string[]
   /** Genres whose songs and artists are never looked up. */
   metadataExcludedGenres?: string[]
+  /** Film and series libraries the two-language task leaves out; by id. */
+  languageExcludedLibraries?: string[]
 }
 
 export interface ModeBranding {

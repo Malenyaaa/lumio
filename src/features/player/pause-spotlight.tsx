@@ -4,6 +4,7 @@ import { useAuthedSession } from '@/features/auth/session'
 import { formatRuntime, plainText } from '@/lib/format'
 import { logoImageUrl } from '@/lib/images'
 import { cn } from '@/lib/utils'
+import { useLocalizedItem } from '@/lib/localized'
 
 interface PauseSpotlightProps {
   item?: BaseItemDto
@@ -14,8 +15,9 @@ interface PauseSpotlightProps {
  * Cinematic overlay shown while a paused video sits idle: logo (or title), episode line, key facts and the synopsis,
  * on a gradient from the left edge. It never takes pointer events, so it can't get in the way of the player.
  */
-export function PauseSpotlight({ item, visible }: PauseSpotlightProps) {
+export function PauseSpotlight({ item: jellyfinItem, visible }: PauseSpotlightProps) {
   const { api } = useAuthedSession()
+  const item = useLocalizedItem(jellyfinItem)
   const [failedLogo, setFailedLogo] = useState<string | null>(null)
   if (!item) return null
 

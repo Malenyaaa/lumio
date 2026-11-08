@@ -17,6 +17,7 @@ import { useMessages } from '@/lib/i18n'
 import { landscapeImageUrl } from '@/lib/images'
 import { itemHref, playHref, WATCHLIST_TYPES } from '@/lib/item-links'
 import { cn } from '@/lib/utils'
+import { useLocalizedItem } from '@/lib/localized'
 
 interface HoverPreviewProps {
   item: BaseItemDto
@@ -83,7 +84,8 @@ export function HoverPreview({ item, anchor, shape, closing, onEnter, onLeave }:
   const { api } = useAuthedSession()
   const t = useMessages(hoverPreviewMessages)
   const full = useItem(item.Id!)
-  const data = full.data ?? item
+  // In the interface's language.
+  const data = useLocalizedItem(full.data ?? item)
   const { target, label, verb, detail } = usePlayTarget(data)
   const favorite = useSetFavorite(item.Id!)
 

@@ -1,12 +1,14 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
+import type { Label, Localized, LocalizedMeta } from './languages.ts'
 
 /**
  * What the Lumio server keeps (SQLite, one file): the people who used it (name and picture tag as Jellyfin reported
  * them, so others can see who they are), who follows whom, each person's privacy choices, what they last played, and
  * their Lumio settings that follow the account (the app decides which; the server keeps them as one JSON object),
- * and the credits looked up for the library's tracks (see credits.ts), shared by everyone.
+ * the credits looked up for the library's tracks (see credits.ts), and films' and series' texts and pictures in both
+ * languages (see languages.ts), shared by everyone.
  */
 export interface Privacy {
   /** Others see the person's public playlists on their profile. */
@@ -110,6 +112,8 @@ export class Store {
       CREATE TABLE IF NOT EXISTS plays (session TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL, item_key TEXT NOT NULL, title TEXT NOT NULL, subtitle TEXT, context_id TEXT, image TEXT, client TEXT, started_at INTEGER NOT NULL, seconds INTEGER NOT NULL, updated_at INTEGER NOT NULL);
       CREATE INDEX IF NOT EXISTS plays_user_started ON plays (user_id, started_at);
       CREATE INDEX IF NOT EXISTS plays_started ON plays (started_at);
+      CREATE TABLE IF NOT EXISTS localized (item_id TEXT PRIMARY KEY, label TEXT NOT NULL, data TEXT NOT NULL, meta TEXT NOT NULL, at INTEGER NOT NULL);
+      CREATE INDEX IF NOT EXISTS localized_label ON localized (label);
       CREATE TABLE IF NOT EXISTS playlist_adds (playlist_id TEXT NOT NULL, item_id TEXT NOT NULL, user_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (playlist_id, item_id));
     `)
     // How a play went (music too): why it started and ended, where it came from, shuffle, from the device, buffering.
@@ -319,5 +323,52 @@ export class Store {
   tracksWithoutCredits(): Array<{ id: string; at: number; meta: unknown }> {
     const rows = this.db.prepare('SELECT item_id, at, meta FROM track_credits WHERE data IS NULL ORDER BY at DESC').all() as Array<{ item_id: string; at: number; meta: string | null }>
     return rows.map((row) => ({ id: row.item_id, at: row.at, meta: row.meta ? (JSON.parse(row.meta) as unknown) : null }))
+  }
+
+  /** The two-language entries of these items; items without one are left out. */
+  localized(ids: string[]): Record<string, Localized> {
+    const result: Record<string, Localized> = {}
+    const query = this.db.prepare('SELECT data FROM localized WHERE item_id = ?')
+    for (const id of ids) {
+      const row = query.get(id) as { data: string } | undefined
+      if (row) result[id] = JSON.parse(row.data) as Localized
+    }
+    return result
+  }
+
+  localizedMeta(id: string): LocalizedMeta | null {
+    const row = this.db.prepare('SELECT meta FROM localized WHERE item_id = ?').get(id) as { meta: string } | undefined
+    return row ? (JSON.parse(row.meta) as LocalizedMeta) : null
+  }
+
+  setLocalized(id: string, data: Localized, meta: LocalizedMeta) {
+    this.db
+      .prepare('INSERT INTO localized (item_id, label, data, meta, at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(item_id) DO UPDATE SET label = excluded.label, data = excluded.data, meta = excluded.meta, at = excluded.at')
+      .run(id, data.label, JSON.stringify(data), JSON.stringify(meta), Date.now())
+  }
+
+  /**
+   * Entries for the administrators' lists, newest first: those with one label (e.g. the unclear ones), or all;
+   * `search` matches the name or series.
+   */
+  localizedPage(label: Label | null, search: string, offset: number, limit: number): { total: number; rows: Array<{ id: string; label: Label; meta: LocalizedMeta; at: number }> } {
+    const pattern = `%${search.replace(/[\\%_]/g, (char) => `\\${char}`)}%`
+    const conditions = [...(label ? ['label = ?'] : []), ...(search ? ["meta LIKE ? ESCAPE '\\'"] : [])]
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+    const params = [...(label ? [label] : []), ...(search ? [pattern] : [])]
+    const { total } = this.db.prepare(`SELECT count(*) AS total FROM localized ${where}`).get(...params) as { total: number }
+    const rows = this.db.prepare(`SELECT item_id, label, meta, at FROM localized ${where} ORDER BY at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset) as Array<{
+      item_id: string
+      label: Label
+      meta: string
+      at: number
+    }>
+    return { total, rows: rows.map((row) => ({ id: row.item_id, label: row.label, meta: JSON.parse(row.meta) as LocalizedMeta, at: row.at })) }
+  }
+
+  /** How many entries have each label. */
+  localizedCounts(): Partial<Record<Label, number>> {
+    const rows = this.db.prepare('SELECT label, count(*) AS n FROM localized GROUP BY label').all() as Array<{ label: Label; n: number }>
+    return Object.fromEntries(rows.map((row) => [row.label, row.n]))
   }
 }
