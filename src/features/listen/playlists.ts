@@ -7,6 +7,7 @@ import { getPlaylistApi } from '@jellyfin/sdk/lib/utils/api/playlist-api'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useAuthedSession } from '@/features/auth/session'
+import { lumioSend } from '@/features/social/social'
 
 const fields = [ItemFields.PrimaryImageAspectRatio, ItemFields.DateCreated]
 
@@ -150,6 +151,12 @@ export function usePlaylistActions() {
    */
   const markOwner = (playlistId: string) =>
     playlists.updatePlaylistUser({ playlistId, userId: session.userId, updatePlaylistUserDto: { CanEdit: true } }).catch(() => undefined)
+  /** Tells the Lumio server who added these songs (Jellyfin doesn't keep it); shared playlists show it. */
+  const recordAdds = async (playlistId: string, ids: string[]) => {
+    for (let start = 0; start < ids.length; start += 300)
+      await lumioSend('POST', '/playlists/adds', { playlistId, itemIds: ids.slice(start, start + 300) }).catch(() => undefined)
+    void queryClient.invalidateQueries({ queryKey: ['playlist-adds', playlistId] })
+  }
 
   const create = useMutation({
     mutationFn: async ({ name, ids = [] }: { name: string; ids?: string[] }) => {
@@ -159,13 +166,16 @@ export function usePlaylistActions() {
         })
       ).data.Id!
       await markOwner(id)
+      if (ids.length) void recordAdds(id, ids)
       return id
     },
     onSuccess: () => refresh(),
   })
   const add = useMutation({
-    mutationFn: async ({ playlistId, ids }: { playlistId: string; ids: string[]; name?: string }) =>
-      playlists.addItemToPlaylist({ playlistId, ids, userId: session.userId }),
+    mutationFn: async ({ playlistId, ids }: { playlistId: string; ids: string[]; name?: string }) => {
+      await playlists.addItemToPlaylist({ playlistId, ids, userId: session.userId })
+      void recordAdds(playlistId, ids)
+    },
     onSuccess: (_, { playlistId, name }) => {
       refresh(playlistId)
       if (name) toast.success(name)
@@ -228,11 +238,23 @@ export function usePlaylistActions() {
       playlists.moveItem({ playlistId, itemId: entryId, newIndex: index }),
     onSuccess: (_, { playlistId }) => refresh(playlistId),
   })
+  /** Shares a playlist with someone who may then add, remove and reorder songs (a shared playlist), or stops it. */
+  const share = useMutation({
+    mutationFn: async ({ playlistId, userId, canEdit }: { playlistId: string; userId: string; canEdit: boolean }) => {
+      if (canEdit) await playlists.updatePlaylistUser({ playlistId, userId, updatePlaylistUserDto: { CanEdit: true } })
+      else await playlists.removeUserFromPlaylist({ playlistId, userId })
+    },
+    onSuccess: (_, { playlistId }) => {
+      refresh(playlistId)
+      void queryClient.invalidateQueries({ queryKey: ['playlist-infos'] })
+      void queryClient.invalidateQueries({ queryKey: ['playlist-users', playlistId] })
+    },
+  })
   const destroy = useMutation({
     mutationFn: async (playlistId: string) => getLibraryApi(api).deleteItem({ itemId: playlistId }),
     onSuccess: () => refresh(),
   })
-  return { create, add, remove, update, editDetails, move, destroy }
+  return { create, add, remove, update, editDetails, move, destroy, share }
 }
 
 /**

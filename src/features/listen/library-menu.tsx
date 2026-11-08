@@ -28,6 +28,7 @@ import { music } from './player/music-player'
 import { useFollowedArtists, useListenLibrary, usePlaylistActions, usePlaylists, usePlaylistTracks, useSavedAlbums } from './playlists'
 import { useArtistRadio } from './radio'
 import { TasteMenuItem } from './taste'
+import { useEditablePlaylists } from './profiles'
 
 const messages = defineMessages({
   de: {
@@ -147,7 +148,8 @@ export function AddToPlaylist({ tracks, label, exclude }: { tracks: () => Promis
   const navigate = useNavigate()
   const playlists = usePlaylists()
   const actions = usePlaylistActions()
-  const mine = (playlists.data ?? []).filter((playlist) => playlist.CanDelete !== false && playlist.Id !== exclude)
+  // Own playlists and shared ones the user edits.
+  const mine = useEditablePlaylists().filter((playlist) => playlist.Id !== exclude)
   const add = async (playlist: BaseItemDto) => {
     const ids = (await tracks()).map((track) => track.Id!).filter(Boolean)
     if (ids.length) actions.add.mutate({ playlistId: playlist.Id!, ids, name: t.addedTo(playlist.Name ?? '') })

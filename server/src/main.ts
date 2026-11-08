@@ -753,6 +753,23 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
     return send(response, 200, Object.fromEntries(Object.entries(known).map(([id, entry]) => [id, entry.data])))
   }
 
+  // POST /playlists/adds {playlistId, itemIds}: the user added these songs to a playlist (sent after Jellyfin took
+  // them). GET /playlists/adds?playlistId=…: who added which song, for shared playlists.
+  if (path === '/playlists/adds') {
+    const isId = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f-]{32,36}$/i.test(value)
+    if (request.method === 'POST') {
+      const body = await readJson<{ playlistId?: unknown; itemIds?: unknown }>(request).catch(() => null)
+      if (!isId(body?.playlistId) || !Array.isArray(body.itemIds) || body.itemIds.length > 400 || !body.itemIds.every(isId)) return send(response, 400, { error: 'Bad songs' })
+      store.recordPlaylistAdds(body.playlistId, body.itemIds, me.id)
+      return send(response, 204)
+    }
+    if (request.method === 'GET') {
+      const playlistId = url.searchParams.get('playlistId')
+      if (!isId(playlistId)) return send(response, 400, { error: 'Bad playlist' })
+      return send(response, 200, store.playlistAdds(playlistId))
+    }
+  }
+
   // GET /credits/by-artist?name=…: the tracks someone is on (as an artist) or credited on (wrote, produced …), for
   // artists the library has no page for (guests the file tags leave out).
   if (path === '/credits/by-artist' && request.method === 'GET') {

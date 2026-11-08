@@ -10,6 +10,7 @@ import {
   IconPlayerPlayFilled,
   IconPlaylistAdd,
   IconTrash,
+  IconUsersPlus,
   IconWorld,
 } from '@tabler/icons-react'
 import { useState, type ReactNode } from 'react'
@@ -35,7 +36,8 @@ import { PlaylistDetailsDialog } from './playlist-details-dialog'
 import { LikedCover, OfficialCover, PlaylistCover } from './playlist-cards'
 import { useLikedSongs, useListenLibrary, usePlaylistAccess, usePlaylistActions, usePlaylistTracks } from './playlists'
 import { ProfileAvatar } from './profile-page'
-import { usePlaylistOwner, useProfile } from './profiles'
+import { usePlaylistInfos, usePlaylistOwner, useProfile } from './profiles'
+import { PlaylistShareDialog, usePlaylistAdds } from './playlist-share-dialog'
 import { AddToPlaylist } from './library-menu'
 import { TasteMenuItem } from './taste'
 
@@ -58,6 +60,9 @@ const messages = defineMessages({
     rename: 'Umbenennen',
     editDetails: 'Details bearbeiten',
     makePublic: 'Öffentlich machen',
+    sharedPlaylist: 'Gemeinsame Playlist',
+    share: 'Mitwirkende einladen',
+    addedBy: 'Hinzugefügt von',
     makePrivate: 'Privat machen',
     delete: 'Löschen',
     deleteConfirm: (name: string) => `„${name}“ wird endgültig gelöscht.`,
@@ -89,6 +94,9 @@ const messages = defineMessages({
     rename: 'Rename',
     editDetails: 'Edit details',
     makePublic: 'Make public',
+    sharedPlaylist: 'Shared playlist',
+    share: 'Invite collaborators',
+    addedBy: 'Added by',
     makePrivate: 'Make private',
     delete: 'Delete',
     deleteConfirm: (name: string) => `"${name}" will be deleted for good.`,
@@ -127,7 +135,7 @@ interface CollectionProps {
   /** Opens "Edit details" (own playlists): clicking the title or the cover. */
   onEdit?: (from: 'title' | 'cover') => void
   /** A column beside the songs (plays, listeners), by track id, with its heading. */
-  extras?: Record<string, string>
+  extras?: Record<string, ReactNode>
   extraLabel?: string
 }
 
@@ -316,8 +324,12 @@ export function PlaylistPage() {
   const access = usePlaylistAccess(id)
   const editor = usePlaylistOwner(id)
   const actions = usePlaylistActions()
+  const infos = usePlaylistInfos()
   const [editing, setEditing] = useState<'title' | 'cover' | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const shareInfo = infos.data?.find((info) => info.playlist.Id === id)
+  const adds = usePlaylistAdds(id, (shareInfo?.editors.length ?? 0) > 1).data
 
   if (playlist.isError) return <Navigate to="/listen" replace />
   const item = playlist.data
@@ -325,11 +337,30 @@ export function PlaylistPage() {
   const owner = editor ?? (mine ? session.userId : undefined)
   const isPublic = !!access.data?.OpenAccess
   const list = tracks.data ?? []
+  // A shared playlist: more than one editor; each of them may change its songs, and it shows who added what.
+  const editors = shareInfo?.editors ?? (owner ? [owner] : [])
+  const shared = editors.length > 1
+  const canEdit = mine || editors.includes(session.userId)
+  let addedBy: Record<string, ReactNode> | undefined
+  if (shared) {
+    addedBy = {}
+    for (const track of list) {
+      const person = adds?.[track.Id ?? '']?.person
+      addedBy[track.Id ?? ''] = person ? (
+        <Link to={`/listen/user/${person.id}`} onClick={(event) => event.stopPropagation()} className="flex min-w-0 items-center gap-2 hover:text-foreground hover:underline">
+          <ProfileAvatar userId={person.id} name={person.name} tag={person.imageTag} className="size-5 text-[9px]" />
+          <span className="truncate">{person.name}</span>
+        </Link>
+      ) : (
+        ''
+      )
+    }
+  }
 
   return (
     <>
       <Collection
-        kind={isPublic ? t.publicPlaylist : mine ? t.privatePlaylist : t.playlist}
+        kind={shared ? t.sharedPlaylist : isPublic ? t.publicPlaylist : mine ? t.privatePlaylist : t.playlist}
         title={item?.Name ?? ''}
         description={item?.Overview ?? undefined}
         cover={item ? <PlaylistCover playlist={item} tracks={list} /> : null}
@@ -337,9 +368,11 @@ export function PlaylistPage() {
         tracks={list}
         loading={tracks.isLoading}
         source={`playlist:${id}`}
-        empty={mine ? t.empty : undefined}
-        onRemove={mine ? (track) => track.PlaylistItemId && actions.remove.mutate({ playlistId: id, entryIds: [track.PlaylistItemId] }) : undefined}
-        onMove={mine ? (track, index) => track.PlaylistItemId && actions.move.mutate({ playlistId: id, entryId: track.PlaylistItemId, index }) : undefined}
+        empty={canEdit ? t.empty : undefined}
+        extras={addedBy}
+        extraLabel={t.addedBy}
+        onRemove={canEdit ? (track) => track.PlaylistItemId && actions.remove.mutate({ playlistId: id, entryIds: [track.PlaylistItemId] }) : undefined}
+        onMove={canEdit ? (track, index) => track.PlaylistItemId && actions.move.mutate({ playlistId: id, entryId: track.PlaylistItemId, index }) : undefined}
         onEdit={mine && item ? setEditing : undefined}
         actions={
           <>
@@ -359,6 +392,9 @@ export function PlaylistPage() {
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => setEditing('title')}>
                       <IconPencil /> {t.editDetails}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSharing(true)}>
+                      <IconUsersPlus /> {t.share}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => actions.update.mutate({ playlistId: id, isPublic: !isPublic })}>
                       {isPublic ? <IconLock /> : <IconWorld />} {isPublic ? t.makePrivate : t.makePublic}
@@ -384,6 +420,8 @@ export function PlaylistPage() {
           focus={editing === 'cover' ? 'none' : 'name'}
         />
       )}
+
+      {mine && <PlaylistShareDialog playlistId={id} editors={editors} open={sharing} onOpenChange={setSharing} />}
 
       <Dialog open={deleting} onOpenChange={setDeleting}>
         <DialogContent>

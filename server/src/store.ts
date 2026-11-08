@@ -56,6 +56,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS activity (user_id TEXT PRIMARY KEY, payload TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS settings (user_id TEXT PRIMARY KEY, data TEXT NOT NULL, updated INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS track_credits (item_id TEXT PRIMARY KEY, data TEXT, at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS playlist_adds (playlist_id TEXT NOT NULL, item_id TEXT NOT NULL, user_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (playlist_id, item_id));
     `)
     // What the track was (title, artist, album), so a list of misses can name them.
     const columns = this.db.prepare('PRAGMA table_info(track_credits)').all() as Array<{ name: string }>
@@ -148,6 +149,21 @@ export class Store {
 
   clearActivity(id: string) {
     this.db.prepare('DELETE FROM activity WHERE user_id = ?').run(id)
+  }
+
+  /** Remembers who added songs to a playlist (Jellyfin doesn't keep it), for shared playlists' "Added by". */
+  recordPlaylistAdds(playlistId: string, itemIds: string[], userId: string) {
+    const statement = this.db.prepare(
+      'INSERT INTO playlist_adds (playlist_id, item_id, user_id, at) VALUES (?, ?, ?, ?) ON CONFLICT(playlist_id, item_id) DO UPDATE SET user_id = excluded.user_id, at = excluded.at',
+    )
+    const at = Date.now()
+    for (const itemId of itemIds) statement.run(playlistId, itemId, userId, at)
+  }
+
+  /** Who added each song of a playlist and when, as far as it was added through Lumio. */
+  playlistAdds(playlistId: string): Record<string, { person: Person; at: number }> {
+    const rows = this.db.prepare('SELECT item_id, user_id, at FROM playlist_adds WHERE playlist_id = ?').all(playlistId) as Array<{ item_id: string; user_id: string; at: number }>
+    return Object.fromEntries(rows.map((row) => [row.item_id, { person: this.person(row.user_id) ?? { id: row.user_id, name: '', imageTag: null }, at: row.at }]))
   }
 
   /** The credits looked up for these tracks (null: looked up, none found); tracks never looked up are left out. */

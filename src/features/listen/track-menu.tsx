@@ -39,6 +39,7 @@ import { LikedCover } from './playlist-cards'
 import { useLikedSongs } from './playlists'
 import { usePlaylistActions, usePlaylists } from './playlists'
 import { TasteMenuItem } from './taste'
+import { useEditablePlaylists } from './profiles'
 
 const messages = defineMessages({
   de: {
@@ -131,8 +132,8 @@ function TrackMenuItems({ track, onRemove, removeLabel }: { track: BaseItemDto; 
   const favorite = useSetFavorite(track.Id!)
   const [liked, setLiked] = useState<boolean | null>(null)
   const isLiked = liked ?? !!track.UserData?.IsFavorite
-  // Only playlists the user may change take new songs.
-  const mine = (playlists.data ?? []).filter((playlist) => playlist.CanDelete !== false)
+  // Only playlists the user may change take new songs (their own, and shared ones they edit).
+  const mine = useEditablePlaylists()
   const artist = artistsOf(track)[0]
 
   const addTo = (playlist: BaseItemDto) => actions.add.mutate({ playlistId: playlist.Id!, ids: [track.Id!], name: t.addedTo(playlist.Name ?? '') })

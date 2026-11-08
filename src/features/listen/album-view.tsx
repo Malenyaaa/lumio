@@ -291,7 +291,7 @@ export function TrackTableRow({
   /** Show the track's cover next to its title (lists spanning several albums). */
   cover?: boolean
   /** A column before the length, e.g. the play count. */
-  extra?: string
+  extra?: ReactNode
   /** For a playlist's own entries: removes this one from the playlist. */
   onRemove?: () => void
 }) {
@@ -346,7 +346,7 @@ export function TrackTableRow({
             </span>
           </span>
         </span>
-        {extra !== undefined && <span className="hidden text-right text-sm tabular-nums text-muted-foreground sm:block">{extra}</span>}
+        {extra !== undefined && <span className="hidden min-w-0 justify-end text-right text-sm tabular-nums text-muted-foreground sm:flex">{extra}</span>}
         <span className="flex items-center justify-end gap-3 text-sm tabular-nums text-muted-foreground">
           <LikeToggle track={track} />
           {formatClock(ticksToSeconds(track.RunTimeTicks ?? 0))}

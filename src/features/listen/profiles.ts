@@ -81,6 +81,16 @@ export function usePlaylistInfos() {
   })
 }
 
+/** Playlists the user may add songs to: their own, and shared ones where they are an editor. */
+export function useEditablePlaylists() {
+  const { session } = useAuthedSession()
+  const playlists = usePlaylists()
+  const infos = usePlaylistInfos()
+  return (playlists.data ?? []).filter(
+    (playlist) => playlist.CanDelete !== false || !!infos.data?.find((info) => info.playlist.Id === playlist.Id)?.editors.includes(session.userId),
+  )
+}
+
 /** The playlists on someone's profile: public ones they edit (all of their own on the user's own profile). */
 export function useProfilePlaylists(userId: string | undefined) {
   const { session } = useAuthedSession()
