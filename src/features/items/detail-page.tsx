@@ -26,6 +26,7 @@ import { usePlayTarget } from './play-target'
 import { TrackPicker, type TrackChoice } from './track-picker'
 import { useEpisodes, useItem, useOtherVersions, useSeasons, useSeriesGuestStars, useSetFavorite, useSetPlayed, useSimilarItems } from './queries'
 import { useUserViews } from '@/features/home/queries'
+import { MediaAdminMenu } from '@/features/admin/media-admin'
 
 export function DetailPage() {
   const { id = '' } = useParams()
@@ -108,6 +109,8 @@ export function DetailPage() {
             {WATCHLIST_TYPES.has(item.Type ?? '') && <WatchlistButton item={item} />}
             {PLAYED_TYPES.has(item.Type ?? '') && <PlayedButton item={item} />}
             <PluginSlot name="item:actions" context={{ item }} className="contents" />
+            {/* Administrators: images, identify, refresh metadata. */}
+            <MediaAdminMenu item={item} className="size-10 rounded-full border border-border/60 bg-background/40" />
           </div>
           {overview && <p className="max-w-3xl whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{overview}</p>}
           {directors.length > 0 && (

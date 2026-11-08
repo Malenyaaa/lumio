@@ -142,6 +142,26 @@ export function proxyUpgrade(base: string, request: IncomingMessage, socket: Soc
  */
 export const ADMIN_SCRIPT = `(function () {
   var ADMIN = /^#!?\\/(dashboard|metadata|configurationpage|edititemmetadata|dashboardgeneral|scheduledtasks|plugins|devices|users|useredit|userprofiles|networking|apikeys|log|notificationsettings|encodingsettings|librarysettings|library|livetvsettings|livetvstatus|playbackconfiguration|streamingsettings|serveractivity)(?:[/.?]|$)/i;
+  // Where jellyfin-web's own pages lead in Lumio (leaving the dashboard lands on one of these).
+  var LUMIO = [
+    [/^#!?\\/(home|movies|tv|livetv|list|favorites|home\\.html)?(?:[/?.]|$)/i, '/'],
+    [/^#!?\\/music(?:[/?.]|$)/i, '/listen'],
+    [/^#!?\\/userprofile(?:[/?.]|$)/i, '/settings/profile'],
+    [/^#!?\\/mypreferencesmenu(?:[/?.]|$)/i, '/settings'],
+    [/^#!?\\/mypreferencesdisplay(?:[/?.]|$)/i, '/settings/interface'],
+    [/^#!?\\/mypreferenceshome(?:[/?.]|$)/i, '/settings/home'],
+    [/^#!?\\/mypreferencesplayback(?:[/?.]|$)/i, '/settings/playback'],
+    [/^#!?\\/mypreferencessubtitles(?:[/?.]|$)/i, '/settings/subtitles'],
+    [/^#!?\\/mypreferencescontrols(?:[/?.]|$)/i, '/settings/controls'],
+    [/^#!?\\/quickconnect(?:[/?.]|$)/i, '/?connect=1'],
+    [/^#!?\\/search(?:[/?.]|$)/i, '/search']
+  ];
+  function lumioPath(hash) {
+    var details = hash.match(/^#!?\\/details\\?(.*)$/i);
+    if (details) { var id = new URLSearchParams(details[1]).get('id'); if (id) return '/item/' + encodeURIComponent(id); }
+    for (var i = 0; i < LUMIO.length; i++) if (LUMIO[i][0].test(hash)) return LUMIO[i][1];
+    return '/';
+  }
   function read(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; } }
   function jellyfinSession() { var c = read('jellyfin_credentials'); var s = c && c.Servers && c.Servers[0]; return s && s.AccessToken ? s : null; }
   function handOver(lumio) {
@@ -163,8 +183,9 @@ export const ADMIN_SCRIPT = `(function () {
       else if (!lumio && !jellyfinSession()) location.replace('/login?next=' + encodeURIComponent('/web/' + hash));
       return;
     }
-    // Anything else is Lumio's. A fresh sign-in made here (SSO) is taken over there.
-    location.replace(jellyfinSession() && !lumio ? '/login?adopt=1' : '/');
+    // Anything else is Lumio's, at its counterpart there. A fresh sign-in made here (SSO) is taken over first.
+    var target = lumioPath(hash);
+    location.replace(jellyfinSession() && !lumio ? '/login?adopt=1&next=' + encodeURIComponent(target) : target);
   }
   check();
   window.addEventListener('hashchange', check);

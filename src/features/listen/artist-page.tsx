@@ -36,6 +36,7 @@ import { currentTrack, music, START, useMusic } from './player/music-player'
 import { ShuffleToggle } from './shuffle-toggle'
 import { playCircle } from './play-circle'
 import { useArtistBio, useArtistPhoto } from './artist-photo'
+import { MediaAdminMenu } from '@/features/admin/media-admin'
 
 const messages = defineMessages({
   de: {
@@ -245,6 +246,7 @@ export function ArtistPage({ item }: { item: BaseItemDto }) {
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+        <MediaAdminMenu item={item} />
       </div>
 
       <div className="space-y-12">

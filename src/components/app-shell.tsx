@@ -317,7 +317,8 @@ export function HeaderActions({ search = true }: { search?: boolean }) {
   const hideCast = useHidden('header:cast')
   const t = useMessages(shellMessages)
   const mode = useAppMode()
-  const [connectOpen, setConnectOpen] = useState(false)
+  // "Connect a device" opens at once when asked for by address (jellyfin-web's Quick Connect page leads to /?connect=1).
+  const [connectOpen, setConnectOpen] = useState(() => new URLSearchParams(window.location.search).has('connect'))
   return (
     <>
       <div className="flex shrink-0 items-center gap-1">

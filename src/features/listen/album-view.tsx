@@ -36,6 +36,7 @@ import { TasteMenuItem } from './taste'
 import { DownloadButton, DownloadMenuItem } from './download-ui'
 import { useHeldByDownload } from './download-ui'
 import { useUnavailable } from './availability'
+import { MediaAdminMenu } from '@/features/admin/media-admin'
 
 const messages = defineMessages({
   de: {
@@ -214,6 +215,7 @@ export function AlbumView({ item }: { item: BaseItemDto }) {
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+        <MediaAdminMenu item={item} />
       </div>
 
       {/* Track table */}
