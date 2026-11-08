@@ -30,6 +30,13 @@ const messages = defineMessages({
     followingCount: (n: number) => `${n} gefolgt`,
     followerCount: (n: number) => (n === 1 ? '1 Follower*in' : `${n} Follower*innen`),
     followersRow: 'Follower*innen',
+    showAll: 'Alle anzeigen',
+    all: 'Alle',
+    artistsFilter: 'Künstler*innen',
+    profilesFilter: 'Profile',
+    nobodyFollowed: 'Noch niemandem gefolgt.',
+    noFollowers: 'Noch keine Follower*innen.',
+    hidden: 'Diese Liste ist privat.',
     friend: 'Freund*in',
     followsYou: 'Folgt dir',
     listening: 'Hört gerade',
@@ -68,6 +75,13 @@ const messages = defineMessages({
     followingCount: (n: number) => `${n} following`,
     followerCount: (n: number) => (n === 1 ? '1 follower' : `${n} followers`),
     followersRow: 'Followers',
+    showAll: 'Show all',
+    all: 'All',
+    artistsFilter: 'Artists',
+    profilesFilter: 'Profiles',
+    nobodyFollowed: 'Not following anyone yet.',
+    noFollowers: 'No followers yet.',
+    hidden: 'This list is private.',
     friend: 'Friend',
     followsYou: 'Follows you',
     listening: 'Listening now',
@@ -196,13 +210,30 @@ export function ProfilePage() {
             </p>
             {profile.isLoading ? <Skeleton className="h-16 w-72" /> : <h1 className="text-5xl font-black leading-none tracking-tight text-balance sm:text-7xl xl:text-8xl">{name}</h1>}
             <p className="text-sm text-foreground/85">
+              {/* The counts open the lists (where the person shares them). */}
               {[
-                showPlaylists ? t.publicPlaylists(publicPlaylists.length) : undefined,
-                social ? t.followerCount(social.followerCount) : undefined,
-                own ? t.followingCount(followedIds.length + (artists.data?.length ?? 0)) : social ? t.followingCount(social.followingCount) : undefined,
+                showPlaylists ? <span key="playlists">{t.publicPlaylists(publicPlaylists.length)}</span> : null,
+                social ? (
+                  social.followers ? (
+                    <Link key="followers" to={`/listen/user/${userId}/followers`} className="hover:underline">
+                      {t.followerCount(social.followerCount)}
+                    </Link>
+                  ) : (
+                    <span key="followers">{t.followerCount(social.followerCount)}</span>
+                  )
+                ) : null,
+                own || social ? (
+                  own || social?.following ? (
+                    <Link key="following" to={`/listen/user/${userId}/following`} className="hover:underline">
+                      {t.followingCount(own ? followedIds.length + (artists.data?.length ?? 0) : (social?.followingCount ?? 0))}
+                    </Link>
+                  ) : (
+                    <span key="following">{t.followingCount(social?.followingCount ?? 0)}</span>
+                  )
+                ) : null,
               ]
                 .filter(Boolean)
-                .join(' • ')}
+                .flatMap((node, index) => (index ? [<span key={`dot-${index}`}> • </span>, node] : [node]))}
             </p>
           </div>
         </div>
@@ -268,14 +299,28 @@ export function ProfilePage() {
           {!isLoading && shownPlaylists.length === 0 && <p className="-mt-8 px-4 text-sm text-muted-foreground sm:px-8">{t.noPlaylists}</p>}
           {own && <ArtistRow title={t.recentArtists} subtitle={t.onlyYou} items={stats.data?.recentArtists} loading={stats.isLoading} />}
           {!!social?.followers?.length && (
-            <CardRow title={t.followersRow}>
+            <CardRow
+              title={t.followersRow}
+              action={
+                <Link to={`/listen/user/${userId}/followers`} className="text-sm font-semibold text-muted-foreground hover:text-foreground hover:underline">
+                  {t.showAll}
+                </Link>
+              }
+            >
               {social.followers.map((person) => (
                 <ProfileCard key={person.id} userId={person.id} name={person.name || undefined} imageTag={person.imageTag} />
               ))}
             </CardRow>
           )}
           {(!!followedPeople?.length || (own && !!artists.data?.length)) && (
-            <CardRow title={t.followingRow}>
+            <CardRow
+              title={t.followingRow}
+              action={
+                <Link to={`/listen/user/${userId}/following`} className="text-sm font-semibold text-muted-foreground hover:text-foreground hover:underline">
+                  {t.showAll}
+                </Link>
+              }
+            >
               {followedPeople?.map((person) => (
                 <ProfileCard key={person.id} userId={person.id} name={person.name || undefined} imageTag={person.imageTag} />
               ))}
@@ -395,15 +440,75 @@ function ProfileDetailsDialog({ open, onOpenChange, name, tag }: { open: boolean
   )
 }
 
-export function ProfileCard({ userId, name, imageTag }: { userId: string; name?: string | null; imageTag?: string | null }) {
+export function ProfileCard({ userId, name, imageTag, className }: { userId: string; name?: string | null; imageTag?: string | null; className?: string }) {
   const t = useMessages(messages)
   const profile = useProfile(name ? undefined : userId)
   const shown = name ?? profile.data?.Name ?? t.unknown
   return (
-    <Link to={`/listen/user/${userId}`} className="w-44 shrink-0 rounded-lg p-3 transition-colors duration-300 hover:bg-foreground/[0.07]">
+    <Link to={`/listen/user/${userId}`} className={cn('w-44 shrink-0 rounded-lg p-3 transition-colors duration-300 hover:bg-foreground/[0.07]', className)}>
       <ProfileAvatar userId={userId} name={shown} tag={imageTag ?? profile.data?.PrimaryImageTag} className="aspect-square w-full text-4xl shadow-lg shadow-black/40" />
       <p className="mt-3 truncate text-sm font-semibold">{shown}</p>
       <p className="mt-0.5 text-sm text-muted-foreground">{t.profile}</p>
     </Link>
   )
 }
+
+type FollowFilter = 'all' | 'artists' | 'profiles'
+
+/**
+ * Everyone a person follows, or who follows them, as Spotify shows it: a grid of round pictures; "Following" with
+ * filters for artists and profiles (artists only on the user's own profile: whom others follow among artists isn't
+ * shared).
+ */
+export function FollowListPage({ kind }: { kind: 'following' | 'followers' }) {
+  const { id = '' } = useParams()
+  const t = useMessages(messages)
+  const { session } = useAuthedSession()
+  const userId = id === 'me' ? session.userId : id
+  const own = userId === session.userId
+  const socialMe = useSocialMe()
+  const socialOther = useSocialProfile(own ? undefined : userId)
+  const social = own ? socialMe.data : socialOther.data
+  const artists = useFollowedArtists()
+  const [filter, setFilter] = useState<FollowFilter>('all')
+  const people = (kind === 'followers' ? social?.followers : social?.following) ?? null
+  const ownArtists = kind === 'following' && own ? (artists.data ?? []) : []
+  const loading = (own ? socialMe.isLoading : socialOther.isLoading) || (kind === 'following' && own && artists.isLoading)
+  const showPeople = filter !== 'artists'
+  const showArtists = filter !== 'profiles'
+  const empty = !loading && !(people?.length ?? 0) && !ownArtists.length
+  const filters: Array<[FollowFilter, string]> = [
+    ['all', t.all],
+    ['artists', t.artistsFilter],
+    ['profiles', t.profilesFilter],
+  ]
+  return (
+    <div className="space-y-5 px-4 pb-12 pt-20 sm:px-8">
+      <h1 className="text-3xl font-bold tracking-tight">{kind === 'followers' ? t.followersRow : t.followingRow}</h1>
+      {kind === 'following' && own && (
+        <div className="flex gap-2">
+          {filters.map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={filter === value}
+              onClick={() => setFilter(value)}
+              className={cn('rounded-full px-3 py-1.5 text-sm transition-colors', filter === value ? 'bg-foreground text-background' : 'bg-foreground/10 text-foreground hover:bg-foreground/20')}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {social && people === null && !ownArtists.length && <p className="text-sm text-muted-foreground">{t.hidden}</p>}
+      {empty && people !== null && <p className="text-sm text-muted-foreground">{kind === 'followers' ? t.noFollowers : t.nobodyFollowed}</p>}
+      <div className="-mx-3 grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(11rem,1fr))]">
+        {loading && Array.from({ length: 8 }, (_, index) => <Skeleton key={index} className="m-3 aspect-square rounded-full" />)}
+        {showArtists && ownArtists.map((artist) => <MusicCard key={artist.Id} item={artist} className="w-auto" />)}
+        {showPeople &&
+          people?.map((person) => <ProfileCard key={person.id} userId={person.id} name={person.name || undefined} imageTag={person.imageTag} className="w-auto" />)}
+      </div>
+    </div>
+  )
+}
+

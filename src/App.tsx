@@ -18,7 +18,7 @@ import { GuestArtistPage } from '@/features/listen/guest-artist-page'
 import { ListenHome } from '@/features/listen/listen-home'
 import { PlatformPage } from '@/features/listen/platform-page'
 import { EpisodePage, PodcastPage, PodcastsPage, SavedEpisodesPage } from '@/features/listen/podcast-pages'
-import { ProfilePage as ListenProfilePage } from '@/features/listen/profile-page'
+import { FollowListPage, ProfilePage as ListenProfilePage } from '@/features/listen/profile-page'
 import { ListenShell } from '@/features/listen/listen-shell'
 import { MusicPlayerHost } from '@/features/listen/player/music-host'
 import { PlayEntry } from '@/features/listen/player/play-entry'
@@ -127,6 +127,8 @@ const router = createBrowserRouter(
         <Route path="official/:slug" element={<OfficialPlaylistPage />} />
         <Route path="liked" element={<LikedSongsPage />} />
         <Route path="user/:id" element={<ListenProfilePage />} />
+        <Route path="user/:id/following" element={<FollowListPage kind="following" />} />
+        <Route path="user/:id/followers" element={<FollowListPage kind="followers" />} />
         <Route path="platform" element={<PlatformPage />} />
         <Route path="podcasts" element={<PodcastsPage />} />
         <Route path="podcast/:id" element={<PodcastPage />} />
