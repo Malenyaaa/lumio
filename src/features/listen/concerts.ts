@@ -27,7 +27,7 @@ let nextSlot = 0
 async function ticketmaster<T>(path: string, params: Record<string, string>): Promise<T> {
   // Searching with one locale (de-de) hides events abroad, so all locales are asked for.
   const query = new URLSearchParams({ ...params, apikey: KEY!, locale: '*' })
-  const relayed = await lumioGet(`/concerts/${path}?${query}`).catch(() => null)
+  const relayed = await lumioGet(`/relay/concerts/${path}?${query}`).catch(() => null)
   if (relayed?.ok) return (await relayed.json()) as T
   if (relayed?.status === 404) throw new Error('Ticketmaster 404')
   const now = Date.now()

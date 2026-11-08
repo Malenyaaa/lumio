@@ -62,9 +62,15 @@ JELLYFIN_URL=https://jellyfin.example.org PORT=8097 DATA_DIR=/var/lib/lumio node
 | ----------------- | -------- | --------------------------------------------------------------------------------------------- |
 | `JELLYFIN_URL`    | yes      | The Jellyfin server whose tokens it accepts (every API request is checked with it).          |
 | `PORT`            | no       | Port to listen on (default 8097).                                                             |
-| `DATA_DIR`        | no       | Where its SQLite database lives (default `./data`).                                           |
+| `DATA_DIR`        | no       | Where it keeps its SQLite database and caches (podcast covers, relayed answers; default `./data`). |
 | `WEB_DIR`         | no       | The built app it serves (default `dist/` of this repository).                                 |
 | `ALLOWED_ORIGINS` | no       | Comma-separated origins allowed to call the API from elsewhere (only for split setups).       |
+| `TICKETMASTER_API_KEY` | no  | The server's own Ticketmaster key for the concert relay (otherwise the app's key is used).    |
+| `LASTFM_API_KEY`  | no       | The server's own Last.fm key for the relay (otherwise the app's key is used).                 |
+
+The server relays and caches what the app asks Ticketmaster (6 h), Last.fm (24 h) and MusicBrainz (7 days) for, and
+podcast covers from Apple (kept), so one listener's lookup is there at once for everyone and the services' limits are
+kept centrally.
 
 | Script           | What it does                         |
 | ---------------- | ------------------------------------ |

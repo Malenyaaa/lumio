@@ -79,6 +79,16 @@ export async function lumioGet(path: string): Promise<Response | null> {
   return fetch(`${connection.base}${path}`, { headers: { Authorization: `MediaBrowser Token="${connection.token}"` } })
 }
 
+/**
+ * Asks an outside service through the Lumio server, which caches the answers for everyone (see the server's relay);
+ * straight from the service while there is no connection, or when the server can't help.
+ */
+export async function relayFetch(service: 'concerts' | 'lastfm' | 'musicbrainz', path: string, query: URLSearchParams, direct: string): Promise<Response> {
+  const relayed = await lumioGet(`/relay/${service}/${path}?${query}`).catch(() => null)
+  if (relayed && (relayed.ok || relayed.status === 404)) return relayed
+  return fetch(`${direct}${path}?${query}`)
+}
+
 /** Whether the user shares what they play (the players only report when they do). */
 export function setSocialSharing(next: boolean) {
   sharing = next

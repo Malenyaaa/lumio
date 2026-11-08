@@ -1,4 +1,5 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
+import { relayFetch } from '@/features/social/social'
 import { getLocale } from '@/lib/i18n'
 
 /**
@@ -13,7 +14,8 @@ const DAY = 24 * 60 * 60_000
 
 async function lastfm<T>(params: Record<string, string>): Promise<T> {
   const query = new URLSearchParams({ ...params, api_key: LASTFM_KEY!, format: 'json', autocorrect: '1' })
-  const response = await fetch(`https://ws.audioscrobbler.com/2.0/?${query}`)
+  // Through the Lumio server, which keeps the answers for everyone.
+  const response = await relayFetch('lastfm', '', query, 'https://ws.audioscrobbler.com/2.0/')
   if (!response.ok) throw new Error(`Last.fm ${response.status}`)
   const data = (await response.json()) as T & { error?: number }
   if (data.error) throw new Error(`Last.fm error ${data.error}`)
@@ -229,16 +231,18 @@ export function useArtistLinks(name: string | undefined, musicBrainzId: string |
     staleTime: DAY,
     retry: false,
     queryFn: async (): Promise<ArtistLink[]> => {
-      const base = 'https://musicbrainz.org/ws/2/artist'
+      // Through the Lumio server (cached a week), which also keeps to MusicBrainz's one call a second.
+      const musicbrainz = async (path: string, query: Record<string, string>) =>
+        (await relayFetch('musicbrainz', path, new URLSearchParams(query), 'https://musicbrainz.org/ws/2/')).json()
       let id = musicBrainzId
       if (!id) {
-        const found = (await (await fetch(`${base}/?${new URLSearchParams({ query: `artist:"${name}"`, fmt: 'json', limit: '3' })}`)).json()) as {
+        const found = (await musicbrainz('artist', { query: `artist:"${name}"`, fmt: 'json', limit: '3' })) as {
           artists?: Array<{ id: string; name: string; score: number }>
         }
         id = found.artists?.find((artist) => artist.score >= 95 && sameName(artist.name, name))?.id
         if (!id) return []
       }
-      const data = (await (await fetch(`${base}/${id}?inc=url-rels&fmt=json`)).json()) as { relations?: Array<{ type: string; url?: { resource: string } }> }
+      const data = (await musicbrainz(`artist/${id}`, { inc: 'url-rels', fmt: 'json' })) as { relations?: Array<{ type: string; url?: { resource: string } }> }
       const links: ArtistLink[] = []
       for (const relation of data.relations ?? []) {
         const url = relation.url?.resource

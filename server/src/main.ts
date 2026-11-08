@@ -14,7 +14,7 @@ import { DEFAULT_PRIVACY, Store, type Activity, type Person, type Privacy } from
  *
  * Settings (environment): JELLYFIN_URL (required), PORT (8097), DATA_DIR (./data), WEB_DIR (the built app, ../dist),
  * ALLOWED_ORIGINS (comma-separated; only needed when the app runs elsewhere, e.g. the Vite dev server),
- * TICKETMASTER_API_KEY (optional; otherwise the app's own key is used for concerts).
+ * TICKETMASTER_API_KEY and LASTFM_API_KEY (optional; otherwise the app's own keys are used).
  */
 const JELLYFIN_URL = (process.env.JELLYFIN_URL ?? '').replace(/\/+$/, '')
 const PORT = Number(process.env.PORT ?? 8097)
@@ -30,12 +30,58 @@ const IMAGE_HOSTS = /(^|\.)mzstatic\.com$/
 /** Largest picture relayed (bytes). */
 const IMAGE_LIMIT = 8 * 1024 * 1024
 const IMAGE_DIR = join(DATA_DIR, 'images')
-const CONCERT_DIR = join(DATA_DIR, 'concerts')
-const TICKETMASTER_KEY = process.env.TICKETMASTER_API_KEY?.trim()
-/** Concert answers are fresh this long; older ones are fetched again (and still served if Ticketmaster fails). */
-const CONCERT_TTL_MS = 6 * 60 * 60_000
-/** What the relay asks Ticketmaster's Discovery API for: events, artists and venues. */
-const CONCERT_PATHS = /^(events|attractions|venues)(\/[A-Za-z0-9_-]+)?(\.json)?$/
+const RELAY_DIR = join(DATA_DIR, 'relay')
+const HOUR = 60 * 60_000
+
+/**
+ * The outside services the app asks through this server, which caches their answers on disk for everyone: what one
+ * listener looked up (an artist's concerts, biography, links) is there at once for the next, survives restarts, and
+ * each service's request limits are kept centrally. Each only allows its own paths, so the relay is no open proxy.
+ */
+interface RelayService {
+  base: string
+  paths: RegExp
+  /** The query parameter that carries the API key, and the server's own key (else the app's is used). */
+  key?: { param: string; value?: string }
+  /** Answers are fresh this long; older ones are fetched again (and still served if the service fails). */
+  ttl: number
+  /** Time between two calls (the service's rate limit). */
+  spacing: number
+  headers?: Record<string, string>
+  /** Whether an answer is worth keeping (not a rate limit or an outage reported inside a 200). */
+  keep?: (status: number, body: string) => boolean
+}
+
+const RELAY_SERVICES: Record<string, RelayService> = {
+  // Ticketmaster's Discovery API: events, artists, venues. Five calls a second per key.
+  concerts: {
+    base: 'https://app.ticketmaster.com/discovery/v2/',
+    paths: /^(events|attractions|venues)(\/[A-Za-z0-9_-]+)?(\.json)?$/,
+    key: { param: 'apikey', value: process.env.TICKETMASTER_API_KEY?.trim() },
+    ttl: 6 * HOUR,
+    spacing: 220,
+    keep: (status) => status < 400 || status === 404,
+  },
+  // Last.fm: artist info, top tracks, similar artists, charts. Its answers change slowly.
+  lastfm: {
+    base: 'https://ws.audioscrobbler.com/2.0/',
+    paths: /^$/,
+    key: { param: 'api_key', value: process.env.LASTFM_API_KEY?.trim() },
+    ttl: 24 * HOUR,
+    spacing: 200,
+    // Errors come inside a 200: "not found" (6) is an answer, being limited or down (8, 11, 16, 29) is not.
+    keep: (status, body) => status < 400 && !/"error":\s*(8|11|16|29)\b/.test(body),
+  },
+  // MusicBrainz: an artist and their links. It asks for at most one call a second and a name for the caller.
+  musicbrainz: {
+    base: 'https://musicbrainz.org/ws/2/',
+    paths: /^artist(\/[0-9a-f-]{36})?$/,
+    ttl: 7 * 24 * HOUR,
+    spacing: 1100,
+    headers: { 'User-Agent': 'Lumio/1.0 (self-hosted Jellyfin client)' },
+    keep: (status) => status < 400 || status === 404,
+  },
+}
 
 if (!JELLYFIN_URL) {
   console.error('JELLYFIN_URL is required, e.g. JELLYFIN_URL=https://jellyfin.example.org')
@@ -226,52 +272,56 @@ async function serveImage(response: ServerResponse, source: string | null) {
   }
 }
 
-/** Ticketmaster allows five requests a second for a key; the relay spaces its calls out to stay under it. */
-let nextTicketmasterSlot = 0
-async function ticketmasterSlot() {
+/** When each service may be called next. */
+const nextSlot = new Map<string, number>()
+async function relaySlot(name: string, spacing: number) {
   const now = Date.now()
-  const wait = Math.max(0, nextTicketmasterSlot - now)
-  nextTicketmasterSlot = Math.max(now, nextTicketmasterSlot) + 220
-  if (wait) await new Promise((resolve) => setTimeout(resolve, wait))
+  const at = Math.max(now, nextSlot.get(name) ?? 0)
+  nextSlot.set(name, at + spacing)
+  if (at > now) await new Promise((resolve) => setTimeout(resolve, at - now))
 }
 
-/**
- * GET /api/concerts/<path>?…: Ticketmaster's Discovery API, cached on disk for everyone. An artist's shows are fetched
- * once every few hours however many people open the artist, and the answers survive restarts.
- */
-async function serveConcerts(response: ServerResponse, path: string, params: URLSearchParams) {
-  if (!CONCERT_PATHS.test(path)) return send(response, 404, { error: 'Unknown concert path' })
-  const key = TICKETMASTER_KEY || params.get('apikey')
-  if (!key) return send(response, 503, { error: 'No Ticketmaster key' })
-  const query = new URLSearchParams([...params].filter(([name]) => name !== 'apikey').sort(([a], [b]) => a.localeCompare(b)))
-  const file = join(CONCERT_DIR, createHash('sha256').update(`${path}?${query}`).digest('hex'))
-  let cached: { at: number; status: number; body: string } | null = null
+interface RelayEntry {
+  at: number
+  status: number
+  type: string
+  body: string
+}
+
+/** GET /api/relay/<service>/<path>?…: a service's answer, from the cache while it is fresh. */
+async function serveRelay(response: ServerResponse, name: string, path: string, params: URLSearchParams) {
+  const service = RELAY_SERVICES[name]
+  if (!service || !service.paths.test(path)) return send(response, 404, { error: 'Unknown relay path' })
+  const key = service.key ? service.key.value || params.get(service.key.param) : undefined
+  if (service.key && !key) return send(response, 503, { error: `No ${name} key` })
+  const query = new URLSearchParams([...params].filter(([param]) => param !== service.key?.param).sort(([a], [b]) => a.localeCompare(b)))
+  const file = join(RELAY_DIR, name, createHash('sha256').update(`${path}?${query}`).digest('hex'))
+  let cached: RelayEntry | null = null
   try {
-    cached = JSON.parse(await readFile(file, 'utf8')) as { at: number; status: number; body: string }
+    cached = JSON.parse(await readFile(file, 'utf8')) as RelayEntry
   } catch {
     // Not asked before.
   }
-  const reply = (entry: { status: number; body: string }) => {
-    response.writeHead(entry.status, { 'Content-Type': 'application/json', 'Cache-Control': 'private, max-age=3600' })
+  const reply = (entry: RelayEntry) => {
+    response.writeHead(entry.status, { 'Content-Type': entry.type, 'Cache-Control': 'private, max-age=3600' })
     response.end(entry.body)
   }
-  if (cached && Date.now() - cached.at < CONCERT_TTL_MS) return reply(cached)
+  if (cached && Date.now() - cached.at < service.ttl) return reply(cached)
   try {
-    await ticketmasterSlot()
-    query.set('apikey', key)
-    const upstream = await fetch(`https://app.ticketmaster.com/discovery/v2/${path}?${query}`, { signal: AbortSignal.timeout(15_000) })
-    // Answers worth keeping: found, or "no such event" (404); limits and failures are not.
-    if (!upstream.ok && upstream.status !== 404) {
+    await relaySlot(name, service.spacing)
+    if (service.key && key) query.set(service.key.param, key)
+    const upstream = await fetch(`${service.base}${path}?${query}`, { headers: service.headers, signal: AbortSignal.timeout(15_000) })
+    const entry: RelayEntry = { at: Date.now(), status: upstream.status, type: upstream.headers.get('content-type') ?? 'application/json', body: await upstream.text() }
+    if (!(service.keep ?? ((status) => status < 400))(entry.status, entry.body)) {
       if (cached) return reply(cached)
-      return send(response, 502, { error: `Ticketmaster ${upstream.status}` })
+      return send(response, 502, { error: `${name} ${upstream.status}` })
     }
-    const entry = { at: Date.now(), status: upstream.status, body: await upstream.text() }
-    await mkdir(CONCERT_DIR, { recursive: true })
+    await mkdir(join(RELAY_DIR, name), { recursive: true })
     await writeFile(file, JSON.stringify(entry))
     reply(entry)
   } catch {
     if (cached) return reply(cached)
-    send(response, 502, { error: 'Ticketmaster unavailable' })
+    send(response, 502, { error: `${name} unavailable` })
   }
 }
 
@@ -290,8 +340,12 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
   const me = await authenticate(tokenOf(request, url))
   if (!me) return send(response, 401, { error: 'Not signed in' })
 
-  // GET /concerts/…: concert data, relayed and cached (for signed-in users only, as it may use the server's key).
-  if (path.startsWith('/concerts/') && request.method === 'GET') return serveConcerts(response, path.slice('/concerts/'.length), url.searchParams)
+  // GET /relay/<service>/…: outside services, relayed and cached (for signed-in users only, as it may use the server's
+  // keys). /concerts/… is the older address of the Ticketmaster relay.
+  if (request.method === 'GET' && (path.startsWith('/relay/') || path.startsWith('/concerts/'))) {
+    const [name = '', ...rest] = path.startsWith('/concerts/') ? ['concerts', path.slice('/concerts/'.length)] : path.slice('/relay/'.length).split(/\/(.*)/s)
+    return serveRelay(response, name, rest.join(''), url.searchParams)
+  }
 
   // GET /me: the user's own follows and privacy.
   if (path === '/me' && request.method === 'GET') {
