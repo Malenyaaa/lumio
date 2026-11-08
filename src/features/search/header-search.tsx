@@ -1,12 +1,18 @@
-import { IconLoader2, IconPlayerPlayFilled, IconSearch, IconX } from '@tabler/icons-react'
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
+import { ContextMenu } from '@base-ui/react/context-menu'
+import { IconDots, IconLoader2, IconPlayerPauseFilled, IconPlayerPlayFilled, IconSearch, IconX } from '@tabler/icons-react'
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import { Link } from '@/components/link'
 import { FadeImage } from '@/components/media/fade-image'
 import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useAuthedSession } from '@/features/auth/session'
-import { useSearch } from '@/features/items/queries'
+import { useItem, useSearch } from '@/features/items/queries'
+import { AlbumMenuItems, ArtistMenuItems, PlaylistMenuItems, PodcastMenuItems } from '@/features/listen/library-menu'
+import { currentTrack, music, useMusic } from '@/features/listen/player/music-player'
 import { usePodcastSearch } from '@/features/listen/podcasts'
+import { TrackMenuItems } from '@/features/listen/track-menu'
 import { portraitImageUrl } from '@/lib/images'
 import { itemHref, SQUARE_TYPES } from '@/lib/item-links'
 import { inMode, useAppMode } from '@/lib/app-mode'
@@ -14,7 +20,7 @@ import { useMessages } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { searchMessages, typeLabels } from './messages'
 import { canPlay, usePlayResult } from './play-result'
-import { useRecentSearches, type SearchEntry } from './recent-searches'
+import { useRecentSearches, type SearchEntry, type SearchTarget } from './recent-searches'
 
 const TYPE_ORDER = ['Movie', 'Series', 'BoxSet', 'MusicArtist', 'MusicAlbum', 'Playlist', 'AudioBook', 'Book', 'Episode', 'Audio']
 const DEBOUNCE_MS = 200
@@ -22,6 +28,18 @@ const MAX_RESULTS = 8
 
 /** Podcasts shown in the short list, after the library's results. */
 const MAX_PODCASTS = 3
+
+/** Results with a menu ("…" and right-click), as the queue's rows have. */
+const WITH_MENU = new Set(['Audio', 'MusicAlbum', 'MusicArtist', 'Playlist'])
+const hasMenu = (target: SearchTarget) => target.kind === 'podcast' || WITH_MENU.has(target.type)
+
+const SOURCE_KIND: Record<string, string> = { MusicAlbum: 'album', MusicArtist: 'artist', Playlist: 'playlist' }
+
+/** The player's source a result plays as (a track is matched by itself instead). */
+function sourceOf(target: SearchTarget) {
+  if (target.kind === 'podcast') return `podcast:${target.id}`
+  return SOURCE_KIND[target.type] ? `${SOURCE_KIND[target.type]}:${target.id}` : null
+}
 
 /**
  * Search field that lives in the navbar and shows results right below it. On the search page it is the page's own
@@ -86,6 +104,7 @@ export function HeaderSearch({ persistent = false }: { persistent?: boolean }) {
       shape: 'square' as const,
     })),
   ]
+  const itemsById = new Map(items.map((item) => [item.Id!, item]))
   const loading = results.isLoading || (mode === 'listen' && podcasts.isLoading)
   // An empty field lists the recent searches instead (as in Spotify).
   const showingRecent = value.trim().length === 0
@@ -133,6 +152,8 @@ export function HeaderSearch({ persistent = false }: { persistent?: boolean }) {
   useEffect(() => {
     if (!open) return
     const onPointerDown = (event: PointerEvent) => {
+      // A result's menu opens outside the list (in a portal): using it keeps the list open.
+      if ((event.target as Element).closest?.('[role="menu"]')) return
       if (!root.current?.contains(event.target as Node)) setOpenOn(null)
     }
     document.addEventListener('pointerdown', onPointerDown)
@@ -252,7 +273,10 @@ export function HeaderSearch({ persistent = false }: { persistent?: boolean }) {
           aria-label={showingRecent ? t.recent : undefined}
           // Pressing on a result would take the focus from the field first, which hides the list before the click
           // lands; keeping the focus lets the click through.
-          onMouseDown={(event) => event.preventDefault()}
+          // (Only on the list itself: a result's menu, though rendered from here, lives in a portal.)
+          onMouseDown={(event) => {
+            if (event.currentTarget.contains(event.target as Node)) event.preventDefault()
+          }}
           className={cn(
             'absolute top-full z-50 mt-2 max-h-[70svh] overflow-y-auto rounded-xl bg-popover p-2 shadow-2xl ring-1 ring-foreground/5 [scrollbar-width:thin]',
             persistent ? 'inset-x-0' : 'right-0 w-[min(26rem,calc(100vw-2rem))]',
@@ -270,11 +294,14 @@ export function HeaderSearch({ persistent = false }: { persistent?: boolean }) {
               key={entry.key}
               index={index}
               entry={entry}
+              item={entry.target.kind === 'item' ? itemsById.get(entry.target.id) : undefined}
               active={index === active}
               onHover={() => setActive(index)}
               onChoose={() => choose(entry)}
               onPlay={canPlay(entry.target) ? () => play(entry) : undefined}
               onRemove={showingRecent ? () => recent.remove(entry.key) : undefined}
+              // The field loses the focus to the menu; the list stays open meanwhile.
+              onMenuOpen={() => setOpenOn(pathname)}
             />
           ))}
           {!showingRecent && entries.length > 0 && (
@@ -293,29 +320,43 @@ export function HeaderSearch({ persistent = false }: { persistent?: boolean }) {
 }
 
 /**
- * One result: a click opens it; the cover turns into a play button on hover (as in Spotify), and recent searches get
- * an "×" to forget them.
+ * One result, like a row of the queue: a click opens it; the cover turns into a play button on hover (as in Spotify),
+ * a pause button while it is what plays. Music and podcasts have a "…" and a right-click menu; recent searches get an
+ * "×" to forget them.
  */
 function ResultRow({
   index,
   entry,
+  item,
   active,
   onHover,
   onChoose,
   onPlay,
   onRemove,
+  onMenuOpen,
 }: {
   index: number
   entry: SearchEntry
+  /** The result itself, when the search found it (recent searches only know the id). */
+  item?: BaseItemDto
   active: boolean
   onHover: () => void
   onChoose: () => void
   onPlay?: () => void
   onRemove?: () => void
+  onMenuOpen: () => void
 }) {
   const t = useMessages(searchMessages)
+  const state = useMusic()
   const shape = entry.shape === 'poster' ? 'aspect-[2/3] rounded' : entry.shape === 'round' ? 'aspect-square rounded-full' : 'aspect-square rounded'
-  return (
+  const { target } = entry
+  const source = sourceOf(target)
+  const current =
+    target.kind === 'item' && target.type === 'Audio' ? currentTrack(state)?.Id === target.id : !!source && state.source === source && state.index >= 0
+  const playingNow = current && state.playing
+  const menu = hasMenu(target)
+  const menuItems = <ResultMenuItems target={target} item={item} />
+  const row = (
     <div
       id={`search-result-${index}`}
       role="option"
@@ -332,13 +373,13 @@ function ResultRow({
           event.preventDefault()
           onChoose()
         }}
-        className="flex min-w-0 flex-1 items-center gap-3 p-2 pr-10 outline-none"
+        className="flex min-w-0 flex-1 items-center gap-3 p-2 outline-none"
       >
         <div className={cn('w-11 shrink-0 overflow-hidden bg-muted', shape)}>
           {entry.image && <FadeImage src={entry.image} alt="" className="size-full object-cover" />}
         </div>
         <div className="min-w-0">
-          <p className="truncate text-[15px] font-medium">{entry.title}</p>
+          <p className={cn('truncate text-[15px] font-medium', current && 'text-listen')}>{entry.title}</p>
           <p className="truncate text-sm text-muted-foreground">{entry.meta}</p>
         </div>
       </Link>
@@ -346,29 +387,79 @@ function ResultRow({
         <button
           type="button"
           tabIndex={-1}
-          aria-label={t.play(entry.title)}
-          title={t.play(entry.title)}
-          onClick={onPlay}
+          aria-label={playingNow ? t.pause(entry.title) : t.play(entry.title)}
+          title={playingNow ? t.pause(entry.title) : t.play(entry.title)}
+          // What plays already is paused and resumed rather than started over.
+          onClick={current ? () => music.toggle() : onPlay}
           className={cn(
             'absolute left-2 top-1/2 grid w-11 -translate-y-1/2 place-items-center bg-black/50 text-white opacity-0 transition-opacity group-hover/result:opacity-100',
             shape,
           )}
         >
-          <IconPlayerPlayFilled className="size-5" />
+          {playingNow ? <IconPlayerPauseFilled className="size-5" /> : <IconPlayerPlayFilled className="size-5" />}
         </button>
       )}
-      {onRemove && (
-        <button
-          type="button"
-          tabIndex={-1}
-          aria-label={t.removeRecent(entry.title)}
-          title={t.removeRecent(entry.title)}
-          onClick={onRemove}
-          className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/result:opacity-100"
-        >
-          <IconX className="size-4" />
-        </button>
+      {(menu || onRemove) && (
+        <div className="flex shrink-0 items-center gap-0.5 pr-2">
+          {menu && (
+            <DropdownMenu onOpenChange={(open) => open && onMenuOpen()}>
+              <DropdownMenuTrigger
+                tabIndex={-1}
+                aria-label={t.more(entry.title)}
+                title={t.more(entry.title)}
+                onClick={(event) => event.stopPropagation()}
+                className="grid size-8 place-items-center rounded-full text-muted-foreground opacity-0 outline-none transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/result:opacity-100 data-popup-open:opacity-100"
+              >
+                <IconDots className="size-5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64" onClick={(event) => event.stopPropagation()}>
+                {menuItems}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {onRemove && (
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t.removeRecent(entry.title)}
+              title={t.removeRecent(entry.title)}
+              onClick={onRemove}
+              className="grid size-8 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/result:opacity-100"
+            >
+              <IconX className="size-4" />
+            </button>
+          )}
+        </div>
       )}
+    </div>
+  )
+  if (!menu) return row
+  return (
+    <ContextMenu.Root onOpenChange={(open) => open && onMenuOpen()}>
+      <ContextMenu.Trigger render={row} />
+      <DropdownMenuContent className="w-64" onClick={(event) => event.stopPropagation()}>
+        {menuItems}
+      </DropdownMenuContent>
+    </ContextMenu.Root>
+  )
+}
+
+/** A result's menu: the one its kind has elsewhere (the item is loaded first for a remembered search). */
+function ResultMenuItems({ target, item }: { target: SearchTarget; item?: BaseItemDto }) {
+  const loaded = useItem(target.id, target.kind === 'item' && !item)
+  if (target.kind === 'podcast') return <PodcastMenuItems podcastId={target.id} />
+  const found = item ?? loaded.data
+  if (!found) return <MenuLoading />
+  if (target.type === 'Audio') return <TrackMenuItems track={found} />
+  if (target.type === 'MusicAlbum') return <AlbumMenuItems album={found} />
+  if (target.type === 'MusicArtist') return <ArtistMenuItems artist={found} />
+  return <PlaylistMenuItems playlist={found} />
+}
+
+function MenuLoading(): ReactNode {
+  return (
+    <div className="grid place-items-center py-4 text-muted-foreground">
+      <IconLoader2 className="size-5 animate-spin" />
     </div>
   )
 }

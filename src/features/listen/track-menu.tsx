@@ -122,7 +122,7 @@ export function LikeToggle({ track, className }: { track: BaseItemDto; className
  * What can be done with a track, shared by its "…" button and its right-click menu (as in Spotify): playlists, liked
  * songs, the queue, and the way to its album and artist. Podcast episodes only offer the queue and their show.
  */
-function TrackMenuItems({ track, onRemove, removeLabel }: { track: BaseItemDto; onRemove?: () => void; removeLabel?: string }) {
+export function TrackMenuItems({ track, onRemove, removeLabel }: { track: BaseItemDto; onRemove?: () => void; removeLabel?: string }) {
   const t = useMessages(messages)
   const navigate = useNavigate()
   const playlists = usePlaylists()

@@ -17,6 +17,8 @@ export const searchMessages = defineMessages({
     recent: 'Letzte Suchanfragen',
     removeRecent: (name: string) => `„${name}“ aus den letzten Suchanfragen entfernen`,
     play: (name: string) => `${name} abspielen`,
+    pause: (name: string) => `${name} pausieren`,
+    more: (name: string) => `Weitere Optionen für ${name}`,
   },
   en: {
     search: 'Search',
@@ -34,6 +36,8 @@ export const searchMessages = defineMessages({
     recent: 'Recent searches',
     removeRecent: (name: string) => `Remove “${name}” from recent searches`,
     play: (name: string) => `Play ${name}`,
+    pause: (name: string) => `Pause ${name}`,
+    more: (name: string) => `More options for ${name}`,
   },
 })
 
