@@ -242,9 +242,6 @@ function SongInfoDialog({ track, onClose }: { track: BaseItemDto | null; onClose
 export function NowPlaying({ track }: { track: BaseItemDto }) {
   const { api } = useAuthedSession()
   const cover = portraitImageUrl(api, track, { fillHeight: 640 })
-  const artistId = artistsOf(track)[0]?.id
-  const artist = useItem(artistId ?? '', !!artistId)
-  const external = !!externalOf(track)
   return (
     <div className="space-y-4">
       {/* Right-click: the song's menu. */}
@@ -259,12 +256,24 @@ export function NowPlaying({ track }: { track: BaseItemDto }) {
         </Link>
         <ArtistLine item={track} className="text-sm" />
       </div>
+      <NowPlayingDetails track={track} />
+    </div>
+  )
+}
+
+/** Below the cover: lyrics, the artist and their concerts, the credits, what comes next (also the phone's player). */
+export function NowPlayingDetails({ track }: { track: BaseItemDto }) {
+  const artistId = artistsOf(track)[0]?.id
+  const artist = useItem(artistId ?? '', !!artistId)
+  const external = !!externalOf(track)
+  return (
+    <>
       {!external && <LyricsPreview track={track} />}
       {artistId && artist.data && <AboutArtist artist={artist.data} />}
       {artist.data?.Name && <ArtistTour name={artist.data.Name} artistId={artist.data.Id!} />}
       {!external && <SongInfoCard track={track} />}
       <NextInQueue />
-    </div>
+    </>
   )
 }
 

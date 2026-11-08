@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { flushSync } from 'react-dom'
+import { PHONE_QUERY } from '@/lib/use-media-query'
 
 /**
  * Listen's right-hand panel (as Spotify's): what's playing, the queue, or the lyrics. While music is loaded it never
@@ -55,6 +56,8 @@ function setPanel(next: ListenPanelState) {
  * big panel the queue and the quality open in the column beside it, the lyrics swap with the cover.
  */
 export function toggleListenPanel(target: Exclude<ListenPanel, 'nowPlaying'>) {
+  // Phones have no side panel: the full-screen player opens, with the queue or the lyrics over it.
+  if (matchMedia(PHONE_QUERY).matches) return openPhonePlayer(target === 'quality' ? null : phone.openOn === location.pathname && phone.sheet === target ? null : target)
   if (panel.expanded) {
     if (target === 'queue' || target === 'quality') return setPanel({ ...panel, beside: panel.beside === target ? null : target })
     return setPanel({ ...panel, view: panel.view === target ? 'nowPlaying' : target })
@@ -175,5 +178,44 @@ export function useListenLayout() {
       return () => layoutListeners.delete(listener)
     },
     () => layout,
+  )
+}
+
+/**
+ * Phones: the full-screen player, and the sheet over it (the queue or the lyrics). It belongs to the page it was opened
+ * on, so following a link in it (an artist, an album) leaves it closed behind.
+ */
+export interface PhonePlayerState {
+  openOn: string | null
+  sheet: 'queue' | 'lyrics' | null
+}
+
+let phone: PhonePlayerState = { openOn: null, sheet: null }
+const phoneListeners = new Set<() => void>()
+
+function setPhone(next: PhonePlayerState) {
+  phone = next
+  for (const listener of phoneListeners) listener()
+}
+
+export function openPhonePlayer(sheet: PhonePlayerState['sheet'] = null) {
+  setPhone({ openOn: location.pathname, sheet })
+}
+
+export function closePhonePlayer() {
+  setPhone({ openOn: null, sheet: null })
+}
+
+export function setPhoneSheet(sheet: PhonePlayerState['sheet']) {
+  setPhone({ ...phone, sheet })
+}
+
+export function usePhonePlayer() {
+  return useSyncExternalStore(
+    (listener) => {
+      phoneListeners.add(listener)
+      return () => phoneListeners.delete(listener)
+    },
+    () => phone,
   )
 }

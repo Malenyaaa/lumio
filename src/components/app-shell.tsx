@@ -52,7 +52,8 @@ import { categoryOf, categoryPath, useCategories } from '@/features/library/cate
 import { DeviceMenu } from '@/features/remote/device-menu'
 import { SyncPlayMenu } from '@/features/remote/syncplay-menu'
 import { MiniPlayer } from '@/features/listen/player/player-bar'
-import { setListenPanelExpanded, useListenPanel } from '@/features/listen/player/panel'
+import { openPhonePlayer, setListenPanelExpanded, useListenPanel } from '@/features/listen/player/panel'
+import { PhonePlayer } from '@/features/listen/player/phone-player'
 import { HeaderSearch } from '@/features/search/header-search'
 import { useLocalSettings } from '@/features/settings/local-settings'
 import { useMessages } from '@/lib/i18n'
@@ -262,7 +263,6 @@ function SignedInShell() {
   const { session } = useSession()
   const [scrolled, setScrolled] = useState(false)
   const tabs = useWatchTabs()
-  const navigate = useNavigate()
 
   // Pages other than home lift the boot screen once the header (navigation) is complete; their content has skeletons.
   // Home waits for its hero instead (see home-page).
@@ -328,7 +328,8 @@ function SignedInShell() {
       {/* Music started in Listen keeps playing here: a small card in the corner, on phones a bar above the tabs. */}
       <MiniPlayer />
       <ListenControlsProvider>
-        <PhoneMiniPlayer onOpen={() => void navigate(modeHome('listen'))} />
+        <PhoneMiniPlayer onOpen={() => openPhonePlayer()} />
+        <PhonePlayer />
       </ListenControlsProvider>
       <TabBar tabs={tabs} pathname={pathname} />
     </div>

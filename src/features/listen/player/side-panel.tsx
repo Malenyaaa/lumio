@@ -566,7 +566,7 @@ const AUTOPLAY_SHOWN = 10
  * the collection that was started (named, as a link); and the similar songs autoplay has lined up after it. When a song
  * starts, the rows slide up into their new places.
  */
-function Queue() {
+export function Queue() {
   const controls = usePlayerControls()
   // Steering another device: its queue, as far as it tells.
   if (controls.remote) return <RemoteQueue remote={controls.remote} />
@@ -799,7 +799,7 @@ function QueueRow({ uid, item, index, kind, current }: { uid: string; item: Base
  * Lyrics on the cover's colour; synced ones follow the music (the current line lit, scrolled into view) and a click on
  * a line jumps there. In the big panel they are set large for singing along.
  */
-function LyricsView({ track, big }: { track: BaseItemDto; big: boolean }) {
+export function LyricsView({ track, big }: { track: BaseItemDto; big: boolean }) {
   const t = useMessages(messages)
   const lyrics = useLyrics(track)
   const { position } = usePlayerTime()

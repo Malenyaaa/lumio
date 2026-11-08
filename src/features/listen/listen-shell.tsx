@@ -8,8 +8,9 @@ import { AppBrand } from '@/components/app-switcher'
 import { PageTransition } from '@/components/page-transition'
 import { useSession } from '@/features/auth/session'
 import { HeaderSearch } from '@/features/search/header-search'
-import { LEFT_LIMITS, PEEK_WIDTH, RIGHT_LIMITS, setListenLayout, setListenPanelExpanded, useListenLayout, useListenPanel, useListenPanelPeek } from './player/panel'
+import { LEFT_LIMITS, openPhonePlayer, PEEK_WIDTH, RIGHT_LIMITS, setListenLayout, setListenPanelExpanded, useListenLayout, useListenPanel, useListenPanelPeek } from './player/panel'
 import { SongInfoHost } from './player/now-playing'
+import { PhonePlayer } from './player/phone-player'
 import { PlayerBar } from './player/player-bar'
 import { ListenControlsProvider } from './player/player-controls'
 import { SidePanel } from './player/side-panel'
@@ -220,7 +221,8 @@ function SignedInListen() {
       <ListenControlsProvider>
         <SidePanel />
         <PlayerBar />
-        <PhoneMiniPlayer />
+        <PhoneMiniPlayer onOpen={() => openPhonePlayer()} />
+        <PhonePlayer />
         <SongInfoHost />
       </ListenControlsProvider>
       <TabBar tabs={tabs} pathname={pathname} />
