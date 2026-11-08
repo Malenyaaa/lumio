@@ -28,6 +28,7 @@ const messages = defineMessages({
     remove: 'Download entfernen',
     loading: (percent: number) => `Wird heruntergeladen: ${percent} %`,
     queued: 'Wartet auf den Download',
+    failed: (error: string) => `Fehlgeschlagen (${error}), wird gleich erneut versucht`,
     downloadSeason: 'Staffel herunterladen',
     seasonDownloaded: 'Staffel heruntergeladen',
     seasonProgress: (done: number, total: number) => `${done} von ${total} heruntergeladen`,
@@ -41,6 +42,7 @@ const messages = defineMessages({
     remove: 'Remove download',
     loading: (percent: number) => `Downloading: ${percent}%`,
     queued: 'Waiting to download',
+    failed: (error: string) => `Failed (${error}), trying again shortly`,
     downloadSeason: 'Download season',
     seasonDownloaded: 'Season downloaded',
     seasonProgress: (done: number, total: number) => `${done} of ${total} downloaded`,
@@ -75,7 +77,7 @@ const shareOf = (download: VideoDownloadState) => (download?.state === 'loading'
 function labelOf(t: (typeof messages)['de'], download: VideoDownloadState) {
   if (!download) return t.download
   if (download.state === 'loading') return t.loading(Math.round(download.share * 100))
-  if (download.state === 'queued') return t.queued
+  if (download.state === 'queued') return download.error ? t.failed(download.error) : t.queued
   return t.downloaded
 }
 

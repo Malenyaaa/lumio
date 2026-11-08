@@ -133,6 +133,8 @@ export interface VideoCacheSettings {
   pinned?: boolean
   /** Told the bytes received so far while it downloads. */
   onProgress?: (bytes: number) => void
+  /** Stops the download (a download removed while it comes in). */
+  signal?: AbortSignal
 }
 
 /**
@@ -169,7 +171,7 @@ export function downloadVideo(api: Api, session: { userId: string; accessToken: 
         playSessionId: crypto.randomUUID(),
         ApiKey: session.accessToken,
       })
-      const response = await fetch(`${api.basePath}/Videos/${itemId}/stream.mp4?${params}`, { priority: 'low' } as RequestInit)
+      const response = await fetch(`${api.basePath}/Videos/${itemId}/stream.mp4?${params}`, { priority: 'low', signal: settings.signal } as RequestInit)
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`)
       // Counted on the way into the cache.
       let bytes = 0

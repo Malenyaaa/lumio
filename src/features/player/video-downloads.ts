@@ -51,6 +51,10 @@ let pending: string[] = []
 /** The file coming in now and how far (bytes so far, and about how many there will be). */
 let current: { id: string; received: number; expected: number } | null = null
 let running = false
+/** Stops the file coming in now (its download was removed meanwhile). */
+let abortCurrent: AbortController | null = null
+/** Why the last try of a file failed (shown while it waits for the next one). */
+const failures: Record<string, string> = {}
 let version = 0
 const listeners = new Set<() => void>()
 
@@ -80,6 +84,8 @@ function reconcile() {
   const want = wanted()
   pending = [...want].filter((id) => !isVideoPinned(id))
   for (const id of pinnedVideoIds()) if (!want.has(id)) void forgetVideo(id)
+  // Removed while it comes in: stopped at once (the server stops converting it too).
+  if (current && !want.has(current.id)) abortCurrent?.abort()
   changed()
   void run()
 }
@@ -108,13 +114,16 @@ async function run() {
       const { api, session, bitrate } = source
       try {
         const item = (await getLibraryApi(api).getItem({ itemId: id, userId: session.userId })).data
+        if (!wanted().has(id)) throw new Error('Removed')
         current = { id, received: 0, expected: expectedBytes(item, bitrate) }
         notify()
         let shown = 0
+        abortCurrent = new AbortController()
         await downloadVideo(api, session, item, {
           maxBytes: Infinity,
           bitrate,
           pinned: true,
+          signal: abortCurrent.signal,
           onProgress: (bytes) => {
             if (!current || current.id !== id) return
             current.received = bytes
@@ -131,19 +140,26 @@ async function run() {
           if (!isVideoPinned(id)) throw new Error('Not stored')
         }
         pending = pending.filter((entry) => entry !== id)
+        delete failures[id]
         current = null
         changed()
-      } catch {
+      } catch (error) {
         current = null
-        // Offline or the server failed: tried again when the connection is back.
+        pending = pending.filter((entry) => entry !== id)
+        // Removed meanwhile: nothing to try again.
+        if (!wanted().has(id)) continue
+        failures[id] = error instanceof Error ? error.message : String(error)
+        // Offline or the server failed: tried again when the connection is back, or in a moment.
+        pending.push(id)
+        notify()
         if (!navigator.onLine) break
-        pending = [...pending.filter((entry) => entry !== id), id]
         await new Promise((resolve) => setTimeout(resolve, 10_000))
       }
     }
   } finally {
     running = false
     current = null
+    abortCurrent = null
     notify()
   }
 }
@@ -212,7 +228,8 @@ export function clearVideoDownloads() {
 /** The ids of downloaded films and episodes (for the offline library). */
 export const downloadedVideoIds = () => wanted()
 
-export type VideoDownloadState = { state: 'done' } | { state: 'loading'; share: number } | { state: 'queued' } | null
+/** `error`: why the last try failed (it is tried again). */
+export type VideoDownloadState = { state: 'done' } | { state: 'loading'; share: number } | { state: 'queued'; error?: string } | null
 
 const shareOf = (entry: NonNullable<typeof current>) => (entry.expected ? Math.min(0.99, entry.received / entry.expected) : 0)
 
@@ -220,7 +237,7 @@ function stateOf(id: string): VideoDownloadState {
   if (!wanted().has(id)) return null
   if (isVideoPinned(id)) return { state: 'done' }
   if (current?.id === id) return { state: 'loading', share: shareOf(current) }
-  return { state: 'queued' }
+  return { state: 'queued', error: failures[id] }
 }
 
 /** A film's or episode's download: there, coming in now (how far, 0–1), waiting its turn, or none. */

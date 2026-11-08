@@ -38,6 +38,7 @@ const messages = defineMessages({
     removeSeries: 'Alle entfernen',
     loading: (percent: number) => `Wird heruntergeladen: ${percent} %`,
     queued: 'Wartet auf den Download',
+    failed: (error: string) => `Fehlgeschlagen (${error}), wird gleich erneut versucht`,
   },
   en: {
     title: 'Downloads',
@@ -56,6 +57,7 @@ const messages = defineMessages({
     removeSeries: 'Remove all',
     loading: (percent: number) => `Downloading: ${percent}%`,
     queued: 'Waiting to download',
+    failed: (error: string) => `Failed (${error}), trying again shortly`,
   },
 })
 
@@ -69,7 +71,7 @@ function useSize() {
 /** How far a download is, or its size once it's there. */
 function stateText(t: Messages, entry: DownloadedVideo, size: (bytes: number) => string) {
   if (entry.state.state === 'loading') return t.loading(Math.round(entry.state.share * 100))
-  if (entry.state.state === 'queued') return t.queued
+  if (entry.state.state === 'queued') return entry.state.error ? t.failed(entry.state.error) : t.queued
   return size(entry.bytes)
 }
 
