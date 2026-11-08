@@ -103,7 +103,7 @@ export interface LocalSettings {
   videoCacheGb: number
   /** Bitrate episodes are downloaded at, in Mbit/s. */
   videoBitrateMbit: number
-  /** Bitrate films and episodes are downloaded at (Watch's downloads), in Mbit/s. */
+  /** Bitrate films and episodes are downloaded at (Watch's downloads), in Mbit/s; 0 = their original quality. */
   videoDownloadMbit: number
   /** Where "concerts near you" are looked for (a city or the device's position); null = not set. */
   concertLocation: { label: string; lat: number; lon: number } | null

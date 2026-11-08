@@ -44,8 +44,8 @@ let index: Record<string, Collection> = (() => {
 interface Source {
   api: Api
   session: { userId: string; accessToken: string }
-  /** Download bitrate in bit/s. */
-  bitrate: number
+  /** Download bitrate in bit/s; null for the original quality. */
+  bitrate: number | null
 }
 
 let source: Source | null = null
@@ -104,6 +104,9 @@ function reconcile() {
   void run()
 }
 
+/** For the original quality when a file's bitrate isn't known: high enough that nothing is lost. */
+const ORIGINAL_BITRATE_UNKNOWN = 40_000_000
+
 /** The bytes a file will about have: its length at the download bitrate (the server says no size for a conversion). */
 const expectedBytes = (item: BaseItemDto, bitrate: number) => ((item.RunTimeTicks ?? 0) / 10_000_000) * ((bitrate + 192_000) / 8)
 
@@ -129,15 +132,19 @@ async function run() {
       try {
         const item = (await getLibraryApi(api).getItem({ itemId: id, userId: session.userId })).data
         if (!wanted().has(id)) throw new Error('Removed')
-        current = { id, received: 0, expected: expectedBytes(item, bitrate) }
+        // Original quality: a file the browser can't play as it is is converted at its own bitrate, so the server only
+        // repackages what it can (H.264 in MKV) and keeps the rest as good as it is.
+        const rate = bitrate ?? (item.MediaSources?.[0]?.Bitrate || ORIGINAL_BITRATE_UNKNOWN)
+        current = { id, received: 0, expected: expectedBytes(item, rate) }
         notify()
         let shown = 0
         abortCurrent = new AbortController()
         await downloadVideo(api, session, item, {
           maxBytes: Infinity,
-          bitrate,
+          bitrate: rate,
           pinned: true,
           original: true,
+          originalQuality: bitrate === null,
           signal: abortCurrent.signal,
           onProgress: (bytes, total) => {
             if (!current || current.id !== id) return

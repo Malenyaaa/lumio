@@ -64,7 +64,8 @@ const messages = defineMessages({
 export function VideoDownloadsHost() {
   const { api, session } = useAuthedSession()
   const { settings } = useLocalSettings()
-  const bitrate = settings.videoDownloadMbit * MBIT
+  // 0: the original quality (see video-downloads).
+  const bitrate = settings.videoDownloadMbit ? settings.videoDownloadMbit * MBIT : null
   useEffect(() => {
     setVideoDownloadSource({ api, session, bitrate })
     return () => setVideoDownloadSource(null)

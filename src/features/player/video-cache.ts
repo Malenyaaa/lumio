@@ -138,6 +138,8 @@ export interface VideoCacheSettings {
   pinned?: boolean
   /** A file the browser plays as it is (MP4 with H.264 and AAC or MP3) is downloaded unchanged, in its original quality. */
   original?: boolean
+  /** Converted in the original quality (at the file's own bitrate): noted as the original, not as a bitrate. */
+  originalQuality?: boolean
   /** Told the bytes received so far while it downloads (and how many there will be, when the server says). */
   onProgress?: (bytes: number, total?: number) => void
   /** Stops the download (a download removed while it comes in). */
@@ -217,7 +219,7 @@ export function downloadVideo(api: Api, session: { userId: string; accessToken: 
         subtitles.push({ index: stream.Index, language: stream.Language ?? undefined, title: stream.DisplayTitle ?? undefined })
       }
 
-      index[itemId] = { bytes, added: Date.now(), name: item.Name ?? '', audioIndex: audioIndex ?? undefined, subtitles, streams, pinned: settings.pinned || undefined, bitrate: asIs ? null : settings.bitrate }
+      index[itemId] = { bytes, added: Date.now(), name: item.Name ?? '', audioIndex: audioIndex ?? undefined, subtitles, streams, pinned: settings.pinned || undefined, bitrate: asIs || settings.originalQuality ? null : settings.bitrate }
       saveIndex()
       if (!settings.pinned) await trimVideos(settings.maxBytes, itemId)
     } catch (error) {

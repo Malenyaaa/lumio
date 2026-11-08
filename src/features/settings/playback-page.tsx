@@ -357,7 +357,7 @@ export function DownloadsPage() {
   return (
     <SettingsPage title={t.downloadsTitle} description={t.downloadsDescription}>
       {downloadsAvailable && (
-        <Section title={t.downloadsTitle} scope="device">
+        <Section title={t.musicDownloadsTitle} scope="device">
         {downloadsAvailable && (
           <SelectField
             id="music-download-quality"
@@ -462,7 +462,7 @@ function VideoDownloadsSection() {
         label={t.videoDownloadQualityLabel}
         hint={t.videoDownloadQualityHint}
         value={settings.videoDownloadMbit}
-        options={[3, 5, 8, 12, 20].map((mbit) => ({ value: mbit, label: `${mbit} Mbit/s` }))}
+        options={[{ value: 0, label: t.videoOriginal }, ...[20, 12, 8, 5, 3].map((mbit) => ({ value: mbit, label: `${mbit} Mbit/s` }))]}
         onChange={(value) => update({ videoDownloadMbit: value })}
       />
       {stats.count + stats.pending > 0 && (
