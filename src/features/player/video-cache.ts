@@ -33,6 +33,8 @@ interface Entry {
   streams: MediaStream[]
   /** Held by a download: stays until the download is removed. */
   pinned?: boolean
+  /** The quality it was stored in: a bitrate (bit/s), or null for the original file (unset in older copies). */
+  bitrate?: number | null
 }
 
 type Index = Record<string, Entry>
@@ -80,6 +82,9 @@ export function useVideoCacheStats() {
 export const isVideoCached = (itemId: string) => !!index[itemId]
 export const isVideoPinned = (itemId: string) => !!index[itemId]?.pinned
 export const pinnedVideoIds = () => Object.keys(index).filter((itemId) => index[itemId]!.pinned)
+/** The quality a stored copy is in: a bitrate, null for the original file, undefined when unknown or not stored. */
+export const storedQuality = (itemId: string) => index[itemId]?.bitrate
+
 /** A stored file's size (0 when there is none). */
 export const videoBytes = (itemId: string) => index[itemId]?.bytes ?? 0
 
@@ -131,8 +136,10 @@ export interface VideoCacheSettings {
   bitrate: number
   /** For a download: kept for good (and not counted against the cache's space). */
   pinned?: boolean
-  /** Told the bytes received so far while it downloads. */
-  onProgress?: (bytes: number) => void
+  /** A file the browser plays as it is (MP4 with H.264 and AAC or MP3) is downloaded unchanged, in its original quality. */
+  original?: boolean
+  /** Told the bytes received so far while it downloads (and how many there will be, when the server says). */
+  onProgress?: (bytes: number, total?: number) => void
   /** Stops the download (a download removed while it comes in). */
   signal?: AbortSignal
 }
@@ -156,7 +163,11 @@ export function downloadVideo(api: Api, session: { userId: string; accessToken: 
     try {
       const source = item.MediaSources?.[0]
       const streams = (source?.MediaStreams ?? item.MediaStreams ?? []).filter((stream) => stream.Type === 'Audio' || stream.Type === 'Subtitle' || stream.Type === 'Video')
-      const audioIndex = source?.DefaultAudioStreamIndex ?? streams.find((stream) => stream.Type === 'Audio')?.Index ?? undefined
+      const asIs = settings.original && playsAsIs(source)
+      // The original file plays its first audio track (browsers can't switch between the tracks of a file).
+      const audioIndex = asIs
+        ? (streams.find((stream) => stream.Type === 'Audio')?.Index ?? undefined)
+        : (source?.DefaultAudioStreamIndex ?? streams.find((stream) => stream.Type === 'Audio')?.Index ?? undefined)
       const params = new URLSearchParams({
         container: 'mp4',
         videoCodec: 'h264',
@@ -171,15 +182,21 @@ export function downloadVideo(api: Api, session: { userId: string; accessToken: 
         playSessionId: crypto.randomUUID(),
         ApiKey: session.accessToken,
       })
-      const response = await fetch(`${api.basePath}/Videos/${itemId}/stream.mp4?${params}`, { priority: 'low', signal: settings.signal } as RequestInit)
+      // Unchanged: the file itself, as fast as the network allows. Otherwise converted by the server, about as fast as
+      // it plays.
+      const url = asIs
+        ? `${api.basePath}/Videos/${itemId}/stream?${new URLSearchParams({ static: 'true', mediaSourceId: source?.Id ?? itemId, ApiKey: session.accessToken })}`
+        : `${api.basePath}/Videos/${itemId}/stream.mp4?${params}`
+      const response = await fetch(url, { priority: 'low', signal: settings.signal } as RequestInit)
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`)
+      const total = Number(response.headers.get('content-length')) || undefined
       // Counted on the way into the cache.
       let bytes = 0
       const counted = response.body.pipeThrough(
         new TransformStream<Uint8Array, Uint8Array>({
           transform(chunk, controller) {
             bytes += chunk.byteLength
-            settings.onProgress?.(bytes)
+            settings.onProgress?.(bytes, total)
             controller.enqueue(chunk)
           },
         }),
@@ -200,7 +217,7 @@ export function downloadVideo(api: Api, session: { userId: string; accessToken: 
         subtitles.push({ index: stream.Index, language: stream.Language ?? undefined, title: stream.DisplayTitle ?? undefined })
       }
 
-      index[itemId] = { bytes, added: Date.now(), name: item.Name ?? '', audioIndex: audioIndex ?? undefined, subtitles, streams, pinned: settings.pinned || undefined }
+      index[itemId] = { bytes, added: Date.now(), name: item.Name ?? '', audioIndex: audioIndex ?? undefined, subtitles, streams, pinned: settings.pinned || undefined, bitrate: asIs ? null : settings.bitrate }
       saveIndex()
       if (!settings.pinned) await trimVideos(settings.maxBytes, itemId)
     } catch (error) {
@@ -216,6 +233,17 @@ export function downloadVideo(api: Api, session: { userId: string; accessToken: 
   })()
   inFlight.set(itemId, job)
   return job
+}
+
+/** Whether the browser plays a file as it is: MP4 with H.264 video and AAC or MP3 as its first audio track. */
+function playsAsIs(source: NonNullable<BaseItemDto['MediaSources']>[number] | undefined) {
+  if (!source) return false
+  const containers = (source.Container ?? '').toLowerCase().split(',')
+  if (!containers.includes('mp4') && !containers.includes('m4v')) return false
+  const streams = source.MediaStreams ?? []
+  const video = streams.find((stream) => stream.Type === 'Video')
+  const audio = streams.find((stream) => stream.Type === 'Audio')
+  return video?.Codec?.toLowerCase() === 'h264' && (!audio || ['aac', 'mp3'].includes(audio.Codec?.toLowerCase() ?? ''))
 }
 
 /** Deletes an episode's stored copy (watched to the end, or making room). */

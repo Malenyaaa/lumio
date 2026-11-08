@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { settingsPanelMessages } from './messages'
 import { moveMenuFocus, usePanelFocus } from './panel-focus'
 import { QUALITY_OPTIONS, type StreamOption } from './playback'
+import { DownloadGlyph } from '@/features/listen/download-ui'
 
 interface SettingsPanelProps {
   audio: StreamOption[]
@@ -17,7 +18,14 @@ interface SettingsPanelProps {
   subtitleIndex: number
   onSubtitle: (index: number) => void
   maxBitrate?: number
-  onQuality: (bitrate?: number) => void
+  /** `fromDevice`: the stored copy's quality was picked (it plays from the device again). */
+  onQuality: (bitrate: number | undefined, fromDevice: boolean) => void
+  /** The quality of the copy on the device: a bitrate, null for the original file, undefined when there is none. */
+  storedBitrate?: number | null
+  /** Whether the copy on the device is what plays now. */
+  playingStored?: boolean
+  /** Offline with a stored copy: there is nothing else to pick. */
+  qualityLocked?: boolean
   /** Opens the "Statistik für Interessierte" overlay (and closes the panel). */
   onShowStats: () => void
   speed: number
@@ -54,6 +62,15 @@ function Choice({ selected, onSelect, children }: { selected: boolean; onSelect:
   )
 }
 
+/** The green download mark (as in Listen): this quality is on the device and plays offline. */
+function OnDevice({ label }: { label: string }) {
+  return (
+    <span role="img" aria-label={label} title={label} className="inline-grid shrink-0 text-listen">
+      <DownloadGlyph state="done" className="size-4" />
+    </span>
+  )
+}
+
 function Submenu({ title, onBack, children }: { title: string; onBack: () => void; children: ReactNode }) {
   return (
     <div role="group" aria-label={title}>
@@ -81,6 +98,9 @@ export function SettingsPanel({
   onSubtitle,
   maxBitrate,
   onQuality,
+  storedBitrate,
+  playingStored,
+  qualityLocked,
   onShowStats,
   speed,
   speedLocked,
@@ -123,16 +143,22 @@ export function SettingsPanel({
   const currentAudio = audio.find((option) => option.index === audioIndex)
   const currentSubtitle = subtitles.find((option) => option.index === subtitleIndex)
   // The default from the settings page may not be one of the fixed steps; keep it in the list so it shows as selected.
-  const qualityOptions = (QUALITY_OPTIONS.some((option) => option.bitrate === maxBitrate) ? QUALITY_OPTIONS : [...QUALITY_OPTIONS, { bitrate: maxBitrate }]).map(
-    ({ resolution, bitrate }) => ({
-      bitrate,
-      label: bitrate === undefined ? t.original : [resolution, mbitLabel(bitrate, undefined, locale)].filter(Boolean).join(' · '),
-    }),
-  )
-  const currentQuality = qualityOptions.find((option) => option.bitrate === maxBitrate)
+  // The stored copy's quality (null: the original file) is one of the steps, marked as on the device.
+  const stored = storedBitrate === null ? undefined : storedBitrate
+  const hasStored = storedBitrate !== undefined
+  const steps = [...QUALITY_OPTIONS]
+  for (const bitrate of [maxBitrate, ...(hasStored ? [stored] : [])]) if (!steps.some((option) => option.bitrate === bitrate)) steps.push({ bitrate })
+  const qualityOptions = steps.map(({ resolution, bitrate }) => ({
+    bitrate,
+    label: bitrate === undefined ? t.original : [resolution, mbitLabel(bitrate, undefined, locale)].filter(Boolean).join(' · '),
+    onDevice: hasStored && bitrate === stored,
+  }))
+  // What plays: the stored copy's quality while it plays from the device, else the one picked for streaming.
+  const selectedBitrate = playingStored ? stored : maxBitrate
+  const currentQuality = qualityOptions.find((option) => option.bitrate === selectedBitrate)
 
   // A category with nothing to choose (a single audio track, no subtitles) only shows what there is and can't be opened.
-  const allRows: Array<{ page: Exclude<Page, 'main'>; label: string; value: string; disabled?: boolean }> = [
+  const allRows: Array<{ page: Exclude<Page, 'main'>; label: string; value: string; disabled?: boolean; onDevice?: boolean }> = [
     { page: 'audio', label: t.audio, value: audio.length ? shortTitle(currentAudio ?? audio[0]) : t.none, disabled: audio.length <= 1 },
     {
       page: 'subtitles',
@@ -140,7 +166,7 @@ export function SettingsPanel({
       value: subtitles.length === 0 ? t.none : subtitleIndex < 0 ? t.off : shortTitle(currentSubtitle),
       disabled: subtitles.length === 0,
     },
-    { page: 'quality', label: t.quality, value: currentQuality?.label ?? t.original },
+    { page: 'quality', label: t.quality, value: currentQuality?.label ?? t.original, onDevice: playingStored, disabled: qualityLocked },
     { page: 'speed', label: t.speed, value: speedLabel(speed, locale), disabled: speedLocked },
     ...(fit && onFit
       ? [{ page: 'fit' as const, label: t.fit, value: fit === 'auto' && autoFitLabel ? t.autoShort(autoFitLabel) : fitNames[fit] }]
@@ -189,6 +215,7 @@ export function SettingsPanel({
           {rows.map((row) => (
             <button key={row.page} type="button" role="menuitem" disabled={row.disabled} onClick={() => open(row.page)} className={cn(ROW, 'disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent')}>
               <span className="flex-1">{row.label}</span>
+              {row.onDevice && <OnDevice label={t.onDevice} />}
               <span className="max-w-32 truncate text-white/60">{row.value}</span>
               <IconChevronRight className={cn('size-4 shrink-0 text-white/60', row.disabled && 'invisible')} />
             </button>
@@ -228,8 +255,11 @@ export function SettingsPanel({
       {page === 'quality' && (
         <Submenu title={t.quality} onBack={back}>
           {qualityOptions.map((option) => (
-            <Choice key={option.bitrate ?? 'original'} selected={option.bitrate === maxBitrate} onSelect={pick(() => onQuality(option.bitrate))}>
-              {option.label}
+            <Choice key={option.bitrate ?? 'original'} selected={option.bitrate === selectedBitrate} onSelect={pick(() => onQuality(option.bitrate, option.onDevice))}>
+              <span className="flex items-center gap-2">
+                <span className="truncate">{option.label}</span>
+                {option.onDevice && <OnDevice label={t.onDevice} />}
+              </span>
             </Choice>
           ))}
         </Submenu>

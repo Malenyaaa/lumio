@@ -35,7 +35,8 @@ import { initialChoice, usePlayback, useStreamOptions, type PlaybackChoice } fro
 import { reportActivity } from '@/features/social/social'
 import { usePreloadNext } from './preload-next'
 import { useVideoPrefetch } from './use-video-prefetch'
-import { forgetVideo, isVideoCached, isVideoPinned } from './video-cache'
+import { forgetVideo, isVideoCached, isVideoPinned, storedQuality, useVideoStored } from './video-cache'
+import { useOffline } from '@/lib/network'
 import { startAfterIntro, useMediaSegments } from './segments'
 import { fitLabels } from './labels'
 import { SettingsPanel } from './settings-panel'
@@ -136,6 +137,12 @@ function Player({ id }: { id: string }) {
     if (target !== startSeconds) setChoice((current) => ({ ...current, startTicks: secondsToTicks(target) }))
   }
   const playback = usePlayback(id, isAudio, choice, !!item.data && introResolved)
+  // A copy on the device (downloaded or stored ahead): its quality is marked in the menu, and offline it is all there is.
+  const offline = useOffline()
+  const hasStored = useVideoStored(id)
+  const storedBitrateKnown = hasStored ? storedQuality(id) : undefined
+  // Copies stored before their quality was noted were made in the cache's quality.
+  const storedBitrate = !hasStored ? undefined : storedBitrateKnown === undefined ? settings.videoBitrateMbit * 1_000_000 : storedBitrateKnown
   // The item as it is now, for telling friends what plays (read inside the stream effect).
   const itemRef = useRef(item.data)
   useEffect(() => {
@@ -907,7 +914,14 @@ function Player({ id }: { id: string }) {
             subtitleIndex={activeSubtitle}
             onSubtitle={(index) => index !== activeSubtitle && chooseSubtitle(index)}
             maxBitrate={choice.maxBitrate}
-            onQuality={(bitrate) => bitrate !== choice.maxBitrate && restartWith({ maxBitrate: bitrate })}
+            // The stored copy's quality plays from the device again; any other streams (online).
+            onQuality={(bitrate, fromDevice) => {
+              if (fromDevice ? !!data.stats.offline : bitrate === choice.maxBitrate && !data.stats.offline) return
+              restartWith({ maxBitrate: fromDevice ? choice.maxBitrate : bitrate, stream: !fromDevice })
+            }}
+            storedBitrate={storedBitrate}
+            playingStored={!!data.stats.offline}
+            qualityLocked={offline && !!data.stats.offline}
             onShowStats={() => {
               setSettingsOpen(false)
               setStatsOpen(true)

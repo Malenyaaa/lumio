@@ -103,6 +103,7 @@ export const episodeMessages = defineMessages({
 
 export const settingsPanelMessages = defineMessages({
   de: {
+    onDevice: 'Auf dem Gerät: spielt offline',
     title: 'Wiedergabe-Einstellungen',
     audio: 'Sprache',
     subtitles: 'Untertitel',
@@ -117,6 +118,7 @@ export const settingsPanelMessages = defineMessages({
     stats: 'Statistik für Interessierte',
   },
   en: {
+    onDevice: 'On the device: plays offline',
     title: 'Playback settings',
     audio: 'Audio',
     subtitles: 'Subtitles',

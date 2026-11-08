@@ -9,8 +9,9 @@ import { downloadVideo, forgetVideo, isVideoPinned, pinnedVideoIds, pinVideo, vi
 
 /**
  * Downloads for Watch: films, whole seasons and single episodes, kept on this device for good (unlike the episodes the
- * player stores ahead, see video-cache, whose files they share, pinned). Each is one MP4 in the download quality, with
- * its text subtitles. A downloaded season stays in step with the server: episodes added later are fetched too (except
+ * player stores ahead, see video-cache, whose files they share, pinned). Each is one MP4 with its text subtitles: the
+ * original file when the browser plays it as it is (fast, as the network allows), else converted by the server in the
+ * download quality (about as fast as it plays). A downloaded season stays in step with the server: episodes added later are fetched too (except
  * those taken out by hand). What the pages need offline (the items, the season's other episodes, the pictures) is
  * kept beside them, so the series page and the player's episode list show the downloads and grey out the rest.
  *
@@ -123,10 +124,12 @@ async function run() {
           maxBytes: Infinity,
           bitrate,
           pinned: true,
+          original: true,
           signal: abortCurrent.signal,
-          onProgress: (bytes) => {
+          onProgress: (bytes, total) => {
             if (!current || current.id !== id) return
             current.received = bytes
+            if (total) current.expected = total
             if (Date.now() - shown > 500) {
               shown = Date.now()
               notify()

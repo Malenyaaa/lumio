@@ -81,6 +81,8 @@ export interface PlaybackChoice {
   maxBitrate?: number
   /** Upper limit for transcoded audio channels; unset = automatic. */
   maxAudioChannels?: number
+  /** Streams even though a stored copy exists (another quality was picked in the player). */
+  stream?: boolean
 }
 
 /**
@@ -157,7 +159,7 @@ export function playbackOptions(
     retry: false,
     queryFn: async (): Promise<Playback> => {
       // An episode stored ahead plays from the browser (instant, offline), unless another audio track is asked for.
-      const stored = isAudio ? null : await cachedVideo(itemId)
+      const stored = isAudio || choice.stream ? null : await cachedVideo(itemId)
       if (stored && (choice.audio == null || choice.audio === stored.audioIndex)) {
         const subtitles = Object.keys(stored.subtitleUrls).map(Number)
         return {
