@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Lumio</string>
     <string name="title_activity_main">Lumio</string>
-    <string name="package_name">de.nauren.lumio</string>
-    <string name="custom_url_scheme">de.nauren.lumio</string>
+    <string name="package_name">de.lumio</string>
+    <string name="custom_url_scheme">de.lumio</string>
 </resources>

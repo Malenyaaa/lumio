@@ -93,7 +93,7 @@ film stills © Blender Foundation, CC BY).
 
 ## Apps
 
-- **Android** (`de.nauren.lumio`, Capacitor): music plays on in the background with a media notification, the video
+- **Android** (`de.lumio`, Capacitor): music plays on in the background with a media notification, the video
   player is fullscreen in landscape with picture in picture and swipe gestures, the back button walks back through
   panels and pages. Small native plugins in `android/` handle picture in picture, brightness and volume, and updates.
 - **Windows and Linux** (Electron; NSIS installer, AppImage, deb): Lumio's header holds the window buttons (or a normal

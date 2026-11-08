@@ -6,7 +6,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
  * The server is the one the user signs in to; its address is https://localhost to the server (allowed there).
  */
 const config: CapacitorConfig = {
-  appId: 'de.nauren.lumio',
+  appId: 'de.lumio',
   appName: 'Lumio',
   webDir: 'dist',
   android: {

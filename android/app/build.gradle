@@ -4,7 +4,7 @@ android {
     namespace = "de.nauren.lumio"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "de.nauren.lumio"
+        applicationId "de.lumio"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Set by the release workflow from the tag (LUMIO_VERSION) and the run number (LUMIO_VERSION_CODE).
