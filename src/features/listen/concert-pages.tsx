@@ -57,7 +57,7 @@ const messages = defineMessages({
     moreBy: (name: string) => `Weitere Konzerte von ${name}`,
     status: (code: string): string => ({ cancelled: 'Abgesagt', postponed: 'Verschoben', rescheduled: 'Neuer Termin', offsale: 'Kein Verkauf' })[code] ?? '',
     notFound: 'Dieses Konzert wurde nicht gefunden.',
-    unavailable: 'Für Konzerte braucht Lumio einen Ticketmaster-Schlüssel (VITE_TICKETMASTER_API_KEY).',
+    unavailable: 'Für Konzerte braucht der Lumio-Server einen Ticketmaster-Schlüssel (TICKETMASTER_API_KEY).',
     searchPlaceholder: 'Nach Künstler, Ort oder Festival suchen',
     nearYou: 'In deiner Nähe',
     nearPlace: (place: string) => `In der Nähe von ${place}`,
@@ -96,7 +96,7 @@ const messages = defineMessages({
     moreBy: (name: string) => `More concerts by ${name}`,
     status: (code: string): string => ({ cancelled: 'Cancelled', postponed: 'Postponed', rescheduled: 'Rescheduled', offsale: 'Off sale' })[code] ?? '',
     notFound: "This concert couldn't be found.",
-    unavailable: 'Concerts need a Ticketmaster key (VITE_TICKETMASTER_API_KEY).',
+    unavailable: 'Concerts need a Ticketmaster key on the Lumio server (TICKETMASTER_API_KEY).',
     searchPlaceholder: 'Search artists, venues or festivals',
     nearYou: 'Near you',
     nearPlace: (place: string) => `Near ${place}`,
@@ -256,7 +256,7 @@ export function ConcertPage() {
   const headliner = concert.data?.artists[0]
   const more = useConcerts(headliner?.name)
 
-  if (!concertsAvailable) return <p className="p-8 pt-24 text-muted-foreground">{t.unavailable}</p>
+  if (!concertsAvailable()) return <p className="p-8 pt-24 text-muted-foreground">{t.unavailable}</p>
   if (concert.isLoading)
     return (
       <div className="space-y-6 px-4 pt-24 sm:px-8">
@@ -441,7 +441,7 @@ export function ConcertsPage() {
     return () => window.clearTimeout(timer)
   }, [term])
 
-  if (!concertsAvailable) return <p className="p-8 pt-24 text-muted-foreground">{t.unavailable}</p>
+  if (!concertsAvailable()) return <p className="p-8 pt-24 text-muted-foreground">{t.unavailable}</p>
 
   const nearConcerts = near.data ?? []
   const fromLibrary = nearConcerts.filter((concert) => concert.artists.some((artist) => findArtist(artist.name)))

@@ -5,6 +5,7 @@ import App from './App.tsx'
 import { persistQueryCache, restoreQueryCache, RESTORE_TIMEOUT_MS } from './lib/query-persist'
 import { queryClient } from './lib/query-client'
 import { initTheme } from './lib/theme'
+import { loadServices } from './lib/services'
 import { installOfflineLibrary } from './features/listen/offline-library'
 
 initTheme()
@@ -13,7 +14,12 @@ installOfflineLibrary()
 
 // The data from last time comes back first (briefly, never holding the start up for long), then the app renders and
 // refreshes it in the background.
-void Promise.race([restoreQueryCache(queryClient), new Promise((resolve) => setTimeout(resolve, RESTORE_TIMEOUT_MS))]).then(() => {
+const servicesBase = (import.meta.env.VITE_SOCIAL_URL?.trim() || '/api').replace(/\/+$/, '')
+void Promise.all([
+  Promise.race([restoreQueryCache(queryClient), new Promise((resolve) => setTimeout(resolve, RESTORE_TIMEOUT_MS))]),
+  // Which outside services the Lumio server has keys for (Last.fm, Ticketmaster, TMDb).
+  Promise.race([loadServices(servicesBase), new Promise((resolve) => setTimeout(resolve, 1500))]),
+]).then(() => {
   persistQueryCache(queryClient)
   createRoot(document.getElementById('root')!).render(
     <StrictMode>

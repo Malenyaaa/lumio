@@ -19,7 +19,8 @@ import { DEFAULT_PRIVACY, Store, type Activity, type Person, type Privacy } from
  *
  * Settings (environment): JELLYFIN_URL (required), PORT (8097), DATA_DIR (./data), WEB_DIR (the built app, ../dist),
  * ALLOWED_ORIGINS (comma-separated; only needed when the app runs elsewhere, e.g. the Vite dev server),
- * TICKETMASTER_API_KEY and LASTFM_API_KEY (optional; otherwise the app's own keys are used), MUSICBRAINZ_CONTACT (optional;
+ * LASTFM_API_KEY, TICKETMASTER_API_KEY and TMDB_API_KEY (optional: the keys for those services, which the app then asks
+ * through this server; an app built with keys of its own can use those instead), MUSICBRAINZ_CONTACT (optional;
  * how MusicBrainz can reach the operator), PROXY_JELLYFIN (true: Lumio is the public face and passes everything of
  * Jellyfin's through, see proxy.ts), SSO_PROVIDERS (the SSO plugin's providers for the sign-in page, as
  * `name:Button label` separated by commas, e.g. `authentik:Sign in with Nauren`).
@@ -90,6 +91,15 @@ const RELAY_SERVICES: Record<string, RelayService> = {
     key: { param: 'apikey', value: process.env.TICKETMASTER_API_KEY?.trim() },
     ttl: 6 * HOUR,
     spacing: 220,
+    keep: (status) => status < 400 || status === 404,
+  },
+  // TMDb: a film's or series' rating, and a film collection's parts. Ratings move slowly.
+  tmdb: {
+    base: 'https://api.themoviedb.org/3/',
+    paths: /^(movie|tv|collection)\/\d+$/,
+    key: { param: 'api_key', value: process.env.TMDB_API_KEY?.trim() },
+    ttl: 7 * 24 * HOUR,
+    spacing: 50,
     keep: (status) => status < 400 || status === 404,
   },
   // Last.fm: artist info, top tracks, similar artists, charts. Its answers change slowly.
@@ -829,7 +839,11 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
   const path = url.pathname.slice(4).replace(/\/+$/, '') || '/'
   if (path === '/health') return send(response, 200, { ok: true })
   // What the sign-in page needs before anyone is signed in: the SSO providers, and whether Lumio fronts Jellyfin.
-  if (path === '/public' && request.method === 'GET') return send(response, 200, { sso: SSO_PROVIDERS, proxy: PROXY_JELLYFIN })
+  if (path === '/public' && request.method === 'GET') {
+    // Which outside services this server has keys for: the app asks them through it then (it needs no keys of its own).
+    const services = Object.fromEntries((['lastfm', 'concerts', 'tmdb'] as const).map((name) => [name, !!RELAY_SERVICES[name]?.key?.value]))
+    return send(response, 200, { sso: SSO_PROVIDERS, proxy: PROXY_JELLYFIN, services })
+  }
   // Pictures load from <img> tags, which carry no token; the host list keeps this to podcast covers.
   if (path === '/image' && request.method === 'GET') return serveImage(response, url.searchParams.get('url'))
 

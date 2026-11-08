@@ -1,5 +1,6 @@
 {
   "name": "lumio-server",
+  "license": "GPL-3.0-only",
   "private": true,
   "type": "module",
   "description": "Lumio companion server: follows, privacy and live friend activity for Lumio on top of Jellyfin.",

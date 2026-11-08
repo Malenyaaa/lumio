@@ -87,15 +87,18 @@ for series; without it, only segments from other sources show up.
 
 ### Keys for outside services (optional)
 
-Free keys make Listen richer: [Last.fm](https://www.last.fm/api) (listeners, popular songs, similar artists, bios,
-charts), [Ticketmaster](https://developer.ticketmaster.com) (concerts), [TMDb](https://www.themoviedb.org) (ratings).
+Free keys make Lumio richer. The image comes without any: everyone uses their own, set on the `lumio` container.
+The app then asks those services through Lumio's server (which caches the answers for everyone and keeps the keys
+off the browser).
 
-- **In the published image** they are set when it is built: repository variables `VITE_LASTFM_API_KEY`,
-  `VITE_TICKETMASTER_API_KEY`, `VITE_TMDB_API_KEY` (Settings → Secrets and variables → Actions → Variables). They end
-  up in the app, as browser apps' keys do.
-- **On the server instead**: `LASTFM_API_KEY` and `TICKETMASTER_API_KEY` let Lumio's server use its own keys for its
-  relays.
-- Set `MUSICBRAINZ_CONTACT` (a URL or e-mail address): MusicBrainz throttles anonymous clients.
+| Variable | Service | What it brings |
+| --- | --- | --- |
+| `LASTFM_API_KEY` | [Last.fm](https://www.last.fm/api) (non-commercial use) | Listener counts, popular songs, similar artists, bios, charts, radios |
+| `TICKETMASTER_API_KEY` | [Ticketmaster](https://developer.ticketmaster.com) | Concerts on artist pages and the concerts page |
+| `TMDB_API_KEY` | [TMDb](https://www.themoviedb.org/settings/api) | TMDb ratings, names of film series |
+| `MUSICBRAINZ_CONTACT` | [MusicBrainz](https://musicbrainz.org) (no key) | A URL or e-mail address; MusicBrainz throttles anonymous clients |
+
+Without a key, what it brings simply stays off. Keep to each service's terms (attribution, Last.fm non-commercial).
 
 ### After the first start
 
@@ -110,9 +113,7 @@ As an administrator, in Lumio's settings:
 The image needs nothing but Docker:
 
 ```sh
-docker build -t lumio \
-  --build-arg VITE_JELLYFIN_URL=/ --build-arg VITE_SERVER_LOCKED=true \
-  --build-arg VITE_LASTFM_API_KEY=… .
+docker build -t lumio --build-arg VITE_JELLYFIN_URL=/ --build-arg VITE_SERVER_LOCKED=true .
 ```
 
 `VITE_JELLYFIN_URL=/` means "Jellyfin is on the address Lumio is opened on" (the proxied setup). Without the proxy,

@@ -9,7 +9,8 @@ Lumio runs as one container in front of Jellyfin and becomes its public face (Je
 
 ## Screenshots
 
-Taken against the public [Jellyfin demo server](https://demo.jellyfin.org/stable) (freely licensed films and music).
+Taken against the public [Jellyfin demo server](https://demo.jellyfin.org/stable) (freely licensed films and music;
+film stills © Blender Foundation, CC BY).
 
 ### Watch
 
@@ -38,12 +39,12 @@ Taken against the public [Jellyfin demo server](https://demo.jellyfin.org/stable
   watch history.
 - **Search**: inline search in the header and a full search page.
 - **Hover previews**: Netflix-style cards that load their content before they appear.
-- **Ratings and links**: IMDb/TMDB ratings and external links. The real TMDB rating needs an API key, see below.
+- **Ratings and links**: IMDb/TMDB ratings and external links. The real TMDB rating needs a key on the server, see below.
 - **Player**: a custom player built on hls.js.
   - Audio, subtitle and quality menus.
   - Trickplay thumbnails, intro/outro skipping (media segments) and an in-player episode list.
   - A pause spotlight and a loading progress ring.
-  - Readable track names: a port of CleanFin's `mediaSpecs`.
+  - Readable track names ("Deutsch · Dolby Digital 5.1" instead of the file's stream titles).
 - **Settings**: mirrors jellyfin-web's profile, playback, subtitle and controls pages.
   - Account-wide settings are stored in the Jellyfin user configuration.
   - Device-specific settings stay in the browser.
@@ -87,8 +88,11 @@ JELLYFIN_URL=https://jellyfin.example.org PORT=8097 DATA_DIR=/var/lib/lumio node
 | `DATA_DIR`        | no       | Where it keeps its SQLite database and caches (podcast covers, relayed answers; default `./data`). |
 | `WEB_DIR`         | no       | The built app it serves (default `dist/` of this repository).                                 |
 | `ALLOWED_ORIGINS` | no       | Comma-separated origins allowed to call the API from elsewhere (only for split setups).       |
-| `TICKETMASTER_API_KEY` | no  | The server's own Ticketmaster key for the concert relay (otherwise the app's key is used).    |
-| `LASTFM_API_KEY`  | no       | The server's own Last.fm key for the relay (otherwise the app's key is used).                 |
+| `LASTFM_API_KEY`  | no       | Last.fm key (free, non-commercial): listeners, popular songs, similar artists, bios, charts. The app asks Last.fm through the server. |
+| `TICKETMASTER_API_KEY` | no  | Ticketmaster Discovery key (free): concerts. The app asks through the server.                  |
+| `TMDB_API_KEY`    | no       | TMDb key: TMDb ratings and film series names. The app asks through the server.                 |
+| `PROXY_JELLYFIN`  | no       | `true`: Lumio fronts Jellyfin and passes its API, WebSockets, `/web` and `/sso` through (see [docs/SETUP.md](docs/SETUP.md)). |
+| `SSO_PROVIDERS`   | no       | Sign-in buttons for the Jellyfin SSO plugin's providers, `name:Label` separated by commas.      |
 | `MUSICBRAINZ_CONTACT` | no  | A URL or e-mail address MusicBrainz can reach the operator at (it throttles anonymous clients). |
 
 The server relays and caches what the app asks Ticketmaster (6 h), Last.fm (artists 90 days, charts 24 h), MusicBrainz
@@ -110,9 +114,7 @@ kept centrally.
 | ------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `VITE_JELLYFIN_URL`             | yes      | The Jellyfin server shown on the login screen.                                                                                            |
 | `VITE_SERVER_LOCKED`            | no       | `true` pins the login to `VITE_JELLYFIN_URL` and hides the server field (ignored when no URL is set).                                     |
-| `VITE_TMDB_API_KEY`             | no       | TMDB v3 key for live TMDB ratings. It ends up in the client bundle, so use a key meant for that.                                          |
-| `VITE_LASTFM_API_KEY`           | no       | Last.fm key (free, non-commercial) for listener counts, popular tracks, similar artists and bios in Listen. Ends up in the client bundle. |
-| `VITE_TICKETMASTER_API_KEY`     | no       | Ticketmaster Discovery key (free) for upcoming concerts on artist pages. Ends up in the client bundle. |
+| `VITE_TMDB_API_KEY`, `VITE_LASTFM_API_KEY`, `VITE_TICKETMASTER_API_KEY` | no | Only for builds that ask those services directly (no Lumio server); they end up in the client bundle. Normally the keys belong on the server (above). |
 | `VITE_PASSWORD_CHANGE_DISABLED` | no       | `true` hides "Passwort ändern", e.g. when accounts live in an OIDC provider.                                                              |
 | `VITE_ACCOUNT_URL`              | no       | Where users manage their account instead (for example the Authentik user settings). Quote it if it contains a `#`. |
 | `VITE_SOCIAL_URL`               | no       | Address of the Lumio server's API when the app is served from somewhere else (default: the same origin's `/api`). |
@@ -176,3 +178,11 @@ export default function setup(lumio) {
 Branding and plugins are stored in the Jellyfin server's branding configuration (as one comment inside its custom CSS),
 which every client can read (even before signing in) and only admins can write. jellyfin-web only sees a CSS comment.
 
+## License and notices
+
+Lumio is free software under the [GNU General Public License v3.0](LICENSE).
+
+It is an independent project, not affiliated with or endorsed by Jellyfin, TMDb, Last.fm, Ticketmaster, MusicBrainz,
+Epidemic Sound, Deezer, lrclib or Rotten Tomatoes. Names and data of those services belong to their owners. Whoever
+runs Lumio with keys for those services uses their own keys and keeps to their terms (attribution where asked; Last.fm
+for non-commercial use only).

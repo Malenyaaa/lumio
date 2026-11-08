@@ -2,8 +2,8 @@
 #   ghcr.io/<owner>/lumio:latest   from main
 #   ghcr.io/<owner>/lumio:1.2.3    from a tag v1.2.3 (also 1.2)
 # The image is built to sit in front of Jellyfin (VITE_JELLYFIN_URL=/: Jellyfin is found on the address Lumio is opened
-# on), so it works under any domain. Optional public keys for the app come from the repository's variables
-# (Settings > Secrets and variables > Actions > Variables): VITE_LASTFM_API_KEY, VITE_TICKETMASTER_API_KEY, VITE_TMDB_API_KEY.
+# on), so it works under any domain. It holds no keys for outside services: whoever runs it sets their own on the
+# container (LASTFM_API_KEY, TICKETMASTER_API_KEY, TMDB_API_KEY), and the app asks those services through its server.
 name: Image
 
 on:
@@ -53,9 +53,6 @@ jobs:
           build-args: |
             VITE_JELLYFIN_URL=/
             VITE_SERVER_LOCKED=true
-            VITE_LASTFM_API_KEY=${{ vars.VITE_LASTFM_API_KEY }}
-            VITE_TICKETMASTER_API_KEY=${{ vars.VITE_TICKETMASTER_API_KEY }}
-            VITE_TMDB_API_KEY=${{ vars.VITE_TMDB_API_KEY }}
           # Layers are cached in the Actions cache, not the registry (keeps package storage small).
           cache-from: type=gha
           cache-to: type=gha,mode=max

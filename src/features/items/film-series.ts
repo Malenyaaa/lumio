@@ -3,6 +3,8 @@ import { getLibraryApi } from '@jellyfin/sdk/lib/utils/api/library-api'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthedSession } from '@/features/auth/session'
 import { getLocale } from '@/lib/i18n'
+import { relayFetch } from '@/features/social/social'
+import { hasService, ownKey } from '@/lib/services'
 
 /**
  * Film series ("Harry Potter", "Kung Fu Panda"): Jellyfin stores the TMDB collection a film belongs to as the provider
@@ -17,7 +19,6 @@ export interface FilmSeries {
   index: number
 }
 
-const API_KEY = import.meta.env.VITE_TMDB_API_KEY
 
 /** All films with their collection id, in one light request; cached for a while (series rarely change). */
 function useFilmsByCollection() {
@@ -77,12 +78,13 @@ export function useFilmSeries(item: BaseItemDto | undefined): FilmSeries | undef
 
   const tmdbName = useQuery({
     queryKey: ['tmdb-collection', id, getLocale()],
-    enabled: enabled && !!API_KEY,
+    enabled: enabled && hasService('tmdb'),
     staleTime: 24 * 60 * 60_000,
     retry: false,
     queryFn: async () => {
       const language = getLocale() === 'de' ? 'de-DE' : 'en-US'
-      const response = await fetch(`https://api.themoviedb.org/3/collection/${id}?api_key=${API_KEY}&language=${language}`)
+      const key = ownKey('tmdb')
+      const response = await relayFetch('tmdb', `collection/${id}`, new URLSearchParams({ ...(key ? { api_key: key } : {}), language }), 'https://api.themoviedb.org/3/')
       if (!response.ok) throw new Error(`TMDB ${response.status}`)
       // TMDB names them "Harry Potter Filmreihe" / "Harry Potter Collection"; the UI adds its own word for it.
       return ((await response.json()) as { name?: string }).name?.replace(/\s*(Filmreihe|Collection|Sammlung|Reihe)$/i, '')

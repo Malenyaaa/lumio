@@ -93,7 +93,7 @@ export async function lumioSend(method: 'POST' | 'DELETE', path: string, body?: 
  * Asks an outside service through the Lumio server, which caches the answers for everyone (see the server's relay);
  * straight from the service while there is no connection, or when the server can't help.
  */
-export async function relayFetch(service: 'concerts' | 'lastfm' | 'musicbrainz' | 'lyrics' | 'deezer', path: string, query: URLSearchParams, direct: string): Promise<Response> {
+export async function relayFetch(service: 'concerts' | 'lastfm' | 'musicbrainz' | 'lyrics' | 'deezer' | 'tmdb', path: string, query: URLSearchParams, direct: string): Promise<Response> {
   const relayed = await lumioGet(`/relay/${service}/${path}?${query}`).catch(() => null)
   if (relayed && (relayed.ok || relayed.status === 404)) return relayed
   return fetch(`${direct}${path}?${query}`)

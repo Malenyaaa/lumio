@@ -3,14 +3,15 @@ import { useEffect } from 'react'
 import { useLocalSettings } from '@/features/settings/local-settings'
 import { lumioGet } from '@/features/social/social'
 import { getLocale } from '@/lib/i18n'
+import { hasService, ownKey } from '@/lib/services'
 
 /**
- * Concerts from Ticketmaster's Discovery API (needs `VITE_TICKETMASTER_API_KEY`): an artist's upcoming shows, one
+ * Concerts from Ticketmaster's Discovery API (needs a key: the Lumio server's TICKETMASTER_API_KEY): an artist's upcoming shows, one
  * event with its line-up and venue, and searches by name or around a place. Where "near you" is comes from the
  * browser's location or a city the user picks (looked up with Open-Meteo's free geocoder); it follows the account.
  */
-const KEY = import.meta.env.VITE_TICKETMASTER_API_KEY?.trim()
-export const concertsAvailable = !!KEY
+/** Whether concerts can be looked up (the server has a key, or the app was built with one). */
+export const concertsAvailable = () => hasService('concerts')
 
 const BASE = 'https://app.ticketmaster.com/discovery/v2'
 const DAY = 24 * 60 * 60_000
@@ -26,7 +27,8 @@ let nextSlot = 0
  */
 async function ticketmaster<T>(path: string, params: Record<string, string>): Promise<T> {
   // Searching with one locale (de-de) hides events abroad, so all locales are asked for.
-  const query = new URLSearchParams({ ...params, apikey: KEY!, locale: '*' })
+  const key = ownKey('concerts')
+  const query = new URLSearchParams({ ...params, ...(key ? { apikey: key } : {}), locale: '*' })
   const relayed = await lumioGet(`/relay/concerts/${path}?${query}`).catch(() => null)
   if (relayed?.ok) return (await relayed.json()) as T
   if (relayed?.status === 404) throw new Error('Ticketmaster 404')
@@ -177,7 +179,7 @@ export function useConcerts(name: string | undefined) {
 function artistConcertsOptions(name: string | undefined) {
   return {
     queryKey: ['concerts', name, getLocale()],
-    enabled: concertsAvailable && !!name,
+    enabled: concertsAvailable() && !!name,
     staleTime: DAY / 4,
     // Kept (also across restarts, see query-persist) for a day after last use.
     gcTime: DAY,
@@ -209,7 +211,7 @@ export function useArtistsConcerts(names: string[]) {
 export function useConcert(id: string | undefined) {
   return useQuery({
     queryKey: ['concert', id, getLocale()],
-    enabled: concertsAvailable && !!id,
+    enabled: concertsAvailable() && !!id,
     staleTime: DAY / 4,
     // Kept (also across restarts, see query-persist) for a day after last use.
     gcTime: DAY,
@@ -223,7 +225,7 @@ export function useConcertSearch({ keyword, near }: { keyword?: string; near?: C
   const term = keyword?.trim() ?? ''
   return useQuery({
     queryKey: ['concert-search', term, near?.lat, near?.lon, getLocale()],
-    enabled: concertsAvailable && (term.length > 1 || !!near),
+    enabled: concertsAvailable() && (term.length > 1 || !!near),
     staleTime: DAY / 8,
     gcTime: DAY,
     retry: false,

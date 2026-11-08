@@ -96,7 +96,7 @@ function SignedInListen() {
     })),
     // Not from the server's libraries: podcasts from Apple's directory, concerts from Ticketmaster.
     { to: '/listen/podcasts', label: t.podcasts, icon: IconMicrophone },
-    ...(concertsAvailable ? [{ to: '/listen/concerts', label: t.concerts, icon: IconTicket }] : []),
+    ...(concertsAvailable() ? [{ to: '/listen/concerts', label: t.concerts, icon: IconTicket }] : []),
   ]
 
   return (

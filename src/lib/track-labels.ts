@@ -3,7 +3,7 @@ import { getLocale, LOCALES, messagesFor, type Locale } from '@/lib/i18n'
 import { qualifierLabels, trackLabelMessages } from '@/lib/messages'
 
 /**
- * Readable names for video, audio and subtitle tracks (a port of the `mediaSpecs` module from CleanFin):
+ * Readable names for video, audio and subtitle tracks:
  *
  *   5.1 AC3 @ 640 kbps - German - Dolby Digital - Std.  ->  Deutsch · Dolby Digital 5.1
  *   Commentary - German - DVDSUB                        ->  Deutsch · Commentary · Bild

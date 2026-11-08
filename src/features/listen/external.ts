@@ -1,6 +1,7 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { relayFetch } from '@/features/social/social'
 import { getLocale } from '@/lib/i18n'
+import { hasService, ownKey } from '@/lib/services'
 
 /**
  * Information about artists from outside Jellyfin, each optional (it needs its key in the environment):
@@ -8,12 +9,13 @@ import { getLocale } from '@/lib/i18n'
  * Concerts (Ticketmaster) live in `concerts.ts`. Keys are public by design (they end up in the browser); their
  * secrets are never used.
  */
-const LASTFM_KEY = import.meta.env.VITE_LASTFM_API_KEY?.trim()
 
 const DAY = 24 * 60 * 60_000
 
 async function lastfm<T>(params: Record<string, string>): Promise<T> {
-  const query = new URLSearchParams({ ...params, api_key: LASTFM_KEY!, format: 'json', autocorrect: '1' })
+  // The server's key is added by the server; the app's own (if built with one) for asking Last.fm directly.
+  const key = ownKey('lastfm')
+  const query = new URLSearchParams({ ...params, ...(key ? { api_key: key } : {}), format: 'json', autocorrect: '1' })
   // Through the Lumio server, which keeps the answers for everyone.
   const response = await relayFetch('lastfm', '', query, 'https://ws.audioscrobbler.com/2.0/')
   if (!response.ok) throw new Error(`Last.fm ${response.status}`)
@@ -47,7 +49,7 @@ function cleanBio(html: string | undefined) {
 export function useLastfmArtist(name: string | undefined) {
   return useQuery({
     queryKey: ['lastfm-artist', name, getLocale()],
-    enabled: !!LASTFM_KEY && !!name,
+    enabled: hasService('lastfm') && !!name,
     // Changes rarely: fresh for a week, kept a month.
     staleTime: 7 * DAY,
     gcTime: 30 * DAY,
@@ -94,7 +96,7 @@ export interface LastfmTrack {
 export function useLastfmTopTracks(name: string | undefined) {
   return useQuery({
     queryKey: ['lastfm-top-tracks', name],
-    enabled: !!LASTFM_KEY && !!name,
+    enabled: hasService('lastfm') && !!name,
     // Changes rarely: fresh for a week, kept a month.
     staleTime: 7 * DAY,
     gcTime: 30 * DAY,
@@ -150,7 +152,7 @@ export const homeChartCountry = () => (getLocale() === 'de' ? CHART_COUNTRIES[0]
 function chartArtistsOptions(country: string | undefined) {
   return {
     queryKey: ['lastfm-chart-artists', country ?? 'world'],
-    enabled: !!LASTFM_KEY,
+    enabled: hasService('lastfm'),
     staleTime: DAY,
     retry: false,
     queryFn: async (): Promise<string[]> => {
@@ -174,7 +176,7 @@ export interface ArtistRanks {
  */
 export function useArtistRanks(name: string | undefined, enabled: boolean) {
   const results = useQueries({
-    queries: [undefined, ...CHART_COUNTRIES.map(([, country]) => country)].map((country) => ({ ...chartArtistsOptions(country), enabled: !!LASTFM_KEY && enabled && !!name })),
+    queries: [undefined, ...CHART_COUNTRIES.map(([, country]) => country)].map((country) => ({ ...chartArtistsOptions(country), enabled: hasService('lastfm') && enabled && !!name })),
   })
   const rank = (list: string[] | undefined) => {
     const index = list?.findIndex((entry) => sameName(entry, name)) ?? -1
@@ -197,7 +199,7 @@ export interface ChartTrack {
 
 /** The most played songs worldwide (no country) or in one country, best first (up to 200). */
 export async function fetchChartTracks(country?: string): Promise<ChartTrack[]> {
-  if (!LASTFM_KEY) return []
+  if (!hasService('lastfm')) return []
   type Track = { name: string; artist: { name: string }; listeners?: string }
   type Response = { tracks?: { track?: Track[] } }
   const data = await lastfm<Response>(country ? { method: 'geo.gettoptracks', country, limit: '200' } : { method: 'chart.gettoptracks', limit: '200' })
@@ -206,7 +208,7 @@ export async function fetchChartTracks(country?: string): Promise<ChartTrack[]> 
 
 /** Names of artists similar to one (Last.fm), most similar first. */
 export async function fetchSimilarArtists(name: string): Promise<string[]> {
-  if (!LASTFM_KEY) return []
+  if (!hasService('lastfm')) return []
   type Response = { similarartists?: { artist?: Array<{ name: string }> } }
   const data = await lastfm<Response>({ method: 'artist.getsimilar', artist: name, limit: '30' })
   return (data.similarartists?.artist ?? []).map((artist) => artist.name)

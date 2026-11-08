@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { Input } from '@/components/ui/input'
 import { lumioSend } from '@/features/social/social'
 import { defineMessages, useMessages } from '@/lib/i18n'
+import { ownKey } from '@/lib/services'
 
 const messages = defineMessages({
   de: {
@@ -340,7 +341,7 @@ export function ArtistMetadataDialog({ id, name, error, onClose }: { id: string 
       post<{ found: boolean; failed: string[] }>('/admin/artists/fix', {
         id,
         name,
-        lastfmKey: import.meta.env.VITE_LASTFM_API_KEY?.trim(),
+        lastfmKey: ownKey('lastfm'),
       }),
     onSuccess: (result) => {
       setFailed(result.failed)

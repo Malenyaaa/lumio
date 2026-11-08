@@ -12,6 +12,7 @@ import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n
 import { useLumioConfig } from './branding'
 import { ArtistMetadataDialog, TrackMetadataDialog, type TrackCredits, type TrackMetaInfo } from './metadata-dialogs'
 import { useIsAdmin, useSaveConfig } from './use-admin-config'
+import { ownKey } from '@/lib/services'
 
 const messages = defineMessages({
   de: {
@@ -282,7 +283,7 @@ function JobSection({
   const control = useMutation({
     mutationFn: async (method: 'POST' | 'DELETE') => {
       // The artist task asks Last.fm with the app's key, unless the server has its own.
-      const body = method === 'POST' ? { libraries, ...exclusions, ...(name === 'artists' ? { lastfmKey: import.meta.env.VITE_LASTFM_API_KEY?.trim() } : {}) } : undefined
+      const body = method === 'POST' ? { libraries, ...exclusions, ...(name === 'artists' ? { lastfmKey: ownKey('lastfm') } : {}) } : undefined
       const response = await lumioSend(method, `/admin/jobs/${name}`, body)
       if (!response?.ok) throw new Error('Unavailable')
       return (await response.json()) as JobState

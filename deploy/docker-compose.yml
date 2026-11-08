@@ -16,11 +16,13 @@ services:
       PROXY_JELLYFIN: "true"
       # Optional: buttons on the sign-in page for the Jellyfin SSO plugin's providers ("name:Label", comma-separated).
       # SSO_PROVIDERS: "authentik:Sign in with Authentik"
-      # Optional: how MusicBrainz can reach you (it throttles anonymous clients).
-      # MUSICBRAINZ_CONTACT: "admin@example.org"
-      # Optional: the server's own keys for the relays (else the app's keys are used).
+      # Recommended: how MusicBrainz can reach you (it throttles anonymous clients).
+      MUSICBRAINZ_CONTACT: "admin@example.org"
+      # Optional, your own free keys (the image has none): Last.fm (listeners, bios, similar artists, charts),
+      # Ticketmaster (concerts), TMDb (ratings, film series names). Without one, what it brings stays off.
       # LASTFM_API_KEY: ""
       # TICKETMASTER_API_KEY: ""
+      # TMDB_API_KEY: ""
     volumes:
       - lumio-data:/data
     # Only your reverse proxy needs to reach it; publish the port only without one.
