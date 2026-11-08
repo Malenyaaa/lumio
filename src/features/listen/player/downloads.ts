@@ -20,6 +20,8 @@ interface Collection {
   ids: string[]
   /** Where entries from outside the library (podcast episodes) are fetched from, by download id. */
   urls?: Record<string, string>
+  /** What it belongs to in the library (an episode's podcast, `podcast:<id>`), for the library's "Downloaded" filter. */
+  group?: string
   added: number
 }
 
@@ -42,6 +44,8 @@ let index: Index = (() => {
 
 /** Songs waiting to be downloaded, in order. */
 let pending: string[] = []
+/** The song being downloaded right now, and how far (bytes; total 0 when the server didn't say). */
+let current: { id: string; received: number; total: number } | null = null
 let running = false
 /** Bumped on every change, for the hooks. */
 let version = 0
@@ -121,15 +125,20 @@ async function run() {
         if (!url) throw new Error('No source')
         const response = await fetchAudio(id, url)
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        const blob = await response.blob()
+        const blob = await readWithProgress(id, response)
         // The quality may have changed meanwhile: then this file is stale.
-        if (quality !== index.quality) continue
+        if (quality !== index.quality) {
+          current = null
+          continue
+        }
         await cache.put(requestFor(id), new Response(blob, { headers: { 'Content-Type': blob.type || 'audio/mpeg', 'Content-Length': String(blob.size) } }))
         if (wanted().has(id)) index.tracks[id] = { bytes: blob.size, added: Date.now() }
         else await cache.delete(requestFor(id))
         pending = pending.filter((entry) => entry !== id)
+        current = null
         changed()
       } catch {
+        current = null
         // Offline or the server failed: tried again when the connection is back.
         if (!navigator.onLine) break
         pending = [...pending.filter((entry) => entry !== id), id]
@@ -138,8 +147,33 @@ async function run() {
     }
   } finally {
     running = false
+    current = null
     changed()
   }
+}
+
+/** Reads a download, telling how far it is (a few times a second) while the bytes come in. */
+async function readWithProgress(id: string, response: Response): Promise<Blob> {
+  const total = Number(response.headers.get('content-length') ?? 0)
+  current = { id, received: 0, total }
+  changed()
+  if (!response.body) return response.blob()
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let shown = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    chunks.push(value)
+    current = { id, received: current!.received + value.length, total }
+    if (Date.now() - shown > 250) {
+      shown = Date.now()
+      version++
+      for (const listener of listeners) listener()
+    }
+  }
+  // Stays the current song until it is stored (see run).
+  return new Blob(chunks as BlobPart[], { type: response.headers.get('content-type') ?? 'audio/mpeg' })
 }
 
 if (typeof window !== 'undefined') window.addEventListener('online', () => void run())
@@ -168,8 +202,8 @@ export async function setDownloadQuality(quality: number | null) {
 }
 
 /** Downloads a collection (or updates what it holds). */
-export function downloadCollection(key: string, name: string, ids: string[], urls?: Record<string, string>) {
-  index.collections[key] = { name, ids: [...new Set(ids)], urls, added: index.collections[key]?.added ?? Date.now() }
+export function downloadCollection(key: string, name: string, ids: string[], urls?: Record<string, string>, group?: string) {
+  index.collections[key] = { name, ids: [...new Set(ids)], urls, group, added: index.collections[key]?.added ?? Date.now() }
   void reconcile()
 }
 
@@ -185,7 +219,7 @@ export function syncDownload(key: string, ids: string[]) {
   if (!collection) return
   const next = [...new Set(ids)]
   if (next.length === collection.ids.length && next.every((id, position) => collection.ids[position] === id)) return
-  downloadCollection(key, collection.name, next, collection.urls)
+  downloadCollection(key, collection.name, next, collection.urls, collection.group)
 }
 
 /** Removes every download (the settings' button). */
@@ -225,14 +259,58 @@ export function useIsDownloaded(id: string | null | undefined) {
   return useSyncExternalStore(subscribe, () => isDownloaded(id))
 }
 
-export type DownloadState = { saved: false } | { saved: true; done: number; total: number }
+export type DownloadState =
+  | { saved: false }
+  | {
+      saved: true
+      done: number
+      total: number
+      /** The song of this collection being downloaded now, and how far (0–1). */
+      current?: { id: string; share: number }
+    }
+
+const shareOf = (entry: NonNullable<typeof current>) => (entry.total ? Math.min(1, entry.received / entry.total) : 0)
 
 /** Whether a collection is downloaded, and how far. */
 export function useDownloadState(key: string): DownloadState {
   useSyncExternalStore(subscribe, () => version)
   const collection = index.collections[key]
   if (!collection) return { saved: false }
-  return { saved: true, done: collection.ids.filter((id) => index.tracks[id]).length, total: collection.ids.length }
+  const now = current && collection.ids.includes(current.id) ? { id: current.id, share: shareOf(current) } : undefined
+  return { saved: true, done: collection.ids.filter((id) => index.tracks[id]).length, total: collection.ids.length, current: now }
+}
+
+/** A song's download: there, coming in now (how far, 0–1), waiting its turn, or none. */
+export type TrackDownload = { state: 'done' } | { state: 'loading'; share: number } | { state: 'queued' } | null
+
+export function useTrackDownload(id: string | null | undefined): TrackDownload {
+  useSyncExternalStore(subscribe, () => version)
+  if (!id) return null
+  if (index.tracks[id]) return { state: 'done' }
+  if (current?.id === id) return { state: 'loading', share: shareOf(current) }
+  if (pending.includes(id)) return { state: 'queued' }
+  return null
+}
+
+/** The library entries with downloads (their keys, and the podcasts of downloaded episodes). */
+export function useDownloadedKeys(): Set<string> {
+  useSyncExternalStore(subscribe, () => version)
+  return new Set(Object.entries(index.collections).flatMap(([key, collection]) => (collection.group ? [key, collection.group] : [key])))
+}
+
+/** Everything downloaded, each with its size and how far it is (newest first). */
+export function useDownloadList() {
+  useSyncExternalStore(subscribe, () => version)
+  return Object.entries(index.collections)
+    .map(([key, collection]) => ({
+      key,
+      name: collection.name,
+      added: collection.added,
+      total: collection.ids.length,
+      done: collection.ids.filter((id) => index.tracks[id]).length,
+      bytes: collection.ids.reduce((sum, id) => sum + (index.tracks[id]?.bytes ?? 0), 0),
+    }))
+    .sort((a, b) => b.added - a.added)
 }
 
 /** How much is downloaded, and what is still to come. */

@@ -11,7 +11,7 @@ import { getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
 import { fieldMessages, playbackMessages } from './messages'
 import { useLanguageOptions } from './use-languages'
 import { useUpdateConfiguration, useUserConfiguration } from './use-user-configuration'
-import { clearDownloads, downloadsAvailable, setDownloadQuality, useDownloadStats } from '@/features/listen/player/downloads'
+import { clearDownloads, downloadsAvailable, removeDownload, setDownloadQuality, useDownloadList, useDownloadStats } from '@/features/listen/player/downloads'
 
 const MBIT = 1_000_000
 const BITRATES_MBIT = [120, 80, 60, 40, 20, 10, 8, 4, 3, 1.5]
@@ -229,19 +229,6 @@ export function PlaybackPage() {
             if ((value || null) !== settings.musicQuality) void clearAudioCache()
           }}
         />
-        {downloadsAvailable && (
-          <SelectField
-            id="music-download-quality"
-            label={t.downloadQualityLabel}
-            hint={t.downloadQualityHint}
-            value={settings.musicDownloadQuality ?? 0}
-            options={[{ value: 0, label: t.musicOriginal }, ...[320, 256, 192, 128].map((kbps) => ({ value: kbps, label: `${kbps} kbps` }))]}
-            onChange={(value) => {
-              update({ musicDownloadQuality: value || null })
-              void setDownloadQuality(value || null)
-            }}
-          />
-        )}
       </Section>
 
       {/* Unlike the quality (which depends on this device's connection), what happens after the queue follows the account. */}
@@ -254,75 +241,6 @@ export function PlaybackPage() {
           onChange={(checked) => update({ musicAutoplay: checked })}
         />
       </Section>
-
-      {audioCacheAvailable && (
-        <Section title={t.cache} description={t.cacheDescription} scope="device">
-          <SelectField
-            id="music-prefetch"
-            label={t.prefetchLabel}
-            hint={t.prefetchHint}
-            value={settings.musicPrefetch}
-            options={[0, 1, 2, 3, 5, 10].map((count) => ({ value: count, label: count ? t.prefetchTracks(count) : t.off }))}
-            onChange={(value) => update({ musicPrefetch: value })}
-          />
-          <SelectField
-            id="music-cache-size"
-            label={t.cacheSizeLabel}
-            hint={t.cacheSizeHint}
-            value={settings.musicCacheMb}
-            options={[256, 512, 1024, 2048, 5120, 10240].map((mb) => ({ value: mb, label: mb >= 1024 ? `${number.format(mb / 1024)} GB` : `${mb} MB` }))}
-            onChange={(value) => {
-              update({ musicCacheMb: value })
-              trimAudioCache({ maxBytes: value * MB, keepOftenPlayed: settings.musicKeepOften })
-            }}
-          />
-          <SwitchField
-            id="music-keep-often"
-            label={t.keepOftenLabel}
-            hint={t.keepOftenHint(OFTEN_PLAYED)}
-            checked={settings.musicKeepOften}
-            onChange={(checked) => update({ musicKeepOften: checked })}
-          />
-        </Section>
-      )}
-
-      {videoCacheAvailable && (
-        <Section title={t.videoCache} description={t.videoCacheDescription} scope="device">
-          <SelectField
-            id="video-prefetch"
-            label={t.videoPrefetchLabel}
-            hint={t.videoPrefetchHint}
-            value={settings.videoPrefetch}
-            options={[0, 1, 2, 3].map((count) => ({ value: count, label: count ? t.videoPrefetchEpisodes(count) : t.off }))}
-            onChange={(value) => update({ videoPrefetch: value })}
-          />
-          <SelectField
-            id="video-cache-size"
-            label={t.cacheSizeLabel}
-            hint={t.videoCacheSizeHint}
-            value={settings.videoCacheGb}
-            options={[2, 5, 10, 20, 50].map((gb) => ({ value: gb, label: `${gb} GB` }))}
-            onChange={(value) => {
-              update({ videoCacheGb: value })
-              void trimVideos(value * GB)
-            }}
-          />
-          <SelectField
-            id="video-bitrate"
-            label={t.videoBitrateLabel}
-            hint={t.videoBitrateHint}
-            value={settings.videoBitrateMbit}
-            options={[3, 5, 8, 12, 20].map((mbit) => ({ value: mbit, label: `${mbit} Mbit/s` }))}
-            onChange={(value) => update({ videoBitrateMbit: value })}
-          />
-        </Section>
-      )}
-
-      {(audioCacheAvailable || videoCacheAvailable) && (
-        <Section title={t.storage} description={t.storageDescription} scope="device">
-          <StorageOverview />
-        </Section>
-      )}
 
       <Section title={t.behavior} scope="account">
         <SwitchField
@@ -424,5 +342,131 @@ export function PlaybackPage() {
         ))}
       </Section>
     </SettingsPage>
+  )
+}
+
+/**
+ * Everything kept on this device: downloads (their quality, what each takes, removing them), the song and episode
+ * caches, and the overview of what the browser holds.
+ */
+export function DownloadsPage() {
+  const { settings, update } = useLocalSettings()
+  const t = useMessages(playbackMessages)
+  const number = new Intl.NumberFormat(getLocaleTag(useLocale()))
+  return (
+    <SettingsPage title={t.downloadsTitle} description={t.downloadsDescription}>
+      {downloadsAvailable && (
+        <Section title={t.downloadsTitle} scope="device">
+        {downloadsAvailable && (
+          <SelectField
+            id="music-download-quality"
+            label={t.downloadQualityLabel}
+            hint={t.downloadQualityHint}
+            value={settings.musicDownloadQuality ?? 0}
+            options={[{ value: 0, label: t.musicOriginal }, ...[320, 256, 192, 128].map((kbps) => ({ value: kbps, label: `${kbps} kbps` }))]}
+            onChange={(value) => {
+              update({ musicDownloadQuality: value || null })
+              void setDownloadQuality(value || null)
+            }}
+          />
+        )}
+          <DownloadList />
+        </Section>
+      )}
+
+      {audioCacheAvailable && (
+        <Section title={t.cache} description={t.cacheDescription} scope="device">
+          <SelectField
+            id="music-prefetch"
+            label={t.prefetchLabel}
+            hint={t.prefetchHint}
+            value={settings.musicPrefetch}
+            options={[0, 1, 2, 3, 5, 10].map((count) => ({ value: count, label: count ? t.prefetchTracks(count) : t.off }))}
+            onChange={(value) => update({ musicPrefetch: value })}
+          />
+          <SelectField
+            id="music-cache-size"
+            label={t.cacheSizeLabel}
+            hint={t.cacheSizeHint}
+            value={settings.musicCacheMb}
+            options={[256, 512, 1024, 2048, 5120, 10240].map((mb) => ({ value: mb, label: mb >= 1024 ? `${number.format(mb / 1024)} GB` : `${mb} MB` }))}
+            onChange={(value) => {
+              update({ musicCacheMb: value })
+              trimAudioCache({ maxBytes: value * MB, keepOftenPlayed: settings.musicKeepOften })
+            }}
+          />
+          <SwitchField
+            id="music-keep-often"
+            label={t.keepOftenLabel}
+            hint={t.keepOftenHint(OFTEN_PLAYED)}
+            checked={settings.musicKeepOften}
+            onChange={(checked) => update({ musicKeepOften: checked })}
+          />
+        </Section>
+      )}
+
+      {videoCacheAvailable && (
+        <Section title={t.videoCache} description={t.videoCacheDescription} scope="device">
+          <SelectField
+            id="video-prefetch"
+            label={t.videoPrefetchLabel}
+            hint={t.videoPrefetchHint}
+            value={settings.videoPrefetch}
+            options={[0, 1, 2, 3].map((count) => ({ value: count, label: count ? t.videoPrefetchEpisodes(count) : t.off }))}
+            onChange={(value) => update({ videoPrefetch: value })}
+          />
+          <SelectField
+            id="video-cache-size"
+            label={t.cacheSizeLabel}
+            hint={t.videoCacheSizeHint}
+            value={settings.videoCacheGb}
+            options={[2, 5, 10, 20, 50].map((gb) => ({ value: gb, label: `${gb} GB` }))}
+            onChange={(value) => {
+              update({ videoCacheGb: value })
+              void trimVideos(value * GB)
+            }}
+          />
+          <SelectField
+            id="video-bitrate"
+            label={t.videoBitrateLabel}
+            hint={t.videoBitrateHint}
+            value={settings.videoBitrateMbit}
+            options={[3, 5, 8, 12, 20].map((mbit) => ({ value: mbit, label: `${mbit} Mbit/s` }))}
+            onChange={(value) => update({ videoBitrateMbit: value })}
+          />
+        </Section>
+      )}
+
+      {(audioCacheAvailable || videoCacheAvailable) && (
+        <Section title={t.storage} description={t.storageDescription} scope="device">
+          <StorageOverview />
+        </Section>
+      )}
+    </SettingsPage>
+  )
+}
+
+/** The downloads, each with its size and progress, to remove one by one. */
+function DownloadList() {
+  const t = useMessages(playbackMessages)
+  const size = useSize()
+  const list = useDownloadList()
+  if (!list.length) return <p className="px-4 py-3 text-sm text-muted-foreground">{t.noDownloads}</p>
+  return (
+    <ul className="divide-y">
+      {list.map((entry) => (
+        <li key={entry.key} className="flex items-center gap-3 px-4 py-2.5">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{entry.name || '—'}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {[t.downloadKind(entry.key.split(':')[0] ?? ''), entry.done < entry.total ? t.downloadProgress(entry.done, entry.total) : t.songCountShort(entry.total), size(entry.bytes)].join(' · ')}
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => removeDownload(entry.key)}>
+            {t.removeDownload}
+          </Button>
+        </li>
+      ))}
+    </ul>
   )
 }

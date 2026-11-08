@@ -49,12 +49,14 @@ import {
 import { useFollowedArtists, useLikedSongs, useListenLibrary, usePlaylistActions, usePlaylists, usePlaylistTracks, useSavedAlbums, type LibraryFolder } from './playlists'
 import { useTrackDrop } from './track-drag'
 import { useArtistPhoto } from './artist-photo'
+import { useDownloadedKeys } from './player/downloads'
 
 const messages = defineMessages({
   de: {
     library: 'Bibliothek',
     clearFilter: 'Filter entfernen',
     scrollFilters: 'Weitere Filter',
+    downloaded: 'Heruntergeladen',
     create: 'Erstellen',
     folderName: (n: number) => (n === 1 ? 'Neuer Ordner' : `Neuer Ordner ${n}`),
     folderCount: (n: number) => (n === 1 ? '1 Eintrag' : `${n} Einträge`),
@@ -83,6 +85,7 @@ const messages = defineMessages({
     library: 'Your Library',
     clearFilter: 'Clear filter',
     scrollFilters: 'More filters',
+    downloaded: 'Downloaded',
     create: 'Create',
     folderName: (n: number) => (n === 1 ? 'New folder' : `New folder ${n}`),
     folderCount: (n: number) => (n === 1 ? '1 item' : `${n} items`),
@@ -109,7 +112,7 @@ const messages = defineMessages({
   },
 })
 
-type Filter = 'all' | 'playlists' | 'podcasts' | 'artists' | 'albums'
+type Filter = 'all' | 'playlists' | 'podcasts' | 'artists' | 'albums' | 'downloaded'
 
 /**
  * Listen's library, as in Spotify's sidebar: a "+" to create a playlist, filter chips, and everything the user keeps:
@@ -126,6 +129,7 @@ export function LibrarySidebar({ compact }: { compact: boolean }) {
   const albums = useSavedAlbums()
   const library = useListenLibrary()
   const official = useOfficialPlaylists()
+  const downloaded = useDownloadedKeys()
   const actions = usePlaylistActions()
   const podcasts = useFollowedPodcasts()
   const savedEpisodes = useSavedEpisodes()
@@ -231,7 +235,8 @@ export function LibrarySidebar({ compact }: { compact: boolean }) {
   const byKey = new Map(entries.map((entry) => [entry.key, entry]))
   const inFolder = new Set(library.folders.flatMap((folder) => folder.items))
   const show = (kind: Filter) => filter === 'all' || filter === kind
-  const visible = (entry: LibraryItem) => entry.kinds.some(show)
+  // "Downloaded": what has a download on this device (albums, playlists, podcasts with downloaded episodes).
+  const visible = (entry: LibraryItem) => (filter === 'downloaded' ? downloaded.has(entry.key) : entry.kinds.some(show))
 
   // Folders as entries of the top level, holding theirs.
   const folderItems: LibraryItem[] = library.folders.map((folder) => {
@@ -301,6 +306,7 @@ export function LibrarySidebar({ compact }: { compact: boolean }) {
     { value: 'podcasts', label: t.podcasts },
     { value: 'artists', label: t.artists },
     { value: 'albums', label: t.albums },
+    ...(downloaded.size || filter === 'downloaded' ? [{ value: 'downloaded' as Filter, label: t.downloaded }] : []),
   ]
 
   return (

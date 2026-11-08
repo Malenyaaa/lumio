@@ -1,4 +1,4 @@
-import { IconBadgeCc, IconCards, IconHome, IconKeyboard, IconLayoutDashboard, IconLock, IconPalette, IconPlayerPlay, IconPuzzle, IconTags, IconUserCircle } from '@tabler/icons-react'
+import { IconBadgeCc, IconCards, IconDownload, IconHome, IconKeyboard, IconLayoutDashboard, IconLock, IconPalette, IconPlayerPlay, IconPuzzle, IconTags, IconUserCircle } from '@tabler/icons-react'
 import { inMode, useAppMode } from '@/lib/app-mode'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import { useUserConfiguration } from './use-user-configuration'
@@ -8,6 +8,7 @@ const labels = defineMessages({
     profile: 'Konto',
     home: 'Startseite',
     playback: 'Wiedergabe',
+    downloads: 'Downloads',
     subtitles: 'Untertitel',
     controls: 'Steuerung',
     interface: 'Oberfläche',
@@ -21,6 +22,7 @@ const labels = defineMessages({
     profile: 'Account',
     home: 'Home',
     playback: 'Playback',
+    downloads: 'Downloads',
     subtitles: 'Subtitles',
     controls: 'Controls',
     interface: 'Interface',
@@ -36,6 +38,7 @@ const PAGES = [
   { key: 'profile', to: '/settings/profile', icon: IconUserCircle },
   { key: 'home', to: '/settings/home', icon: IconHome },
   { key: 'playback', to: '/settings/playback', icon: IconPlayerPlay },
+  { key: 'downloads', to: '/settings/downloads', icon: IconDownload },
   { key: 'subtitles', to: '/settings/subtitles', icon: IconBadgeCc },
   { key: 'controls', to: '/settings/controls', icon: IconKeyboard },
   { key: 'interface', to: '/settings/interface', icon: IconLayoutDashboard },

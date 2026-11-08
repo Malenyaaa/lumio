@@ -39,7 +39,7 @@ import { SearchPage } from '@/features/search/search-page'
 import { ControlsPage } from '@/features/settings/controls-page'
 import { HomeSettingsPage } from '@/features/settings/home-settings-page'
 import { InterfacePage } from '@/features/settings/interface-page'
-import { PlaybackPage } from '@/features/settings/playback-page'
+import { DownloadsPage, PlaybackPage } from '@/features/settings/playback-page'
 import { PrivacyPage } from '@/features/settings/privacy-page'
 import { ProfilePage } from '@/features/settings/profile-page'
 import { SettingsLayout } from '@/features/settings/settings-layout'
@@ -76,6 +76,7 @@ function settingsRoutes() {
       <Route path="profile" element={<ProfilePage />} />
       <Route path="home" element={<HomeSettingsPage />} />
       <Route path="playback" element={<PlaybackPage />} />
+      <Route path="downloads" element={<DownloadsPage />} />
       <Route path="subtitles" element={<SubtitlesPage />} />
       <Route path="controls" element={<ControlsPage />} />
       <Route path="interface" element={<InterfacePage />} />
