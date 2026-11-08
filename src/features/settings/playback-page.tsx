@@ -11,6 +11,7 @@ import { getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
 import { fieldMessages, playbackMessages } from './messages'
 import { useLanguageOptions } from './use-languages'
 import { useUpdateConfiguration, useUserConfiguration } from './use-user-configuration'
+import { clearDownloads, downloadsAvailable, setDownloadQuality, useDownloadStats } from '@/features/listen/player/downloads'
 
 const MBIT = 1_000_000
 const BITRATES_MBIT = [120, 80, 60, 40, 20, 10, 8, 4, 3, 1.5]
@@ -39,6 +40,7 @@ function StorageOverview() {
   const { settings } = useLocalSettings()
   const size = useSize()
   const songs = useAudioCacheStats()
+  const downloads = useDownloadStats()
   const episodes = useVideoCacheStats()
   const storage = useStorageInfo()
   const app = useQuery({ queryKey: ['app-cache-bytes', songs.bytes, episodes.bytes], queryFn: appCacheBytes, staleTime: 0 })
@@ -53,6 +55,14 @@ function StorageOverview() {
         size={size}
         onClear={songs.count ? () => void clearAudioCache() : undefined}
         clear={t.clearCache}
+      />
+      <StorageLine
+        title={t.downloadsStored}
+        detail={downloads.count || downloads.pending ? t.downloadCount(downloads.count, downloads.pending) : t.nothingStored}
+        used={downloads.bytes}
+        size={size}
+        onClear={downloads.count || downloads.collections ? () => void clearDownloads() : undefined}
+        clear={t.clearDownloads}
       />
       <StorageLine
         title={t.episodesStored}
@@ -210,11 +220,28 @@ export function PlaybackPage() {
         <SelectField
           id="music-quality"
           label={t.musicQualityLabel}
-          hint={t.musicQualityHint}
+          hint={`${t.musicQualityHint} ${t.musicQualityCacheNote}`}
           value={settings.musicQuality ?? 0}
           options={[{ value: 0, label: t.musicOriginal }, ...[320, 256, 192, 128].map((kbps) => ({ value: kbps, label: `${kbps} kbps` }))]}
-          onChange={(value) => update({ musicQuality: value || null })}
+          onChange={(value) => {
+            update({ musicQuality: value || null })
+            // The cache held the old quality: it fills again in the new one.
+            if ((value || null) !== settings.musicQuality) void clearAudioCache()
+          }}
         />
+        {downloadsAvailable && (
+          <SelectField
+            id="music-download-quality"
+            label={t.downloadQualityLabel}
+            hint={t.downloadQualityHint}
+            value={settings.musicDownloadQuality ?? 0}
+            options={[{ value: 0, label: t.musicOriginal }, ...[320, 256, 192, 128].map((kbps) => ({ value: kbps, label: `${kbps} kbps` }))]}
+            onChange={(value) => {
+              update({ musicDownloadQuality: value || null })
+              void setDownloadQuality(value || null)
+            }}
+          />
+        )}
       </Section>
 
       {/* Unlike the quality (which depends on this device's connection), what happens after the queue follows the account. */}

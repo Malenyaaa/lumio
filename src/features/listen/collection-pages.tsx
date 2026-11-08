@@ -40,6 +40,7 @@ import { usePlaylistInfos, usePlaylistOwner, useProfile } from './profiles'
 import { PlaylistShareDialog, usePlaylistAdds } from './playlist-share-dialog'
 import { AddToPlaylist } from './library-menu'
 import { TasteMenuItem } from './taste'
+import { DownloadButton, DownloadMenuItem } from './download-ui'
 
 const messages = defineMessages({
   de: {
@@ -377,6 +378,7 @@ export function PlaylistPage() {
         actions={
           <>
             {!mine && <SaveButton id={id} />}
+            <DownloadButton downloadKey={`playlist:${id}`} name={item?.Name ?? ''} items={tracks.data} />
             <DropdownMenu>
               <DropdownMenuTrigger aria-label={t.more} className="grid size-10 place-items-center rounded-full text-muted-foreground outline-none hover:text-foreground">
                 <IconDots className="size-7" />
@@ -386,6 +388,7 @@ export function PlaylistPage() {
                   <IconPlaylistAdd /> {t.addToQueue}
                 </DropdownMenuItem>
                 <AddToPlaylist tracks={async () => list} label={t.addToOtherPlaylist} exclude={id} />
+                <DownloadMenuItem downloadKey={`playlist:${id}`} name={item?.Name ?? ''} items={tracks.data} />
                 <TasteMenuItem kind="playlists" id={id} />
                 {mine && (
                   <>
@@ -486,7 +489,12 @@ export function OfficialPlaylistPage() {
       loading={isLoading}
       source={`official:${slug}`}
       tint="rgb(40 90 70)"
-      actions={<SaveButton id={`official:${slug}`} />}
+      actions={
+        <>
+          <SaveButton id={`official:${slug}`} />
+          <DownloadButton downloadKey={`official:${slug}`} name={playlist?.title ?? ''} items={playlist?.tracks} />
+        </>
+      }
     />
   )
 }
@@ -502,6 +510,7 @@ export function LikedSongsPage() {
       cover={<LikedCover />}
       byline={<span className="font-bold text-foreground">{session.userName}</span>}
       tracks={liked.data ?? []}
+      actions={<DownloadButton downloadKey="liked" name={t.liked} items={liked.data} />}
       loading={liked.isLoading}
       source="liked"
       tint="rgb(80 56 160)"

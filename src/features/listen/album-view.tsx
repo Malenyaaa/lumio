@@ -33,6 +33,7 @@ import { playCircle } from './play-circle'
 import { TrackArtists } from './track-artists'
 import { AddToPlaylist } from './library-menu'
 import { TasteMenuItem } from './taste'
+import { DownloadButton, DownloadMenuItem } from './download-ui'
 
 const messages = defineMessages({
   de: {
@@ -186,6 +187,7 @@ export function AlbumView({ item }: { item: BaseItemDto }) {
         >
           {isSaved ? <IconCircleCheckFilled className="size-8" /> : <IconCirclePlus className="size-8" />}
         </RoundAction>
+        <DownloadButton downloadKey={`album:${item.Id}`} name={item.Name ?? ''} items={tracks.data} />
         <DropdownMenu>
           <DropdownMenuTrigger aria-label={t.more(item.Name ?? '')} className="grid size-10 place-items-center rounded-full text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
             <IconDots className="size-7" />
@@ -198,6 +200,7 @@ export function AlbumView({ item }: { item: BaseItemDto }) {
               <IconTextPlus /> {t.playNext}
             </DropdownMenuItem>
             <AddToPlaylist tracks={async () => list} label={t.addToPlaylist} />
+            <DownloadMenuItem downloadKey={`album:${item.Id}`} name={item.Name ?? ''} items={tracks.data} />
             <TasteMenuItem kind="albums" id={item.Id} />
             {mainArtist?.id && (
               <DropdownMenuItem render={<Link to={titlePath('MusicArtist', mainArtist.id)} />}>

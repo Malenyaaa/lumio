@@ -87,6 +87,8 @@ export interface LocalSettings {
   apps: 'both' | 'watch' | 'listen'
   /** Highest music quality in kbps (above it the server converts to MP3); null = the original file where possible. */
   musicQuality: number | null
+  /** Quality downloads are kept in, in kbps; null = the original file. Changing it fetches every download again. */
+  musicDownloadQuality: number | null
   /** How many of the next tracks are downloaded ahead into the cache while one plays (0 = none). */
   musicPrefetch: number
   /** Space the song cache may take, in MB. */
@@ -192,6 +194,7 @@ export const DEFAULT_SETTINGS: LocalSettings = {
   syncPlay: DEFAULT_SYNCPLAY,
   apps: 'both',
   musicQuality: null,
+  musicDownloadQuality: null,
   musicPrefetch: 2,
   musicCacheMb: 1024,
   musicKeepOften: true,

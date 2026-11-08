@@ -67,6 +67,7 @@ import { endTrackDrag, startTrackDrag } from './track-drag'
 import { TrackContextMenu } from './track-menu'
 import { ContextMenu } from '@base-ui/react/context-menu'
 import { PodcastMenuItems } from './library-menu'
+import { DownloadButton } from './download-ui'
 
 const messages = defineMessages({
   de: {
@@ -413,6 +414,7 @@ function EpisodeRow({ episode, showPodcast }: { episode: Episode; showPodcast?: 
             )}
             <span className="ml-auto flex items-center gap-0.5">
               <SaveEpisodeButton episode={episode} className="size-8 p-1.5" />
+              <DownloadButton downloadKey={`episode:${episode.guid}`} name={episode.title} items={[episode.item]} className="size-8 [&_svg]:size-5 [&>span]:size-5" />
               <button
                 type="button"
                 aria-label={done ? t.markUnplayed : t.markPlayed}
@@ -857,6 +859,7 @@ export function EpisodePage() {
             {playing ? <IconPlayerPauseFilled className="size-6" /> : <IconPlayerPlayFilled className="size-6 translate-x-px" />}
           </button>
           <SaveEpisodeButton episode={episode} className="size-8" />
+          <DownloadButton downloadKey={`episode:${episode.guid}`} name={episode.title} items={[episode.item]} />
           <button
             type="button"
             aria-pressed={done}

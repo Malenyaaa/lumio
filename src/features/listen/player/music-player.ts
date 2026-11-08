@@ -11,6 +11,7 @@ import { reportActivity } from '@/features/social/social'
 import { flushPlayback, rememberPlayback } from '@/lib/playback-outbox'
 import { recordRecent } from '../recent'
 import { audioCacheAvailable, cachedAudioUrl, prefetchAudio, recordCachedPlay } from './audio-cache'
+import { downloadedAudioUrl, downloadId, isDownloaded, setDownloadQuality, setDownloadSource } from './downloads'
 import { DIRECT_FORMATS } from './quality'
 
 /**
@@ -176,6 +177,9 @@ export function connectMusicPlayer(next: typeof connection) {
   if (!next && connection) stop()
   connection = next
   if (next && state.index < 0) restoreSession(next.userId)
+  // Downloads come from the library in their own quality (and are fetched again when it changed while away).
+  if (next) void setDownloadQuality(readLocalSettings(next.userId).musicDownloadQuality).then(() => setDownloadSource((id, quality) => libraryAudioUrl(id, quality, crypto.randomUUID())))
+  else setDownloadSource(null)
 }
 
 // ---- picking up where the user left off (after a reload) ----
@@ -267,8 +271,12 @@ function streamUrl(item: BaseItemDto, sessionId = playSessionId) {
   // Podcast episodes play straight from their host.
   const external = externalOf(item)
   if (external) return external.url
+  return libraryAudioUrl(item.Id!, readLocalSettings(connection!.userId).musicQuality, sessionId)
+}
+
+/** A library song's audio in a quality (kbps; null = the original file where the browser can play it). */
+function libraryAudioUrl(id: string, limit: number | null, sessionId: string) {
   const { api, userId, accessToken } = connection!
-  const limit = readLocalSettings(userId).musicQuality
   const params = new URLSearchParams({
     UserId: userId,
     DeviceId: jellyfin.deviceInfo.id,
@@ -283,7 +291,7 @@ function streamUrl(item: BaseItemDto, sessionId = playSessionId) {
     PlaySessionId: sessionId,
     api_key: accessToken,
   })
-  return `${api.basePath}/Audio/${item.Id}/universal?${params}`
+  return `${api.basePath}/Audio/${id}/universal?${params}`
 }
 
 // ---- the audio element ----
@@ -387,12 +395,14 @@ async function go(index: number, startAt?: number) {
   playSessionId = crypto.randomUUID()
   setState({ index, buffering: true })
   setTime({ position: startAt, duration: ticksToSeconds(item.RunTimeTicks ?? 0) })
-  // From the cache when the song is there (instant, and without a connection), else streamed.
-  const key = cacheKey(item)
+  // Downloaded songs always play from the download, whatever its quality; then from the cache (instant, and without
+  // a connection), else streamed.
+  const downloaded = await downloadedAudioUrl(downloadId(item, externalOf(item)?.guid))
+  const key = downloaded ? null : cacheKey(item)
   const cached = key ? await cachedAudioUrl(key) : null
   // Another track may have been chosen meanwhile.
   if (currentTrack() !== item) return
-  audio.src = cached ?? streamUrl(item)
+  audio.src = downloaded ?? cached ?? streamUrl(item)
   if (key && cached) recordCachedPlay(key)
   // The position can only be set once the stream's metadata is in.
   if (startAt) audio.addEventListener('loadedmetadata', () => (audio.currentTime = startAt), { once: true })
@@ -495,7 +505,8 @@ async function cacheAhead() {
   for (const item of [...upcoming, ...(playing ? [playing] : [])]) {
     if (round !== aheadRound || !connection) return
     const key = cacheKey(item)
-    if (!key) continue
+    // Downloaded songs need no copy in the cache.
+    if (!key || isDownloaded(item.Id)) continue
     await prefetchAudio(key, streamUrl(item, crypto.randomUUID()), limits, item === playing ? 1 : 0)
   }
 }

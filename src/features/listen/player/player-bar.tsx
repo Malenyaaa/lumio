@@ -45,6 +45,7 @@ import { usePlayerControls, usePlayerTime } from './player-controls'
 import { lengthLabel, toggleRemainingTime, useRemainingTime } from '@/lib/remaining-time'
 import { artistHref, useTrackArtists } from '../credits'
 import { TrackArtists } from '../track-artists'
+import { DownloadedMark } from '../download-ui'
 
 /** Listen's player bar along the bottom: the track, the transport with its progress, and queue, lyrics and volume. */
 export function PlayerBar() {
@@ -157,6 +158,7 @@ export function ArtistLine({ item, className }: { item: BaseItemDto; className?:
   const artists = item.Type === 'Audio' ? credited : artistsOf(item)
   return (
     <p className={cn('truncate text-xs text-muted-foreground', className)}>
+      <DownloadedMark item={item} />
       {artists.map((artist, index) => (
         <Fragment key={artist.id ?? artist.name}>
           {index > 0 && ', '}
