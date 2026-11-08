@@ -20,7 +20,7 @@ import { jellyfin } from '@/lib/jellyfin'
 import { remoteMessages } from './messages'
 import { RemoteBar } from './remote-bar'
 import { readLocalSettings } from '@/features/settings/local-settings'
-import { music, setRemoteSink } from '@/features/listen/player/music-player'
+import { handOverSnapshot, music, setRemoteSink } from '@/features/listen/player/music-player'
 import { handoffMessages } from './messages'
 
 /** What the video player exposes so other devices and SyncPlay can steer it. */
@@ -478,6 +478,16 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
     const failed = () => {
       toast.error(messagesFor(handoffMessages).unreachable(target.name))
       setTarget(null)
+    }
+    // Choosing a device while music plays here hands it over, as Spotify Connect does: the current song from where it
+    // is, and what follows it; here it pauses.
+    const now = handOverSnapshot()
+    if (now?.playing) {
+      music.pause()
+      sessions
+        .play({ sessionId: target.sessionId, playCommand: 'PlayNow', itemIds: now.items.map((item) => item.Id!), startIndex: 0, startPositionTicks: now.positionTicks })
+        .then(() => toast.success(messagesFor(handoffMessages).playingOn(target.name)))
+        .catch(failed)
     }
     setRemoteSink({
       play: (items, startIndex) => {

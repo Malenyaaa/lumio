@@ -552,6 +552,18 @@ export function setRemoteSink(next: RemoteSink | null) {
   remoteSink = next
 }
 
+/**
+ * What plays here right now, to hand over to another device: the current track and what follows it (podcasts left
+ * out, as other devices can't play them), and where in the current track it is. null when nothing music is loaded.
+ */
+export function handOverSnapshot(): { items: BaseItemDto[]; positionTicks: number; playing: boolean } | null {
+  const current = currentTrack()
+  if (!current?.Id || externalOf(current)) return null
+  const items = state.queue.slice(state.index, state.index + 200).filter((item) => item.Id && !externalOf(item))
+  const position = pendingStart ?? audio?.currentTime ?? 0
+  return { items, positionTicks: secondsToTicks(position), playing: state.playing }
+}
+
 const forRemote = (items: BaseItemDto[]) => !!remoteSink && items.length > 0 && items.every((item) => item.Id && !externalOf(item))
 
 function entry(kind: QueueKind): QueueEntry {

@@ -425,3 +425,8 @@ html.panel-transition::view-transition-new(listen-cover) {
     animation-duration: 1ms;
   }
 }
+
+/* The remote-control bar ("play on") floats above Listen's player bar instead of covering it. */
+html:has([data-app-shell][data-mode='listen']) [data-remote-bar] {
+  bottom: 6rem;
+}

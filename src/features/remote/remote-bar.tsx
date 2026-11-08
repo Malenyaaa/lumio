@@ -112,10 +112,13 @@ function RemoteBarContent({ target, closing, onDisconnect }: { target: RemoteTar
 
   return (
     <div
+      // In Listen it floats above the player bar (see index.css), not over it.
+      data-remote-bar
       role="region"
       aria-label={t.region(target.name)}
       className={cn(
         'fixed inset-x-3 bottom-3 z-50 mx-auto max-w-3xl overflow-hidden rounded-2xl border bg-popover text-white shadow-2xl',
+
         closing
           ? 'pointer-events-none animate-out fade-out-0 slide-out-to-bottom-4 fill-mode-forwards duration-200'
           : 'animate-in fade-in-0 slide-in-from-bottom-4 duration-300',
