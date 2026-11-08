@@ -1,13 +1,15 @@
 import { useSyncExternalStore } from 'react'
+import { inJellyfinApp } from '@/lib/native-app'
 
 /**
  * Persistent storage: whether the browser keeps this site's data (downloads, caches, the offline library) for good.
  * Without it, the browser may clear everything by itself when the disk runs low. Checked and asked for right when the
  * site loads. Browsers decide on their own: Chrome and Edge grant it silently to installed or often used sites,
  * Firefox asks the user (some versions only after the user did something on the page), Safari grants it to apps on
- * the home screen. So it is asked on load, and asked again on the first click or key press if the first answer was no;
- * a no after that is final for this visit, and a notice explains what it means for downloads. While the browser shows
- * its own question (Firefox), a notice says what it is about and why to allow it.
+ * the home screen. So it is asked on load; a no shows a notice at once (what it means for downloads) and is asked
+ * again on the first click or key press. While the browser shows its own question (Firefox), a notice says what it is
+ * about and why to allow it. A change in the site's settings while Lumio is open is noticed and checked again.
+ * Dismissing the notice hides it for this visit only: a no is said again the next time Lumio opens.
  */
 export type PersistentState = 'checking' | 'asking' | 'granted' | 'denied' | 'unsupported'
 
@@ -32,7 +34,7 @@ function set(next: PersistentState) {
 
 function dismissed() {
   try {
-    return localStorage.getItem(DISMISSED_KEY) === '1'
+    return sessionStorage.getItem(DISMISSED_KEY) === '1'
   } catch {
     return false
   }
@@ -66,36 +68,51 @@ async function ask(): Promise<boolean> {
 }
 
 let started = false
+/** Waiting for the first click or key press to ask again. */
+let retryArmed = false
 
-/** Checks on load and asks right away; a no is asked again once the user does something (see above). */
+function retry() {
+  window.removeEventListener('pointerdown', retry, true)
+  window.removeEventListener('keydown', retry, true)
+  retryArmed = false
+  void ask().then((granted) => set(granted ? 'granted' : 'denied'))
+}
+
+/** Where it stands, asking when the browser may still say yes. */
+async function check() {
+  try {
+    if (await navigator.storage.persisted()) return set('granted')
+  } catch {
+    return set('unsupported')
+  }
+  // Blocked by the user in the site's settings: asking again changes nothing.
+  if ((await permission()) === 'denied') return set('denied')
+  if (await ask()) return set('granted')
+  // Said at once, and asked again once the user does something (some browsers only ask or grant after that).
+  set('denied')
+  if (retryArmed) return
+  retryArmed = true
+  window.addEventListener('pointerdown', retry, true)
+  window.addEventListener('keydown', retry, true)
+}
+
+/** Checks on load and asks right away (see above). */
 export function initPersistentStorage() {
   if (started || typeof window === 'undefined') return
   started = true
-  if (!supported()) return set('unsupported')
-  void (async () => {
-    try {
-      if (await navigator.storage.persisted()) return set('granted')
-    } catch {
-      return set('unsupported')
-    }
-    // Blocked by the user in the site's settings: asking again changes nothing.
-    if ((await permission()) === 'denied') return set('denied')
-    if (await ask()) return set('granted')
-    // Some browsers only ask (or only grant) after the user did something on the page.
-    const retry = () => {
-      window.removeEventListener('pointerdown', retry, true)
-      window.removeEventListener('keydown', retry, true)
-      void ask().then((granted) => set(granted ? 'granted' : 'denied'))
-    }
-    if (navigator.userActivation?.hasBeenActive) return retry()
-    window.addEventListener('pointerdown', retry, true)
-    window.addEventListener('keydown', retry, true)
-  })()
+  // Jellyfin's app keeps the WebView's data in its own storage, and a WebView can't grant this: there is nothing to ask.
+  if (!supported() || inJellyfinApp()) return set('unsupported')
+  void check()
+  // Granted or taken away in the site's settings while Lumio is open: checked again.
+  void navigator.permissions
+    ?.query({ name: 'persistent-storage' as PermissionName })
+    .then((status) => status.addEventListener('change', () => void check()))
+    .catch(() => undefined)
 }
 
 /** Asks again (the notice's button: a click, so browsers that want one get it). */
 export async function requestPersistentStorage() {
-  if (!supported()) return false
+  if (!supported() || inJellyfinApp()) return false
   const granted = await ask()
   set(granted ? 'granted' : 'denied')
   return granted
@@ -113,7 +130,7 @@ export function remindPersistentStorage() {
 export function dismissStorageNotice() {
   try {
     // Hiding the explanation of the browser's question doesn't hide a later no.
-    if (state === 'denied') localStorage.setItem(DISMISSED_KEY, '1')
+    if (state === 'denied') sessionStorage.setItem(DISMISSED_KEY, '1')
   } catch {
     // Hidden for this visit only.
   }
