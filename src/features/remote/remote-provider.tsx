@@ -20,6 +20,8 @@ import { jellyfin } from '@/lib/jellyfin'
 import { remoteMessages } from './messages'
 import { RemoteBar } from './remote-bar'
 import { readLocalSettings } from '@/features/settings/local-settings'
+import { music, setRemoteSink } from '@/features/listen/player/music-player'
+import { handoffMessages } from './messages'
 
 /** What the video player exposes so other devices and SyncPlay can steer it. */
 export interface PlayerController {
@@ -468,6 +470,33 @@ export function RemoteProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(pendingCommand.current)
     }
   }, [])
+
+  // Music started in Listen goes to the controlled device too (whole lists, with the chosen song first to play).
+  useEffect(() => {
+    if (!api || !target) return setRemoteSink(null)
+    const sessions = getSessionApi(api)
+    const failed = () => {
+      toast.error(messagesFor(handoffMessages).unreachable(target.name))
+      setTarget(null)
+    }
+    setRemoteSink({
+      play: (items, startIndex) => {
+        // Not here as well.
+        music.pause()
+        sessions
+          .play({ sessionId: target.sessionId, playCommand: 'PlayNow', itemIds: items.map((item) => item.Id!), startIndex })
+          .then(() => toast.success(messagesFor(handoffMessages).playingOn(target.name)))
+          .catch(failed)
+      },
+      enqueue: (items, how) => {
+        sessions
+          .play({ sessionId: target.sessionId, playCommand: how === 'next' ? 'PlayNext' : 'PlayLast', itemIds: items.map((item) => item.Id!) })
+          .then(() => toast.success(messagesFor(handoffMessages).queuedOn(target.name)))
+          .catch(failed)
+      },
+    })
+    return () => setRemoteSink(null)
+  }, [api, target])
 
   const value = useMemo<RemoteContextValue>(
     () => ({

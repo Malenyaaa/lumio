@@ -536,6 +536,24 @@ function announceQueued(how: 'queue' | 'next', items: BaseItemDto[]) {
 
 export const START = -1
 
+// ---- "play on" another device ----
+
+/**
+ * While Lumio controls another device ("Abspielen auf"), music goes there instead of playing here: what is started,
+ * and what is queued. Set by the remote provider; podcasts (which Jellyfin doesn't know) still play here.
+ */
+export interface RemoteSink {
+  play: (items: BaseItemDto[], startIndex: number) => void
+  enqueue: (items: BaseItemDto[], how: 'next' | 'last') => void
+}
+let remoteSink: RemoteSink | null = null
+
+export function setRemoteSink(next: RemoteSink | null) {
+  remoteSink = next
+}
+
+const forRemote = (items: BaseItemDto[]) => !!remoteSink && items.length > 0 && items.every((item) => item.Id && !externalOf(item))
+
 function entry(kind: QueueKind): QueueEntry {
   return { kind, uid: Math.random().toString(36).slice(2, 10) }
 }
@@ -563,6 +581,17 @@ export const music = {
   play(items: BaseItemDto[], startIndex: number = START, options: { shuffle?: boolean; source?: string; startAt?: number } = {}) {
     const playable = items.filter((item) => item.Id)
     if (!playable.length) return
+    if (forRemote(playable)) {
+      // On the other device, in the order it would play here (shuffled when the collection plays shuffled).
+      const shuffleThere = options.shuffle ?? (options.source ? !!shufflePrefs[options.source] : false)
+      const at = Math.min(Math.max(startIndex, 0), playable.length - 1)
+      if (shuffleThere) {
+        const first = playable[startIndex === START ? Math.floor(Math.random() * playable.length) : at]!
+        remoteSink!.play([first, ...shuffled(playable.filter((item) => item !== first))], 0)
+      } else remoteSink!.play(playable, at)
+      if (options.source) recordRecent(options.source)
+      return
+    }
     // A collection plays with its own shuffle setting; loose tracks in order.
     const shuffle = options.shuffle ?? (options.source ? !!shufflePrefs[options.source] : false)
     let queue = playable
@@ -580,6 +609,7 @@ export const music = {
   /** Puts tracks at the front of the user's queue: they play right after the current one. */
   playNext(items: BaseItemDto[]) {
     if (!items.length) return
+    if (forRemote(items)) return remoteSink!.enqueue(items, 'next')
     if (state.index < 0) return music.play(items)
     insertAt(state.index + 1, items, 'user')
     announceQueued('next', items)
@@ -587,6 +617,7 @@ export const music = {
   /** Adds tracks to the end of the user's queue: after what was queued before, but before the collection goes on. */
   addToQueue(items: BaseItemDto[]) {
     if (!items.length) return
+    if (forRemote(items)) return remoteSink!.enqueue(items, 'last')
     if (state.index < 0) return music.play(items)
     insertAt(userQueueEnd(), items, 'user')
     announceQueued('queue', items)

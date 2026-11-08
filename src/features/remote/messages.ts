@@ -30,6 +30,7 @@ export const deviceMessages = defineMessages({
 export const handoffMessages = defineMessages({
   de: {
     playingOn: (device: string) => `Wird auf ${device} abgespielt`,
+    queuedOn: (device: string) => `Bei ${device} in die Warteschlange gestellt`,
     unreachable: (device: string) => `${device} ist nicht erreichbar`,
     sending: (device: string) => `Wird an ${device} gesendet …`,
     groupFailed: 'Der Titel konnte nicht für die Gruppe gestartet werden',
@@ -37,6 +38,7 @@ export const handoffMessages = defineMessages({
   },
   en: {
     playingOn: (device: string) => `Playing on ${device}`,
+    queuedOn: (device: string) => `Queued on ${device}`,
     unreachable: (device: string) => `${device} can’t be reached`,
     sending: (device: string) => `Sending to ${device} …`,
     groupFailed: 'The title could not be started for the group',
