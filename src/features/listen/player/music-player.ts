@@ -1,6 +1,7 @@
 import type { Api } from '@jellyfin/sdk'
 import { PlayMethod, type BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
 import { getSessionApi } from '@jellyfin/sdk/lib/utils/api/session-api'
+import { getLibraryApi } from '@jellyfin/sdk/lib/utils/api/library-api'
 import { useSyncExternalStore } from 'react'
 import { externalOf } from '@/lib/external-items'
 import { secondsToTicks, ticksToSeconds } from '@/lib/format'
@@ -236,7 +237,7 @@ function compactTrack(item: BaseItemDto): BaseItemDto {
   const keep = [
     'Id', 'Name', 'Type', 'AlbumId', 'Album', 'AlbumArtist', 'AlbumArtists', 'Artists', 'ArtistItems', 'RunTimeTicks', 'ImageTags',
     'AlbumPrimaryImageTag', 'ParentId', 'ParentPrimaryImageItemId', 'ParentPrimaryImageTag', 'IndexNumber', 'ParentIndexNumber',
-    'PlaylistItemId', 'PremiereDate', 'UserData', '__lumioExternal',
+    'PlaylistItemId', 'PremiereDate', 'UserData', 'NormalizationGain', '__lumioExternal',
   ]
   const source = item as Record<string, unknown>
   return Object.fromEntries(keep.filter((key) => source[key] !== undefined && source[key] !== null).map((key) => [key, source[key]])) as BaseItemDto
@@ -318,9 +319,47 @@ function libraryAudioUrl(id: string, limit: number | null, sessionId: string) {
 // ---- the audio element ----
 
 const audio = typeof Audio !== 'undefined' ? new Audio() : null
+
+/**
+ * Volume normalization (Settings → Music): Jellyfin measures each track's and album's loudness (its "audio
+ * normalization" task) and tells the gain in dB that brings it to a common level. Lumio can only turn the element
+ * down, not up, so loud tracks are lowered and quiet ones stay as they are. Tracks without a measurement play unchanged.
+ */
+let gainFactor = 1
+const albumGains = new Map<string, number | null>()
+
+function applyVolume() {
+  if (audio) audio.volume = Math.min(1, Math.max(0, state.volume * gainFactor))
+}
+
+async function gainOf(item: BaseItemDto): Promise<number | null> {
+  const mode = connection ? readLocalSettings(connection.userId).musicNormalization : 'off'
+  if (mode === 'off' || externalOf(item)) return null
+  const track = item.NormalizationGain ?? null
+  if (mode !== 'album' || !item.AlbumId || !connection) return track
+  if (!albumGains.has(item.AlbumId)) {
+    const { api, userId } = connection
+    const album = await getLibraryApi(api)
+      .getItem({ itemId: item.AlbumId, userId })
+      .then((response) => response.data.NormalizationGain ?? null)
+      .catch(() => null)
+    albumGains.set(item.AlbumId, album)
+  }
+  // Albums without a measurement fall back to the track's own.
+  return albumGains.get(item.AlbumId) ?? track
+}
+
+/** Sets the gain for the track playing (on every track change, and when the setting changes). */
+async function normalize(item = currentTrack()) {
+  const gain = item ? await gainOf(item) : null
+  if (item !== currentTrack()) return
+  gainFactor = gain === null ? 1 : Math.min(1, 10 ** (gain / 20))
+  applyVolume()
+}
+
 if (audio) {
   audio.preload = 'auto'
-  audio.volume = state.volume
+  applyVolume()
   audio.addEventListener('play', () => {
     setState({ playing: true })
     updateAppSession()
@@ -385,7 +424,7 @@ function report(kind: 'start' | 'progress' | 'stopped', item = currentTrack(), r
     PositionTicks: secondsToTicks(audio.currentTime),
     IsPaused: audio.paused,
     IsMuted: audio.muted,
-    VolumeLevel: Math.round(audio.volume * 100),
+    VolumeLevel: Math.round(state.volume * 100),
     PlayMethod: PlayMethod.DirectStream,
     PlaySessionId: playSessionId,
     CanSeek: true,
@@ -464,6 +503,7 @@ async function go(index: number, startAt?: number, reason: StartReason = 'clickr
   // Another track may have been chosen meanwhile.
   if (currentTrack() !== item) return
   audio.src = downloaded ?? cached ?? streamUrl(item)
+  void normalize(item)
   startContext = { reasonStart: reason, source: sourceOf(index), shuffle: state.shuffle, offline: !!(downloaded ?? cached) }
   if (key && cached) recordCachedPlay(key)
   // The position can only be set once the stream's metadata is in.
@@ -824,14 +864,19 @@ export const music = {
   },
   setVolume(volume: number) {
     if (!audio) return
-    audio.volume = Math.min(1, Math.max(0, volume))
-    audio.muted = audio.volume === 0
-    setState({ volume: audio.volume, muted: audio.muted })
+    const next = Math.min(1, Math.max(0, volume))
+    setState({ volume: next, muted: next === 0 })
+    audio.muted = next === 0
+    applyVolume()
     try {
-      localStorage.setItem(VOLUME_KEY, String(audio.volume))
+      localStorage.setItem(VOLUME_KEY, String(next))
     } catch {
       // Not remembered for the next visit.
     }
+  },
+  /** Applies a changed normalization setting to the track playing. */
+  renormalize() {
+    void normalize()
   },
   toggleMute() {
     if (!audio) return

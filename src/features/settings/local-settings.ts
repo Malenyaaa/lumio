@@ -103,6 +103,8 @@ export interface LocalSettings {
   musicKeepOften: boolean
   /** When the queue runs out, keep playing similar music. */
   musicAutoplay: boolean
+  /** Even out loudness with Jellyfin's measurements: per track, per album (keeps an album's own dynamics), or not. */
+  musicNormalization: 'off' | 'track' | 'album'
   /** How many of the next episodes of a series are downloaded while one plays (0 = none). */
   videoPrefetch: number
   /** Space the episode cache may take, in GB. */
@@ -154,6 +156,7 @@ export const ACCOUNT_SETTINGS = [
   'homeLayout',
   'syncPlay',
   'musicAutoplay',
+  'musicNormalization',
   'concertLocation',
   'tasteExclusions',
 ] as const satisfies ReadonlyArray<keyof LocalSettings>
@@ -210,6 +213,7 @@ export const DEFAULT_SETTINGS: LocalSettings = {
   musicCacheMb: 1024,
   musicKeepOften: true,
   musicAutoplay: true,
+  musicNormalization: 'off',
   videoPrefetch: 1,
   videoCacheGb: 5,
   videoBitrateMbit: 8,

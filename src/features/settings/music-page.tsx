@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { LocationDialog } from '@/features/listen/concert-pages'
 import { useConcertLocation } from '@/features/listen/concerts'
 import { clearAudioCache } from '@/features/listen/player/audio-cache'
+import { music } from '@/features/listen/player/music-player'
 import { TasteExclusionsSection } from '@/features/listen/taste'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import { Row, Section, SelectField, SettingsPage, SwitchField } from './fields'
@@ -16,6 +17,12 @@ const musicMessages = defineMessages({
     playback: 'Wiedergabe',
     quality: 'Qualität',
     qualityDescription: 'Klangqualität beim Streamen auf diesem Gerät. Downloads haben ihre eigene Qualität (Speicher & Downloads).',
+    normalizationLabel: 'Lautstärke angleichen',
+    normalizationHint:
+      'Laute Titel werden auf das Niveau leiserer gesenkt, mit den Messwerten von Jellyfin (Aufgabe „Audio-Normalisierung“). „Pro Album“ lässt die Unterschiede innerhalb eines Albums, wie sie gemeint sind. Titel ohne Messung spielen unverändert.',
+    normalizationOff: 'Aus',
+    normalizationTrack: 'Pro Titel',
+    normalizationAlbum: 'Pro Album',
     concerts: 'Konzerte',
     locationLabel: 'Standort',
     locationHint: 'Wo Lumio nach Konzerten in deiner Nähe sucht.',
@@ -29,6 +36,12 @@ const musicMessages = defineMessages({
     playback: 'Playback',
     quality: 'Quality',
     qualityDescription: 'Sound quality when streaming on this device. Downloads have a quality of their own (Storage & downloads).',
+    normalizationLabel: 'Even out volume',
+    normalizationHint:
+      'Loud tracks are lowered to the level of quieter ones, using Jellyfin’s measurements (the “Audio normalization” task). “Per album” keeps the differences within an album as intended. Tracks without a measurement play unchanged.',
+    normalizationOff: 'Off',
+    normalizationTrack: 'Per track',
+    normalizationAlbum: 'Per album',
     concerts: 'Concerts',
     locationLabel: 'Location',
     locationHint: 'Where Lumio looks for concerts near you.',
@@ -57,6 +70,21 @@ export function MusicPage() {
           hint={p.autoplayMusicHint}
           checked={settings.musicAutoplay}
           onChange={(checked) => update({ musicAutoplay: checked })}
+        />
+        <SelectField
+          id="music-normalization"
+          label={t.normalizationLabel}
+          hint={t.normalizationHint}
+          value={settings.musicNormalization}
+          options={[
+            { value: 'off', label: t.normalizationOff },
+            { value: 'track', label: t.normalizationTrack },
+            { value: 'album', label: t.normalizationAlbum },
+          ]}
+          onChange={(value) => {
+            update({ musicNormalization: value })
+            music.renormalize()
+          }}
         />
       </Section>
 
