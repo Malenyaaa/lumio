@@ -11,6 +11,7 @@ import { lumioGet, lumioSend } from '@/features/social/social'
 import { plainText } from '@/lib/format'
 import { defineMessages, LOCALES, useMessages, type Locale } from '@/lib/i18n'
 import { localizedKey, localText, type LocalizedEntry, type LocalTexts, type TextLabel } from '@/lib/localized'
+import { ownKey } from '@/lib/services'
 import { cn } from '@/lib/utils'
 
 const messages = defineMessages({
@@ -115,7 +116,7 @@ function LanguageForm({ id, item, entry, onSaved }: { id: string; item: BaseItem
   const preview: LocalizedEntry = { ...entry, label: label === 'auto' ? entry.label : label }
   const save = useMutation({
     mutationFn: async () => {
-      const response = await lumioSend('POST', `/admin/localized/${id}`, { label: label === 'auto' ? (entry.labelManual ? null : undefined) : label, edited })
+      const response = await lumioSend('POST', `/admin/localized/${id}`, { label: label === 'auto' ? (entry.labelManual ? null : undefined) : label, edited, tmdbKey: ownKey('tmdb') })
       if (!response?.ok) throw new Error('Failed')
       return (await response.json()) as AdminLocalized
     },

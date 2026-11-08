@@ -1087,8 +1087,9 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
     return send(response, 200, { ...page, counts: store.localizedCounts() })
   }
 
-  // GET /admin/localized/<id>: an item's full entry. POST {label?, edited?}: an administrator's label (de, en, or null
-  // to find it again) and texts (replacing the written ones; TMDb's stay).
+  // GET /admin/localized/<id>: an item's full entry. POST {label?, edited?, tmdbKey?}: an administrator's label (de,
+  // en, or null to find it again) and texts (replacing the written ones; TMDb's stay). The other language is fetched
+  // from TMDb right away when it wasn't yet (e.g. the task ran without a key).
   const localizedId = path.match(/^\/admin\/localized\/([0-9a-f-]{32,36})$/)?.[1]
   if (localizedId && (request.method === 'GET' || request.method === 'POST')) {
     const token = tokenOf(request, url)
@@ -1096,7 +1097,7 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
     try {
       const { data, meta } = await ensureLocalized(token!, me.id, localizedId)
       if (request.method === 'GET') return send(response, 200, { ...publicLocalized(data), labelManual: !!data.labelManual, meta })
-      const body = await readJson<{ label?: unknown; edited?: unknown }>(request, TEXT_BODY_LIMIT).catch(() => null)
+      const body = await readJson<{ label?: unknown; edited?: unknown; tmdbKey?: unknown }>(request, TEXT_BODY_LIMIT).catch(() => null)
       if (!body) return send(response, 400, { error: 'Bad body' })
       const next: Localized = { ...data }
       if (isLang(body.label)) Object.assign(next, { label: body.label, labelManual: true })
@@ -1107,7 +1108,10 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
       }
       if ('edited' in body) next.edited = cleanTexts(body.edited)
       store.setLocalized(localizedId, next, meta)
-      return send(response, 200, { ...publicLocalized(next), labelManual: !!next.labelManual, meta })
+      // A failed lookup leaves the label saved; the task tries again.
+      await lookupTitle(token!, me.id, localizedId, isTmdbKey(body.tmdbKey) ? body.tmdbKey : undefined).catch(() => null)
+      const saved = store.localized([localizedId])[localizedId] ?? next
+      return send(response, 200, { ...publicLocalized(saved), labelManual: !!saved.labelManual, meta })
     } catch (error) {
       return send(response, 502, { error: error instanceof Error ? error.message : 'Failed' })
     }

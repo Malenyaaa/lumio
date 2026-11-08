@@ -10,10 +10,11 @@ import { Section, SettingsPage, SwitchField } from '@/features/settings/fields'
 import { lumioGet, lumioSend } from '@/features/social/social'
 import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
 import { useLumioConfig } from './branding'
-import { LanguageDialog } from './language-dialog'
+import { LanguageDialog, useLocalizedChanged, type AdminLocalized } from './language-dialog'
 import { ArtistMetadataDialog, TrackMetadataDialog, type TrackCredits, type TrackMetaInfo } from './metadata-dialogs'
 import { useIsAdmin, useSaveConfig } from './use-admin-config'
 import { hasService, ownKey } from '@/lib/services'
+import { toast } from 'sonner'
 
 const messages = defineMessages({
   de: {
@@ -72,6 +73,9 @@ const messages = defineMessages({
       'Was die Aufgabe gefunden hat. Bei „unklar“ kommen Wörter beider Sprachen vor oder zu wenige; Lumio zeigt dort den Jellyfin-Text. Ein Klick öffnet Texte und Sprache zum Festlegen.',
     reviewSearch: 'Titel oder Serie',
     labelFilter: (label: string) => ({ unclear: 'Unklar', de: 'Deutsch', en: 'Englisch', none: 'Ohne Text', all: 'Alle' })[label] ?? label,
+    setLabel: (language: string) => `Der Jellyfin-Text ist ${language}`,
+    labelSaved: 'Festgelegt; die andere Sprache wird ergänzt.',
+    labelFailed: 'Das hat nicht geklappt.',
     titleCount: (n: number) => (n === 1 ? '1 Eintrag' : `${n} Einträge`),
     typeName: (type: string) => ({ Movie: 'Film', Series: 'Serie', Season: 'Staffel', Episode: 'Folge' })[type] ?? type,
   },
@@ -130,6 +134,9 @@ const messages = defineMessages({
       'What the task found. "Unclear" means words of both languages, or too few; Lumio shows the Jellyfin text there. Click one to open its texts and set the language.',
     reviewSearch: 'Title or series',
     labelFilter: (label: string) => ({ unclear: 'Unclear', de: 'German', en: 'English', none: 'No text', all: 'All' })[label] ?? label,
+    setLabel: (language: string) => `Jellyfin's text is ${language}`,
+    labelSaved: 'Set; the other language is being filled in.',
+    labelFailed: "That didn't work.",
     titleCount: (n: number) => (n === 1 ? '1 entry' : `${n} entries`),
     typeName: (type: string) => ({ Movie: 'Film', Series: 'Series', Season: 'Season', Episode: 'Episode' })[type] ?? type,
   },
@@ -441,6 +448,47 @@ function BrowseSection({ onOpen }: { onOpen: (opened: Opened) => void }) {
 
 type LabelFilter = 'unclear' | 'de' | 'en' | 'none' | 'all'
 
+/**
+ * An entry of the review list: opens its texts, and sets the language of Jellyfin's text in one click (the server then
+ * fills in the other language from TMDb).
+ */
+function LabelledRow({ id, current, title, line, onClick }: { id: string; current: string; title: string; line: string; onClick: () => void }) {
+  const t = useMessages(messages)
+  const changed = useLocalizedChanged()
+  const set = useMutation({
+    mutationFn: async (label: 'de' | 'en') => {
+      const response = await lumioSend('POST', `/admin/localized/${id}`, { label, tmdbKey: ownKey('tmdb') })
+      if (!response?.ok) throw new Error('Failed')
+      return (await response.json()) as AdminLocalized
+    },
+    onSuccess: (entry) => {
+      toast.success(t.labelSaved)
+      changed(id, entry)
+    },
+    onError: () => toast.error(t.labelFailed),
+  })
+  return (
+    <div className="flex items-center gap-2 pr-3">
+      <div className="min-w-0 flex-1">
+        <EntryRow title={title} line={line} onClick={onClick} />
+      </div>
+      {(['de', 'en'] as const).map((label) => (
+        <Button
+          key={label}
+          size="sm"
+          variant={current === label ? 'default' : 'outline'}
+          disabled={set.isPending}
+          title={t.setLabel(t.labelFilter(label))}
+          aria-label={t.setLabel(t.labelFilter(label))}
+          onClick={() => set.mutate(label)}
+        >
+          {label.toUpperCase()}
+        </Button>
+      ))}
+    </div>
+  )
+}
+
 interface LocalizedRow {
   id: string
   label: 'de' | 'en' | 'unclear' | 'none'
@@ -496,8 +544,10 @@ function LanguageReviewSection({ running, onOpen }: { running: boolean; onOpen: 
       </div>
       <div className="max-h-[32rem] divide-y overflow-y-auto">
         {rows.map((row) => (
-          <EntryRow
+          <LabelledRow
             key={row.id}
+            id={row.id}
+            current={row.label}
             title={row.meta.name}
             line={[
               t.typeName(row.meta.type),
