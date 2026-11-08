@@ -79,6 +79,17 @@ export function DisplayPage() {
 
       <p className="text-xs text-muted-foreground">{t.storageNote}</p>
 
+      <Section title={t.playerTitle}>
+        <SwitchField
+          id="player-loading-art"
+          label={t.loadingArtLabel}
+          hint={t.loadingArtHint}
+          checked={config.playerLoadingArt !== false}
+          disabled={save.isPending}
+          onChange={(enabled) => save.mutate((current) => ({ ...current, playerLoadingArt: enabled }))}
+        />
+      </Section>
+
       <Section title={t.cacheTitle} description={t.cacheDescription}>
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
           <p className="text-sm text-muted-foreground">{config.cacheVersion ? t.cacheResetCount(config.cacheVersion) : t.cacheNeverReset}</p>

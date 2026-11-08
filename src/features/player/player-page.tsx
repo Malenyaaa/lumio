@@ -19,7 +19,7 @@ import { useRemote } from '@/features/remote/remote-provider'
 import { SyncPlayMenu } from '@/features/remote/syncplay-menu'
 import { useUserConfiguration } from '@/features/settings/use-user-configuration'
 import { secondsToTicks, ticksToSeconds } from '@/lib/format'
-import { portraitImageUrl } from '@/lib/images'
+import { backdropImageUrl, landscapeImageUrl, portraitImageUrl } from '@/lib/images'
 import { rememberPlayback } from '@/lib/playback-outbox'
 import { useMessages } from '@/lib/i18n'
 import { music } from '@/features/listen/player/music-player'
@@ -44,6 +44,7 @@ import { StatsOverlay } from './stats-overlay'
 import { usePreloadTrickplay, useTrickplay } from './trickplay'
 import { useVideoState } from './use-video-state'
 import { resolveFit, useElementSize, usePictureArea, useVideoDimensions, videoLayout } from './video-fit'
+import { useLumioConfig } from '@/features/admin/branding'
 
 const PROGRESS_INTERVAL_MS = 10_000
 /** Seconds of video that count as "enough buffered" for the loading percentage. */
@@ -93,6 +94,9 @@ function Player({ id }: { id: string }) {
   const location = useLocation()
   const { api, session } = useAuthedSession()
   const item = useItem(id)
+  const lumioConfig = useLumioConfig().data
+  // Which title's video has shown its first frame (the loading backdrop fades then).
+  const [startedFor, setStartedFor] = useState<string | null>(null)
   const userConfig = useUserConfiguration()
   const next = useNextItem(item.data)
   const isAudio = item.data?.MediaType === 'Audio'
@@ -141,6 +145,13 @@ function Player({ id }: { id: string }) {
   const container = useRef<HTMLDivElement>(null)
   const [portalRoot, setPortalRoot] = useState<HTMLDivElement | null>(null)
   const video = useRef<HTMLVideoElement>(null)
+  useEffect(() => {
+    const element = video.current
+    if (!element) return
+    const onPlaying = () => setStartedFor(id)
+    element.addEventListener('playing', onPlaying)
+    return () => element.removeEventListener('playing', onPlaying)
+  }, [id])
   /** Current position in ticks on the item's own timeline; set by the stream effect. */
   const positionTicks = useRef<() => number>(() => choice.startTicks)
   /** The running hls.js instance (HLS streams only); scrubbing pauses its loading. */
@@ -748,6 +759,10 @@ function Player({ id }: { id: string }) {
   }
 
   const cover = isAudio && item.data ? portraitImageUrl(api, item.data, { fillHeight: 640 }) : undefined
+  // Until the video's first frame, the title's backdrop (as Jellyfin's own apps do); admins can turn it off.
+  const loadingArt =
+    lumioConfig?.playerLoadingArt !== false && !isAudio && item.data ? (backdropImageUrl(api, item.data) ?? landscapeImageUrl(api, item.data, { fillWidth: 1600 })) : undefined
+  const firstFrame = startedFor === id
   const delivery = !data ? '…' : data.hls ? t.deliveryHls : data.transcoded ? t.deliveryTranscoded : t.deliveryDirect
 
   return (
@@ -792,6 +807,15 @@ function Player({ id }: { id: string }) {
             />
           ))}
       </video>
+
+      {loadingArt && (
+        <div
+          aria-hidden
+          className={cn('pointer-events-none absolute inset-0 bg-black transition-opacity duration-700 ease-out', firstFrame ? 'opacity-0' : 'opacity-100')}
+        >
+          <FadeImage src={loadingArt} alt="" className="size-full object-cover" />
+        </div>
+      )}
 
       {isAudio && (
         <div className="absolute inset-0 grid place-items-center bg-neutral-950">
