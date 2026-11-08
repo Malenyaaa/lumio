@@ -19,6 +19,7 @@ import { landscapeImageUrl, portraitImageUrl } from '@/lib/images'
 import { playHref } from '@/lib/item-links'
 import { useOffline } from '@/lib/network'
 import { requestPersistentStorage, usePersistentStorage } from '@/lib/persistent-storage'
+import { languageName } from '@/lib/track-labels'
 import { cn } from '@/lib/utils'
 
 const messages = defineMessages({
@@ -324,7 +325,7 @@ function SeriesBlock({ group, t, size }: { group: SeriesGroup; t: Messages; size
 function StateLine({ entry, t, size, prefix }: { entry: DownloadedVideo; t: Messages; size: (bytes: number) => string; prefix?: string }) {
   const state = entry.state
   const failed = state.state === 'queued' && !!state.error
-  const text = [prefix, stateText(t, entry, size)].filter(Boolean).join(' · ')
+  const text = [prefix, entry.state.state === 'done' ? languageName(entry.language) : '', stateText(t, entry, size)].filter(Boolean).join(' · ')
   return (
     <p className={cn('flex min-w-0 items-center gap-1.5 text-sm', failed ? 'text-amber-500' : 'text-muted-foreground')} title={failed ? state.error!.detail : undefined}>
       <DownloadGlyph

@@ -42,7 +42,8 @@ export function useEpisodes(seriesId: string | undefined, seasonId: string | und
           seriesId: seriesId!,
           seasonId,
           userId: session.userId,
-          fields: [ItemFields.Overview, ItemFields.PrimaryImageAspectRatio],
+          // Streams too: the audio languages a download can be made in.
+          fields: [ItemFields.Overview, ItemFields.PrimaryImageAspectRatio, ItemFields.MediaStreams],
         })
       ).data.Items ?? [],
   })

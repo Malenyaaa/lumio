@@ -1,9 +1,12 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
-import { useEffect } from 'react'
+import { cloneElement, useEffect, type ReactElement, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useAuthedSession } from '@/features/auth/session'
 import { DownloadGlyph } from '@/features/listen/download-ui'
 import { useLocalSettings } from '@/features/settings/local-settings'
+import { useUserConfiguration } from '@/features/settings/use-user-configuration'
+import { languageKey, languageName } from '@/lib/track-labels'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import { useOffline } from '@/lib/network'
 import { cn } from '@/lib/utils'
@@ -39,6 +42,8 @@ const messages = defineMessages({
     downloadEpisode: (name: string) => `„${name}“ herunterladen`,
     removeEpisode: (name: string) => `Download von „${name}“ entfernen`,
     unavailable: 'Offline nicht verfügbar',
+    chooseLanguage: 'Tonspur zum Herunterladen',
+    preferred: 'Bevorzugt',
   },
   en: {
     download: 'Download',
@@ -57,6 +62,8 @@ const messages = defineMessages({
     downloadEpisode: (name: string) => `Download “${name}”`,
     removeEpisode: (name: string) => `Remove the download of “${name}”`,
     unavailable: 'Not available offline',
+    chooseLanguage: 'Audio to download',
+    preferred: 'Preferred',
   },
 })
 
@@ -90,23 +97,92 @@ function labelOf(t: (typeof messages)['de'], download: VideoDownloadState) {
   return t.downloaded
 }
 
+/** The audio languages of some films or episodes (each once, as a file names it), in the order they come. */
+function audioLanguagesOf(items: BaseItemDto[]) {
+  const found = new Map<string, string>()
+  for (const item of items) {
+    for (const stream of item.MediaStreams ?? item.MediaSources?.[0]?.MediaStreams ?? []) {
+      if (stream.Type !== 'Audio' || !stream.Language || stream.Language === 'und') continue
+      const key = languageKey(stream.Language)
+      if (!found.has(key)) found.set(key, stream.Language)
+    }
+  }
+  return [...found.values()]
+}
+
+/** The languages to choose from (the account's preferred audio language first) and the one taken without asking. */
+function useLanguageChoice(items: BaseItemDto[]) {
+  const preferred = useUserConfiguration().data?.Configuration?.AudioLanguagePreference ?? null
+  const isPreferred = (language: string) => Number(!!preferred && languageKey(language) === languageKey(preferred))
+  const languages = audioLanguagesOf(items).sort((a, b) => isPreferred(b) - isPreferred(a))
+  return { languages, preferred }
+}
+
+/**
+ * With more than one audio language, starting a download asks which one (the file keeps one track: browsers can't
+ * switch between the tracks of a file). `trigger` is the button, `children` what it shows.
+ */
+function LanguageMenu({
+  languages,
+  preferred,
+  onPick,
+  trigger,
+  children,
+}: {
+  languages: string[]
+  preferred: string | null
+  onPick: (language: string) => void
+  trigger: ReactElement
+  children: ReactNode
+}) {
+  const t = useMessages(messages)
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={trigger}>{children}</DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{t.chooseLanguage}</DropdownMenuLabel>
+          {languages.map((language) => (
+            <DropdownMenuItem key={language} onClick={() => onPick(language)}>
+              <span className="flex-1">{languageName(language)}</span>
+              {!!preferred && languageKey(language) === languageKey(preferred) && <span className="text-xs text-muted-foreground">{t.preferred}</span>}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 /** The film's download, beside its play button. */
 export function MovieDownloadButton({ movie }: { movie: BaseItemDto }) {
   const t = useMessages(messages)
   const download = useVideoDownload(movie.Id)
+  const { languages, preferred } = useLanguageChoice([movie])
   if (!videoCacheAvailable || !movie.Id) return null
   const key = `movie:${movie.Id}`
-  return (
+  const start = (language: string | null) => downloadVideos(key, 'movie', movie.Name ?? '', [movie], [], language)
+  const ask = !download && languages.length > 1
+  const button = (
     <Button
       size="lg"
       variant="outline"
       aria-pressed={!!download}
       title={download ? t.remove : t.download}
-      onClick={() => (download ? removeVideoDownload(key) : downloadVideos(key, 'movie', movie.Name ?? '', [movie]))}
+      onClick={ask ? undefined : () => (download ? removeVideoDownload(key) : start(preferred))}
       className={cn(download && 'text-listen hover:text-listen')}
-    >
+    />
+  )
+  const content = (
+    <>
       <DownloadGlyph state={glyphState(download)} share={shareOf(download)} className="size-5" /> {labelOf(t, download)}
-    </Button>
+    </>
+  )
+  if (!ask) return cloneElement(button, undefined, content)
+  return (
+    <LanguageMenu languages={languages} preferred={preferred} onPick={start} trigger={button}>
+      {content}
+    </LanguageMenu>
   )
 }
 
@@ -115,6 +191,7 @@ export function SeasonDownloadButton({ series, seasons, season, episodes }: { se
   const t = useMessages(messages)
   const download = useSeasonDownload(season?.Id)
   const seasonId = season?.Id
+  const { languages, preferred } = useLanguageChoice(episodes ?? [])
   useEffect(() => {
     if (seasonId && episodes?.length) syncSeasonDownload(seasonId, episodes)
   }, [seasonId, episodes])
@@ -122,47 +199,61 @@ export function SeasonDownloadButton({ series, seasons, season, episodes }: { se
   const key = `season:${season.Id}`
   const done = !!download && download.done >= download.total
   const label = !download ? t.downloadSeason : done ? t.seasonDownloaded : t.seasonProgress(download.done, download.total)
-  return (
+  const start = (language: string | null) =>
+    downloadVideos(key, 'season', `${series?.Name ?? ''} · ${season.Name ?? ''}`, episodes ?? [], [...(series ? [series] : []), ...seasons], language)
+  const ask = !download && languages.length > 1
+  const button = (
     <Button
       size="sm"
       variant="outline"
       aria-pressed={!!download}
       title={download ? t.remove : t.downloadSeason}
       disabled={!download && !episodes?.length}
-      onClick={() =>
-        download
-          ? removeVideoDownload(key)
-          : downloadVideos(key, 'season', `${series?.Name ?? ''} · ${season.Name ?? ''}`, episodes ?? [], [...(series ? [series] : []), ...seasons])
-      }
+      onClick={ask ? undefined : () => (download ? removeVideoDownload(key) : start(preferred))}
       className={cn(download && 'text-listen hover:text-listen')}
-    >
+    />
+  )
+  const content = (
+    <>
       <DownloadGlyph state={!download ? 'none' : done ? 'done' : 'loading'} share={download?.share ?? 0} className="size-4" /> {label}
-    </Button>
+    </>
+  )
+  if (!ask) return cloneElement(button, undefined, content)
+  return (
+    <LanguageMenu languages={languages} preferred={preferred} onPick={start} trigger={button}>
+      {content}
+    </LanguageMenu>
   )
 }
 
 /**
- * An episode's download, in its row (series page). `context`: the series, its seasons and the season's episodes, kept
+ * An episode's download, in its card (series page). `context`: the series, its seasons and the season's episodes, kept
  * for offline use with it.
  */
 export function EpisodeDownloadButton({ episode, context, className }: { episode: BaseItemDto; context: BaseItemDto[]; className?: string }) {
   const t = useMessages(messages)
   const download = useVideoDownload(episode.Id)
+  const { languages, preferred } = useLanguageChoice([episode])
   if (!videoCacheAvailable || !episode.Id) return null
   const label = download ? `${labelOf(t, download)} · ${t.removeEpisode(episode.Name ?? '')}` : t.downloadEpisode(episode.Name ?? '')
-  return (
+  const start = (language: string | null) => downloadVideos(`episode:${episode.Id}`, 'episode', episode.Name ?? '', [episode], context, language)
+  const ask = !download && languages.length > 1
+  const button = (
     <button
       type="button"
       aria-label={label}
       title={label}
       aria-pressed={!!download}
-      onClick={(event) => {
-        // The row is a link to the player.
-        event.preventDefault()
-        event.stopPropagation()
-        if (download) removeEpisodeDownload(episode.Id!)
-        else downloadVideos(`episode:${episode.Id}`, 'episode', episode.Name ?? '', [episode], context)
-      }}
+      onClick={
+        ask
+          ? undefined
+          : (event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              if (download) removeEpisodeDownload(episode.Id!)
+              else start(preferred)
+            }
+      }
       className={cn(
         'grid size-11 shrink-0 place-items-center rounded-full outline-none transition-colors hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring',
         !download
@@ -174,9 +265,14 @@ export function EpisodeDownloadButton({ episode, context, className }: { episode
             : 'text-listen',
         className,
       )}
-    >
-      <DownloadGlyph state={glyphState(download)} share={shareOf(download)} className="size-7" />
-    </button>
+    />
+  )
+  const content = <DownloadGlyph state={glyphState(download)} share={shareOf(download)} className="size-7" />
+  if (!ask) return cloneElement(button, undefined, content)
+  return (
+    <LanguageMenu languages={languages} preferred={preferred} onPick={start} trigger={button}>
+      {content}
+    </LanguageMenu>
   )
 }
 
