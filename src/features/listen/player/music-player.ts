@@ -59,7 +59,8 @@ export interface MusicTime {
 
 const VOLUME_KEY = 'lumio.music.volume'
 const SHUFFLE_KEY = 'lumio.music.shuffle'
-const PROGRESS_EVERY_MS = 10_000
+/** How often the position is reported while playing (also what a device steering this one moves on from). */
+const PROGRESS_EVERY_MS = 5000
 /** "Previous" within this many seconds goes to the previous track; later it restarts the current one. */
 const RESTART_AFTER_S = 3
 /** Long tracks (audiobook chapters, mixes) resume where they were left. */

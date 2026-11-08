@@ -156,7 +156,9 @@ function useRemoteControls(target: RemoteTarget | null, disconnect: () => void):
   const clock: RemoteClock =
     fresh.position !== undefined
       ? { position: fresh.position, at: fresh.at, paused, duration }
-      : { position: ticksToSeconds(state?.PositionTicks ?? 0), at: reportedAt, paused, duration }
+      : // The position is as of the device's last report (devices report every few seconds), not of our last asking:
+        // moving on from then keeps lyrics and the bar in time with it. Never later than our asking (clock skew).
+        { position: ticksToSeconds(state?.PositionTicks ?? 0), at: Math.min(reportedAt, Date.parse(remote?.LastPlaybackCheckIn ?? '') || reportedAt), paused, duration }
   const positionNow = () => Math.min(duration || Infinity, clock.position + (clock.paused ? 0 : Math.max(0, Date.now() - clock.at) / 1000))
 
   const byId = new Map((queueItems.data ?? []).map((item) => [item.Id, item]))

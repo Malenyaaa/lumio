@@ -318,6 +318,8 @@ function Extras() {
           // level; the accent and the knob only while pointing at it, dragging, or focused by keyboard.
           thumbAlignment="center"
           className={cn(
+            // The bar stays thin, but the whole height around it can be grabbed.
+            '[&>div]:py-2.5',
             '[&_[data-slot=slider-track]]:bg-foreground/20 [&_[data-slot=slider-range]]:rounded-full [&_[data-slot=slider-range]]:bg-foreground',
             '[&_[data-slot=slider-thumb]]:size-3 [&_[data-slot=slider-thumb]]:border-0 [&_[data-slot=slider-thumb]]:bg-foreground [&_[data-slot=slider-thumb]]:shadow [&_[data-slot=slider-thumb]]:ring-0!',
             '[&_[data-slot=slider-thumb]]:opacity-0 [&_[data-slot=slider-thumb]]:transition-opacity',
