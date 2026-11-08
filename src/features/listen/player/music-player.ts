@@ -10,8 +10,8 @@ import { podcastProgress, recordPodcastProgress } from '../podcasts'
 import { reportActivity } from '@/features/social/social'
 import { flushPlayback, rememberPlayback } from '@/lib/playback-outbox'
 import { recordRecent } from '../recent'
-import { audioCacheAvailable, cachedAudioUrl, prefetchAudio, recordCachedPlay } from './audio-cache'
-import { downloadedAudioUrl, downloadId, isDownloaded, setDownloadQuality, setDownloadSource } from './downloads'
+import { adoptIntoCache, audioCacheAvailable, cachedAudioUrl, prefetchAudio, recordCachedPlay } from './audio-cache'
+import { downloadedAudioUrl, downloadId, isDownloaded, setDownloadQuality, setDownloadSource, setReleaseHandler } from './downloads'
 import { DIRECT_FORMATS } from './quality'
 
 /**
@@ -177,6 +177,19 @@ export function connectMusicPlayer(next: typeof connection) {
   if (!next && connection) stop()
   connection = next
   if (next && state.index < 0) restoreSession(next.userId)
+  // Songs that leave the downloads go into the cache, if they are at least as good as what streams (else they'd play
+  // worse than streaming would); otherwise they are dropped.
+  setReleaseHandler(
+    next
+      ? async (id, blob, quality) => {
+          const settings = readLocalSettings(next.userId)
+          const stream = settings.musicQuality
+          const goodEnough = quality === null || (stream !== null && quality >= stream)
+          if (!goodEnough) return
+          await adoptIntoCache(`${id}|${stream ?? 'original'}`, blob, { maxBytes: settings.musicCacheMb * 1024 * 1024, keepOftenPlayed: settings.musicKeepOften })
+        }
+      : null,
+  )
   // Downloads come from the library in their own quality (and are fetched again when it changed while away).
   if (next) void setDownloadQuality(readLocalSettings(next.userId).musicDownloadQuality).then(() => setDownloadSource((id, quality) => libraryAudioUrl(id, quality, crypto.randomUUID())))
   else setDownloadSource(null)

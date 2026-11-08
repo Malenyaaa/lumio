@@ -51,6 +51,16 @@ let running = false
 let version = 0
 const listeners = new Set<() => void>()
 
+/**
+ * Where a song goes that no download holds any more: into the song cache, when the player says it is good enough
+ * (see setReleaseHandler). Set by the player once signed in.
+ */
+let release: ((id: string, blob: Blob, quality: number | null) => Promise<void>) | null = null
+
+export function setReleaseHandler(next: typeof release) {
+  release = next
+}
+
 /** Builds the address a song is downloaded from (in the download quality); set by the player once signed in. */
 let source: ((trackId: string, quality: number | null) => string) | null = null
 
@@ -85,14 +95,22 @@ function wanted() {
   return new Set(Object.values(index.collections).flatMap((collection) => collection.ids))
 }
 
-/** Lines up what is wanted but not there yet, and drops files nothing holds any more. */
-async function reconcile() {
+/**
+ * Lines up what is wanted but not there yet, and drops files nothing holds any more. `toCache`: they left a playlist
+ * as it changed (not removed by the user), so they may go on in the cache.
+ */
+async function reconcile(toCache = false) {
   const want = wanted()
   pending = [...want].filter((id) => !index.tracks[id])
   const unused = Object.keys(index.tracks).filter((id) => !want.has(id))
   if (unused.length && downloadsAvailable) {
     const cache = await caches.open(CACHE_NAME)
     for (const id of unused) {
+      // A library song left behind (e.g. taken out of a downloaded playlist) moves to the cache rather than vanishing.
+      if (toCache && release && !id.startsWith('podcast:')) {
+        const file = await cache.match(requestFor(id)).catch(() => undefined)
+        if (file) await release(id, await file.blob(), index.quality).catch(() => undefined)
+      }
       await cache.delete(requestFor(id)).catch(() => undefined)
       delete index.tracks[id]
     }
@@ -207,6 +225,12 @@ export function downloadCollection(key: string, name: string, ids: string[], url
   void reconcile()
 }
 
+/** The same, for a playlist that changed: songs it no longer has may move to the cache. */
+function updateCollection(key: string, collection: Collection, ids: string[]) {
+  index.collections[key] = { ...collection, ids }
+  void reconcile(true)
+}
+
 /** Removes a collection's download (its songs stay while another download holds them). */
 export function removeDownload(key: string) {
   delete index.collections[key]
@@ -219,7 +243,7 @@ export function syncDownload(key: string, ids: string[]) {
   if (!collection) return
   const next = [...new Set(ids)]
   if (next.length === collection.ids.length && next.every((id, position) => collection.ids[position] === id)) return
-  downloadCollection(key, collection.name, next, collection.urls, collection.group)
+  updateCollection(key, collection, next)
 }
 
 /** Removes every download (the settings' button). */

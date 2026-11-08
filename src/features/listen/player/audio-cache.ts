@@ -126,6 +126,23 @@ export function prefetchAudio(key: string, url: string, limits: CacheLimits, pla
 }
 
 /**
+ * Takes a song the user had downloaded and no longer keeps (it left a downloaded playlist): it stays in the cache like
+ * any other song, until room is needed. Counts as played once, so it isn't the very first to go.
+ */
+export async function adoptIntoCache(key: string, blob: Blob, limits: CacheLimits) {
+  if (!audioCacheAvailable || index[key] || !blob.size || blob.size > limits.maxBytes) return
+  try {
+    const cache = await caches.open(CACHE_NAME)
+    await cache.put(requestFor(key), new Response(blob, { headers: { 'Content-Type': blob.type || 'audio/mpeg', 'Content-Length': String(blob.size) } }))
+    index[key] = { bytes: blob.size, plays: 1, lastPlayed: Date.now(), added: Date.now() }
+    saveIndex()
+    await trim(limits, key)
+  } catch {
+    // Storage full or blocked: the song is simply gone, as before.
+  }
+}
+
+/**
  * Drops songs until the cache fits the limit: those played rarely and long ago first. Often played songs go last (or
  * never, when they are to be kept and there is anything else to drop). `keep` (the song just added) stays.
  */
