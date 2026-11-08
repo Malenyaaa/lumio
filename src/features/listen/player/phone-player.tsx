@@ -14,7 +14,7 @@ import {
   IconRepeat,
   IconRepeatOnce,
 } from '@tabler/icons-react'
-import { useRef, useState, type PointerEvent, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { useLocation } from 'react-router'
 import { FadeImage } from '@/components/media/fade-image'
 import { Sheet, SheetBody, SheetContent, SheetTitle } from '@/components/ui/sheet'
@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils'
 import { TrackMenu } from '../track-menu'
 import { useLyrics } from './lyrics'
 import { playerBarMessages } from './messages'
-import { useMusic } from './music-player'
+import { music as musicPlayer, useMusic } from './music-player'
 import { NowPlayingDetails } from './now-playing'
 import { closePhonePlayer, setPhoneSheet, usePhonePlayer } from './panel'
 import { ArtistLine } from './player-bar'
@@ -73,8 +73,14 @@ function Player({ track }: { track: BaseItemDto }) {
   const t = useMessages(messages)
   const bar = useMessages(playerBarMessages)
   const state = usePlayerControls()
-  const { source } = useMusic()
-  const cover = portraitImageUrl(api, track, { fillHeight: 720 })
+  const music = useMusic()
+  const { source } = music
+  const coverOf = (item: BaseItemDto | undefined) => (item ? portraitImageUrl(api, item, { fillHeight: 720 }) : undefined)
+  // The songs before and after, whose covers come in from the sides (on this device's queue, or the controlled one's).
+  const queue = state.remote ? state.remote.queue : music.queue
+  const index = state.remote ? state.remote.index : music.index
+  const previous = index > 0 ? queue[index - 1] : undefined
+  const next = index >= 0 ? queue[index + 1] : undefined
   const tint = useDominantColor(portraitImageUrl(api, track, { fillHeight: 64 })).data ?? 'rgb(64 64 64)'
   const lyrics = useLyrics(track)
   const hasLyrics = !lyrics.isLoading && !!lyrics.data?.lines.length
@@ -103,7 +109,16 @@ function Player({ track }: { track: BaseItemDto }) {
           </div>
         </div>
 
-        <SwipeCover cover={cover} onNext={state.next} onPrevious={state.previous} />
+        <SwipeCover
+          trackKey={`${track.Id}:${index}`}
+          index={index}
+          covers={[coverOf(previous), coverOf(track), coverOf(next)]}
+          hasPrevious={!!previous}
+          hasNext={!!next}
+          onNext={state.next}
+          // Swiping back always goes to the song before (the button restarts the song first).
+          onPrevious={() => (state.remote ? state.remote.jump(index - 1) : musicPlayer.jump(index - 1))}
+        />
 
         <div className="mt-auto space-y-5 pt-6">
           <div className="flex items-center gap-3">
@@ -170,31 +185,78 @@ function Player({ track }: { track: BaseItemDto }) {
   )
 }
 
-/** The cover; swiped sideways it follows the finger and, far enough, goes to the next or previous song. */
-function SwipeCover({ cover, onNext, onPrevious }: { cover?: string; onNext: () => void; onPrevious: () => void }) {
+/** Space between two covers in the strip. */
+const COVER_GAP = 24
+
+/**
+ * The cover in a strip with the songs before and after it, as in Spotify: swiped sideways it follows the finger with
+ * the neighbouring cover already coming in, and far enough it goes there. When the song changes otherwise (the
+ * buttons, the end of a song) the new cover pushes the old one out from the side it comes from.
+ */
+function SwipeCover({
+  trackKey,
+  index,
+  covers,
+  hasPrevious,
+  hasNext,
+  onNext,
+  onPrevious,
+}: {
+  trackKey: string
+  index: number
+  covers: [string | undefined, string | undefined, string | undefined]
+  hasPrevious: boolean
+  hasNext: boolean
+  onNext: () => void
+  onPrevious: () => void
+}) {
+  const box = useRef<HTMLDivElement>(null)
   const start = useRef<{ x: number; y: number } | null>(null)
   const [offset, setOffset] = useState(0)
-  const [dragging, setDragging] = useState(false)
-  const [leaving, setLeaving] = useState<-1 | 1 | 0>(0)
-  const end = (event: PointerEvent) => {
-    if (!start.current) return
-    const width = event.currentTarget.clientWidth
-    start.current = null
-    setDragging(false)
-    if (Math.abs(offset) > width * 0.28) {
-      const direction = offset < 0 ? -1 : 1
-      setLeaving(direction)
-      window.setTimeout(() => {
-        if (direction < 0) onNext()
-        else onPrevious()
-        setLeaving(0)
+  const [animate, setAnimate] = useState(false)
+  // A swipe that went through: the strip is already where the new song is.
+  const swiped = useRef(false)
+  const shown = useRef({ key: trackKey, index })
+  const step = () => (box.current?.clientWidth ?? 0) + COVER_GAP
+
+  useLayoutEffect(() => {
+    if (shown.current.key === trackKey) return
+    const forward = index > shown.current.index ? 1 : index < shown.current.index ? -1 : 0
+    shown.current = { key: trackKey, index }
+    setAnimate(false)
+    if (swiped.current || !forward) {
+      swiped.current = false
+      setOffset(0)
+      return
+    }
+    // The old cover is now the neighbour: start with it in the middle, then slide the new one in.
+    setOffset(forward * step())
+    const frame = requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        setAnimate(true)
         setOffset(0)
-      }, 180)
+      }),
+    )
+    return () => cancelAnimationFrame(frame)
+  }, [trackKey, index])
+
+  const end = () => {
+    if (!start.current) return
+    start.current = null
+    const width = step()
+    const direction = offset < 0 ? 1 : -1
+    setAnimate(true)
+    if (Math.abs(offset) > width * 0.28 && (direction > 0 ? hasNext : hasPrevious)) {
+      swiped.current = true
+      setOffset(-direction * width)
+      window.setTimeout(() => (direction > 0 ? onNext() : onPrevious()), 220)
     } else setOffset(0)
   }
+
   return (
     <div
-      className="mt-6 flex flex-1 items-center justify-center touch-pan-y select-none"
+      // As wide as the screen, so the neighbours slide in from its edges.
+      className="-mx-6 mt-6 flex flex-1 items-center justify-center overflow-hidden touch-pan-y select-none"
       onPointerDown={(event) => {
         if (event.pointerType === 'mouse') return
         start.current = { x: event.clientX, y: event.clientY }
@@ -202,24 +264,33 @@ function SwipeCover({ cover, onNext, onPrevious }: { cover?: string; onNext: () 
       onPointerMove={(event) => {
         if (!start.current) return
         const dx = event.clientX - start.current.x
-        // Mostly sideways: the cover follows; mostly down, the sheet (closing) gets the gesture.
+        // Mostly sideways: the strip follows; mostly down, the sheet (closing) gets the gesture.
         if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(event.clientY - start.current.y)) {
-          setDragging(true)
-          setOffset(dx)
+          setAnimate(false)
+          // Where there is no song, it only gives a little.
+          const blocked = (dx < 0 && !hasNext) || (dx > 0 && !hasPrevious)
+          setOffset(blocked ? dx / 4 : dx)
         }
       }}
       onPointerUp={end}
       onPointerCancel={() => {
         start.current = null
-        setDragging(false)
+        setAnimate(true)
         setOffset(0)
       }}
     >
-      <div
-        className={cn('aspect-square w-full max-w-[min(100%,48dvh)] overflow-hidden rounded-md bg-muted shadow-2xl', !dragging && 'transition-[transform,opacity] duration-200 ease-out')}
-        style={{ transform: leaving ? `translateX(${leaving * 120}%)` : `translateX(${offset}px)`, opacity: leaving ? 0 : 1 }}
-      >
-        {cover && <FadeImage key={cover} src={cover} alt="" className="size-full object-cover" draggable={false} />}
+      <div ref={box} className="relative aspect-square w-[calc(100%_-_3rem)] max-w-[min(calc(100%_-_3rem),48dvh)]">
+        <div className={cn('absolute inset-0', animate && 'transition-transform duration-[260ms] ease-out')} style={{ transform: `translateX(${offset}px)` }}>
+          {covers.map((cover, slot) => (
+            <div
+              key={slot}
+              className="absolute inset-0 overflow-hidden rounded-md bg-muted shadow-2xl"
+              style={{ transform: `translateX(calc(${slot - 1} * (100% + ${COVER_GAP}px)))`, visibility: cover || slot === 1 ? 'visible' : 'hidden' }}
+            >
+              {cover && <FadeImage key={cover} src={cover} alt="" className="size-full object-cover" draggable={false} />}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )

@@ -33,7 +33,7 @@ export function PhoneMiniPlayer({ onOpen }: { onOpen?: () => void }) {
       aria-label={t.player}
       // Raises the bottom inset (index.css), so content and messages stay clear of it.
       data-mini-player
-      className="fixed inset-x-2 bottom-[calc(var(--tab-bar-height)+var(--safe-bottom))] z-40 h-14 overflow-hidden rounded-lg shadow-lg animate-in fade-in-0 slide-in-from-bottom-2 duration-300 md:hidden"
+      className="[view-transition-name:app-mini-player] fixed inset-x-2 bottom-[calc(var(--tab-bar-height)+var(--safe-bottom))] z-40 h-14 overflow-hidden rounded-lg shadow-lg animate-in fade-in-0 slide-in-from-bottom-2 duration-300 md:hidden"
       style={{ background: `color-mix(in srgb, ${tint ?? 'var(--muted)'} 55%, var(--background))` }}
     >
       <div className="flex h-full items-center gap-2.5 pr-1 pl-2">

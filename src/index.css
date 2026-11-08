@@ -179,7 +179,8 @@ html.dark {
   }
 }
 
-/* View Transitions: the page cross-fades while the header stays put; posters morph into the detail poster. */
+/* View Transitions: the page cross-fades while the header (and on phones the tabs and the mini player) stays put;
+   posters morph into the detail poster. */
 ::view-transition-old(root) {
   animation: 150ms ease-out both vt-fade-out;
 }
@@ -188,7 +189,9 @@ html.dark {
   animation: 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both vt-fade-in;
 }
 
-::view-transition-group(app-header) {
+::view-transition-group(app-header),
+::view-transition-group(app-tabs),
+::view-transition-group(app-mini-player) {
   animation: none;
 }
 

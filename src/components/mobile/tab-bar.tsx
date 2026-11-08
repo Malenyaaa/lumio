@@ -26,7 +26,8 @@ export function TabBar({ tabs, pathname }: { tabs: Tab[]; pathname: string }) {
     <nav
       aria-label={t.tabs}
       data-tab-bar
-      className="fixed inset-x-0 bottom-0 z-40 bg-linear-to-t from-background from-65% to-background/0 pt-3 pb-(--safe-bottom) md:hidden"
+      // Its own layer in page transitions: it stays put while the page changes (index.css).
+      className="[view-transition-name:app-tabs] fixed inset-x-0 bottom-0 z-40 bg-linear-to-t from-background from-65% to-background/0 pt-3 pb-(--safe-bottom) md:hidden"
     >
       <div className="grid h-14" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
         {tabs.map((tab) => (
