@@ -23,3 +23,16 @@ export function apiBase(): string {
 
 /** Where Lumio's apps (Android, Windows, Linux) are downloaded: the newest GitHub Release. */
 export const APP_DOWNLOAD_URL = 'https://github.com/PalmarHealer/lumio/releases/latest'
+
+/** Lumio's apps by system: Android (APK), Windows (installer), Linux (AppImage, deb). */
+export type AppPlatform = 'android' | 'windows' | 'linux'
+
+/** Which of the apps fits this device; null where there is none (iPhone, iPad, Mac, ChromeOS). */
+export function devicePlatform(): AppPlatform | null {
+  if (typeof navigator === 'undefined') return null
+  const agent = navigator.userAgent
+  if (/Android/i.test(agent)) return 'android'
+  if (/Windows/i.test(agent)) return 'windows'
+  if (/Linux/i.test(agent) && !/CrOS/i.test(agent)) return 'linux'
+  return null
+}

@@ -58,8 +58,8 @@ import { HeaderSearch } from '@/features/search/header-search'
 import { useLocalSettings } from '@/features/settings/local-settings'
 import { useMessages } from '@/lib/i18n'
 import { markAppReady } from '@/lib/boot'
-import { inJellyfinApp, inNativeApp, openAppSettings, openServerSelection } from '@/lib/native-app'
-import { desktop } from '@/lib/desktop'
+import { inJellyfinApp, openAppSettings, openServerSelection } from '@/lib/native-app'
+import { useAppPromoted } from '@/components/app-promo'
 import { APP_DOWNLOAD_URL } from '@/lib/platform'
 import { inMode, isLaunchAtRoot, lastMode, modeHome, rememberMode, rememberPath, useAppMode } from '@/lib/app-mode'
 import { useTheme, useThemePreference, type ThemePreference } from '@/lib/theme'
@@ -350,6 +350,7 @@ export function HeaderActions({ search = true }: { search?: boolean }) {
   const hideCast = useHidden('header:cast')
   const t = useMessages(shellMessages)
   const mode = useAppMode()
+  const appPromoted = useAppPromoted()
   // "Connect a device" opens at once when asked for by address (jellyfin-web's Quick Connect page leads to /?connect=1).
   const [connectOpen, setConnectOpen] = useState(() => new URLSearchParams(window.location.search).has('connect'))
   return (
@@ -411,8 +412,8 @@ export function HeaderActions({ search = true }: { search?: boolean }) {
             <DropdownMenuItem onClick={() => setConnectOpen(true)}>
               <IconDeviceMobile /> {t.quickConnect}
             </DropdownMenuItem>
-            {/* In a browser: the apps for Android, Windows and Linux (not offered inside one of them). */}
-            {!inNativeApp() && !desktop() && (
+            {/* In a browser on a system with an app the admin promotes (never inside one of the apps). */}
+            {appPromoted && (
               <DropdownMenuItem render={<a href={APP_DOWNLOAD_URL} target="_blank" rel="noreferrer noopener" />}>
                 <IconDownload /> {t.getApp}
                 <IconExternalLink className="ml-auto size-3.5 text-muted-foreground" />

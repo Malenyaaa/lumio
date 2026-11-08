@@ -25,8 +25,8 @@ import { useAuthedSession } from '@/features/auth/session'
 import { useLocalSettings } from '@/features/settings/local-settings'
 import { APP_MODES, inMode, modeHome, useAppMode } from '@/lib/app-mode'
 import { useMessages } from '@/lib/i18n'
-import { inJellyfinApp, inNativeApp, openAppSettings, openServerSelection } from '@/lib/native-app'
-import { desktop } from '@/lib/desktop'
+import { inJellyfinApp, openAppSettings, openServerSelection } from '@/lib/native-app'
+import { useAppPromoted } from '@/components/app-promo'
 import { APP_DOWNLOAD_URL } from '@/lib/platform'
 import { useThemePreference, type ThemePreference } from '@/lib/theme'
 import { cn } from '@/lib/utils'
@@ -45,6 +45,7 @@ export function ProfileDrawer() {
   const { settings } = useLocalSettings()
   const plugins = usePluginRegistry()
   const admin = useAdminLinks()
+  const appPromoted = useAppPromoted()
   // Open on the page it was opened on: following a link closes it.
   const [openOn, setOpenOn] = useState<string | null>(null)
   const open = openOn === pathname
@@ -105,8 +106,8 @@ export function ProfileDrawer() {
             )}
             <Section>
               <Row icon={IconDeviceMobile} label={t.quickConnect} onClick={() => setConnectOpen(true)} />
-              {/* In a browser: the apps for Android, Windows and Linux (not offered inside one of them). */}
-              {!inNativeApp() && !desktop() && <Row icon={IconDownload} label={t.getApp} href={APP_DOWNLOAD_URL} external />}
+              {/* In a browser on a system with an app the admin promotes (never inside one of the apps). */}
+              {appPromoted && <Row icon={IconDownload} label={t.getApp} href={APP_DOWNLOAD_URL} external />}
               {/* Inside Jellyfin's Android app: its own screens, which its own web client reaches the same way. */}
               {inJellyfinApp() && (
                 <>

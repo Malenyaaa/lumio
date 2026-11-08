@@ -90,6 +90,20 @@ export function DisplayPage() {
         />
       </Section>
 
+      {/* Users in a browser on these systems are pointed to the app (once, and in the profile menu). */}
+      <Section title={t.appsTitle} description={t.appsDescription}>
+        {([['android', 'Android'], ['windows', 'Windows'], ['linux', 'Linux']] as const).map(([platform, name]) => (
+          <SwitchField
+            key={platform}
+            id={`promote-${platform}`}
+            label={name}
+            checked={config.appPromotion?.[platform] !== false}
+            disabled={save.isPending}
+            onChange={(enabled) => save.mutate((current) => ({ ...current, appPromotion: { ...current.appPromotion, [platform]: enabled } }))}
+          />
+        ))}
+      </Section>
+
       <Section title={t.cacheTitle} description={t.cacheDescription}>
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
           <p className="text-sm text-muted-foreground">{config.cacheVersion ? t.cacheResetCount(config.cacheVersion) : t.cacheNeverReset}</p>

@@ -33,6 +33,8 @@ export interface LumioConfig {
   cacheVersion?: number
   /** The player shows the title's backdrop until the video's first frame (as Jellyfin's apps do); on unless false. */
   playerLoadingArt?: boolean
+  /** Whether the browser suggests Lumio's app on each system (a notice, and the profile menu's entry); on unless false. */
+  appPromotion?: Partial<Record<'android' | 'windows' | 'linux', boolean>>
   /** Libraries the music metadata tasks leave out (e.g. audio plays); by id. */
   metadataExcludedLibraries?: string[]
   /** Artists (by name) whose songs are never looked up, by the tasks nor while they play. */

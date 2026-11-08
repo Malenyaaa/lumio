@@ -4,6 +4,7 @@ import { ErrorBoundary, RouteError } from '@/components/error-boundary'
 import { NotFound } from '@/components/not-found'
 import { AppShell, RequireSession } from '@/components/app-shell'
 import { StorageNotice } from '@/components/storage-notice'
+import { AppPromo } from '@/components/app-promo'
 import { Toaster } from '@/components/ui/sonner'
 import { useToastsWanted } from '@/features/settings/local-settings'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -65,6 +66,8 @@ function RootLayout() {
       <BrandingEffects />
       <MusicPlayerHost />
       <SocialHostWhenSignedIn />
+      {/* In a browser: once, the hint to Lumio's app for this system. */}
+      <AppPromo />
       {/* Coming back (from the player, a detail page, the browser's back button) returns to the same scroll position. */}
       <ScrollRestoration />
     </RemoteProvider>
