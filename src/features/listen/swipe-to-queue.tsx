@@ -60,9 +60,12 @@ export function SwipeToQueue({ onQueue, children, className }: { onQueue: () => 
       // Vertical scrolling stays the browser's; the sideways pull is ours.
       style={{ touchAction: 'pan-y' }}
     >
-      <div aria-hidden className={cn('absolute inset-y-0 left-0 flex items-center bg-listen pl-4 text-listen-foreground', !active && 'transition-[width] duration-200')} style={{ width: offset }}>
-        <IconPlaylistAdd className={cn('size-6 transition-transform', offset >= THRESHOLD && 'scale-125')} />
-      </div>
+      {/* Only while pulled: at rest it would peek out at the row's rounded corners. */}
+      {offset > 0 && (
+        <div aria-hidden className={cn('absolute inset-y-0 left-0 flex items-center overflow-hidden bg-listen pl-4 text-listen-foreground', !active && 'transition-[width] duration-200')} style={{ width: offset }}>
+          <IconPlaylistAdd className={cn('size-6 shrink-0 transition-transform', offset >= THRESHOLD && 'scale-125')} />
+        </div>
+      )}
       <div className={cn('relative bg-background', !active && 'transition-transform duration-200 ease-out')} style={{ transform: `translateX(${offset}px)` }}>
         {children}
       </div>
