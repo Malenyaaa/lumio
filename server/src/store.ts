@@ -71,7 +71,49 @@ export interface Play {
   offline?: boolean
   /** How long it waited for data while playing. */
   bufferingMs?: number
+  /** A song's main artist and its album's name (for Wrapped; older plays only have `subtitle`). */
+  artist?: string
+  album?: string
 }
+
+/** A play from another service's history (`source` is `import:<service>`), handed in by the person. */
+export interface ImportedPlay {
+  session: string
+  kind: 'podcast' | 'audio'
+  key: string
+  title: string
+  subtitle?: string
+  artist?: string
+  album?: string
+  contextId?: string
+  client: string
+  startedAt: number
+  seconds: number
+  reasonStart?: string
+  reasonEnd?: string
+  shuffle?: boolean
+  offline?: boolean
+}
+
+/** What Wrapped reads of a play. */
+export interface WrappedRow {
+  kind: string
+  key: string
+  title: string
+  subtitle: string | null
+  artist: string | null
+  album: string | null
+  contextId: string | null
+  startedAt: number
+  seconds: number
+  imported: boolean
+}
+
+/**
+ * Plays brought in from another service belong to the person's own listening (Wrapped), but not to the administrators'
+ * statistics, nor to the list of podcast episodes heard (they have no page here).
+ */
+const NOT_IMPORTED = "(source IS NULL OR source NOT LIKE 'import:%')"
 
 function playOf(row: Record<string, string | number | null>): Play {
   return {
@@ -92,6 +134,8 @@ function playOf(row: Record<string, string | number | null>): Play {
     shuffle: row.shuffle === null || row.shuffle === undefined ? undefined : !!row.shuffle,
     offline: row.offline === null || row.offline === undefined ? undefined : !!row.offline,
     bufferingMs: row.buffering_ms === null || row.buffering_ms === undefined ? undefined : Number(row.buffering_ms),
+    artist: row.artist === null || row.artist === undefined ? undefined : String(row.artist),
+    album: row.album === null || row.album === undefined ? undefined : String(row.album),
   }
 }
 
@@ -118,7 +162,7 @@ export class Store {
     `)
     // How a play went (music too): why it started and ended, where it came from, shuffle, from the device, buffering.
     const playColumns = (this.db.prepare('PRAGMA table_info(plays)').all() as Array<{ name: string }>).map((column) => column.name)
-    for (const [name, type] of [['source', 'TEXT'], ['reason_start', 'TEXT'], ['reason_end', 'TEXT'], ['shuffle', 'INTEGER'], ['offline', 'INTEGER'], ['buffering_ms', 'INTEGER']]) {
+    for (const [name, type] of [['source', 'TEXT'], ['reason_start', 'TEXT'], ['reason_end', 'TEXT'], ['shuffle', 'INTEGER'], ['offline', 'INTEGER'], ['buffering_ms', 'INTEGER'], ['artist', 'TEXT'], ['album', 'TEXT']]) {
       if (!playColumns.includes(name!)) this.db.exec(`ALTER TABLE plays ADD COLUMN ${name} ${type}`)
     }
     // What the track was (title, artist, album), so a list of misses can name them.
@@ -221,8 +265,8 @@ export class Store {
   recordPlay(play: Play) {
     this.db
       .prepare(
-        `INSERT INTO plays (session, user_id, kind, item_key, title, subtitle, context_id, image, client, started_at, seconds, updated_at, source, reason_start, reason_end, shuffle, offline, buffering_ms)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO plays (session, user_id, kind, item_key, title, subtitle, context_id, image, client, started_at, seconds, updated_at, source, reason_start, reason_end, shuffle, offline, buffering_ms, artist, album)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(session) DO UPDATE SET seconds = MAX(plays.seconds, excluded.seconds), updated_at = excluded.updated_at,
            reason_end = COALESCE(excluded.reason_end, plays.reason_end), buffering_ms = MAX(COALESCE(plays.buffering_ms, 0), COALESCE(excluded.buffering_ms, 0))
          WHERE plays.user_id = excluded.user_id`,
@@ -246,20 +290,118 @@ export class Store {
         play.shuffle === undefined ? null : Number(play.shuffle),
         play.offline === undefined ? null : Number(play.offline),
         play.bufferingMs ?? null,
+        play.artist ?? null,
+        play.album ?? null,
       )
+  }
+
+  /**
+   * Brings in plays from another service's history, in one go. Each keeps its own session (its time and track), so the
+   * same file imported again adds nothing; a song found in the library since then now points to it.
+   */
+  importPlays(userId: string, source: string, plays: ImportedPlay[]) {
+    const statement = this.db.prepare(
+      `INSERT INTO plays (session, user_id, kind, item_key, title, subtitle, context_id, client, started_at, seconds, updated_at, source, reason_start, reason_end, shuffle, offline, artist, album)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(session) DO UPDATE SET item_key = excluded.item_key, context_id = excluded.context_id
+       WHERE plays.user_id = excluded.user_id`,
+    )
+    const now = Date.now()
+    this.db.exec('BEGIN')
+    try {
+      for (const play of plays) {
+        statement.run(
+          play.session,
+          userId,
+          play.kind,
+          play.key,
+          play.title,
+          play.subtitle ?? null,
+          play.contextId ?? null,
+          play.client,
+          play.startedAt,
+          play.seconds,
+          now,
+          `import:${source}`,
+          play.reasonStart ?? null,
+          play.reasonEnd ?? null,
+          play.shuffle === undefined ? null : Number(play.shuffle),
+          play.offline === undefined ? null : Number(play.offline),
+          play.artist ?? null,
+          play.album ?? null,
+        )
+      }
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  /** How much of a service's history someone brought in: plays, how many of them are songs in the library, first, last. */
+  importedSummary(userId: string, source: string) {
+    const row = this.db
+      .prepare(
+        "SELECT COUNT(*) AS count, MIN(started_at) AS first, MAX(started_at) AS last, SUM(kind = 'audio' AND item_key NOT LIKE ?) AS matched FROM plays WHERE user_id = ? AND source = ?",
+      )
+      .get(`${source}:%`, userId, `import:${source}`) as { count: number; first: number | null; last: number | null; matched: number | null }
+    return { count: row.count, first: row.first, last: row.last, matched: row.matched ?? 0 }
+  }
+
+  deleteImported(userId: string, source: string) {
+    this.db.prepare('DELETE FROM plays WHERE user_id = ? AND source = ?').run(userId, `import:${source}`)
+  }
+
+  /** Someone's songs and podcast episodes in a time span, for Wrapped (imported ones too). */
+  wrappedRows(userId: string, from: number, to: number): WrappedRow[] {
+    const rows = this.db
+      .prepare(
+        `SELECT kind, item_key, title, subtitle, artist, album, context_id, started_at, seconds, source FROM plays
+         WHERE user_id = ? AND started_at >= ? AND started_at < ? AND kind IN ('audio', 'podcast') AND seconds > 0 ORDER BY started_at`,
+      )
+      .all(userId, from, to) as Array<Record<string, string | number | null>>
+    return rows.map((row) => ({
+      kind: String(row.kind),
+      key: String(row.item_key),
+      title: String(row.title),
+      subtitle: row.subtitle === null ? null : String(row.subtitle),
+      artist: row.artist === null ? null : String(row.artist),
+      album: row.album === null ? null : String(row.album),
+      contextId: row.context_id === null ? null : String(row.context_id),
+      startedAt: Number(row.started_at),
+      seconds: Number(row.seconds),
+      imported: typeof row.source === 'string' && row.source.startsWith('import:'),
+    }))
+  }
+
+  /** When someone first played each artist (as the plays name them), for Wrapped's discoveries. */
+  firstPlaysByArtist(userId: string, before: number) {
+    return this.db
+      .prepare("SELECT artist, subtitle, MIN(started_at) AS first FROM plays WHERE user_id = ? AND kind = 'audio' AND seconds > 0 AND started_at < ? GROUP BY artist, subtitle")
+      .all(userId, before) as Array<{ artist: string | null; subtitle: string | null; first: number }>
+  }
+
+  /** The years someone listened in (as UTC years; Wrapped settles the edges in the person's time zone). */
+  listeningYears(userId: string): number[] {
+    const rows = this.db
+      .prepare(
+        "SELECT DISTINCT CAST(strftime('%Y', started_at / 1000, 'unixepoch') AS INTEGER) AS year FROM plays WHERE user_id = ? AND kind IN ('audio', 'podcast') AND seconds > 0 ORDER BY year DESC",
+      )
+      .all(userId) as Array<{ year: number }>
+    return rows.map((row) => row.year)
   }
 
   /** Someone's plays, newest first (for their history). */
   plays(userId: string, limit: number, before = Number.MAX_SAFE_INTEGER): Play[] {
     const rows = this.db
-      .prepare('SELECT * FROM plays WHERE user_id = ? AND started_at < ? ORDER BY started_at DESC LIMIT ?')
+      .prepare(`SELECT * FROM plays WHERE user_id = ? AND started_at < ? AND ${NOT_IMPORTED} ORDER BY started_at DESC LIMIT ?`)
       .all(userId, before, limit) as Array<Record<string, string | number | null>>
     return rows.map(playOf)
   }
 
   /** Everyone's plays in a time span (for the administrators' statistics). */
   playsBetween(from: number, to: number): Play[] {
-    return (this.db.prepare('SELECT * FROM plays WHERE started_at >= ? AND started_at < ? ORDER BY started_at').all(from, to) as Array<Record<string, string | number | null>>).map(playOf)
+    return (this.db.prepare(`SELECT * FROM plays WHERE started_at >= ? AND started_at < ? AND ${NOT_IMPORTED} ORDER BY started_at`).all(from, to) as Array<Record<string, string | number | null>>).map(playOf)
   }
 
   /** Remembers who added songs to a playlist (Jellyfin doesn't keep it), for shared playlists' "Added by". */

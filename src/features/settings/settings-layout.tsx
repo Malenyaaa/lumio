@@ -54,10 +54,10 @@ export function SettingsLayout() {
     <div className="mx-auto flex max-w-5xl flex-row gap-12 px-8 pb-12 pt-20">
       {/* At most the scrolling area's height (minus the top offset and the bottom padding): a taller nav would be pushed
           up by the end of the page while scrolling and snap back on the next page. The list scrolls on its own instead.
-          That area is the window, or Listen's content panel, which sets both values (see ListenShell). */}
+          That area is the window, or Listen's content panel, which sets these values (see ListenShell). */}
       <nav
         aria-label={t.navigation}
-        className="sticky top-(--sticky-top,5rem) flex max-h-[calc(var(--scroll-root-height,100dvh)-var(--sticky-top,5rem)-3rem)] w-56 shrink-0 flex-col gap-4 self-start"
+        className="sticky top-(--sticky-top,5rem) flex max-h-[calc(var(--scroll-root-height,100dvh)-var(--sticky-top,5rem)-var(--sticky-bottom,3rem))] w-56 shrink-0 flex-col gap-4 self-start"
       >
         <SearchBox query={query} onChange={setQuery} />
         <div className="-mx-1 min-h-0 overflow-y-auto overscroll-contain px-1 pb-1 [scrollbar-width:thin]">
