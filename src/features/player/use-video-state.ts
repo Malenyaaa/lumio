@@ -1,4 +1,5 @@
 import { useEffect, useState, type RefObject } from 'react'
+import { levelOf } from '@/lib/loudness'
 
 export interface VideoState {
   paused: boolean
@@ -27,7 +28,8 @@ function read(el: HTMLVideoElement, waiting: boolean): VideoState {
     currentTime: el.currentTime,
     duration: Number.isFinite(el.duration) ? el.duration : 0,
     buffered,
-    volume: el.volume,
+    // The slider's position, not the element's (linear) volume.
+    volume: levelOf(el.volume),
     muted: el.muted,
     waiting,
   }

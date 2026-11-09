@@ -22,6 +22,7 @@ import { useUserConfiguration } from '@/features/settings/use-user-configuration
 import { secondsToTicks, ticksToSeconds } from '@/lib/format'
 import { backdropImageUrl, landscapeImageUrl, portraitImageUrl } from '@/lib/images'
 import { rememberPlayback } from '@/lib/playback-outbox'
+import { levelOf, loudness } from '@/lib/loudness'
 import { logOfflineWatch } from '@/features/listen/player/play-log'
 import { useMessages } from '@/lib/i18n'
 import { music } from '@/features/listen/player/music-player'
@@ -521,10 +522,11 @@ function Player({ id }: { id: string }) {
     [syncActive, remote.syncRequests, seekLocal],
   )
   const seekBy = useCallback((delta: number) => seek(ticksToSeconds(positionTicks.current()) + delta), [seek])
+  /** `volume` is the slider's position: the element gets it as heard (see loudness). */
   const setVolume = useCallback((volume: number) => {
     const el = video.current
     if (!el) return
-    el.volume = volume
+    el.volume = loudness(volume)
     el.muted = volume === 0
   }, [])
   const toggleMute = useCallback(() => {
@@ -743,8 +745,8 @@ function Player({ id }: { id: string }) {
         j: () => seekBy(-settings.skipBackSeconds),
         ArrowRight: () => seekBy(settings.skipForwardSeconds),
         l: () => seekBy(settings.skipForwardSeconds),
-        ArrowUp: () => el && setVolume(Math.min(1, el.volume + 0.1)),
-        ArrowDown: () => el && setVolume(Math.max(0, el.volume - 0.1)),
+        ArrowUp: () => el && setVolume(Math.min(1, levelOf(el.volume) + 0.1)),
+        ArrowDown: () => el && setVolume(Math.max(0, levelOf(el.volume) - 0.1)),
         m: toggleMute,
         f: inApp ? () => undefined : toggleFullscreen,
         n: playNext,

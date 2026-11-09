@@ -7,6 +7,7 @@ import { externalOf } from '@/lib/external-items'
 import { secondsToTicks, ticksToSeconds } from '@/lib/format'
 import { readLocalSettings, streamingMusicQuality } from '@/features/settings/local-settings'
 import { jellyfin } from '@/lib/jellyfin'
+import { levelOf, loudness } from '@/lib/loudness'
 import { podcastProgress, recordPodcastProgress } from '../podcasts'
 import { reportActivity } from '@/features/social/social'
 import { flushPlayback, rememberPlayback } from '@/lib/playback-outbox'
@@ -82,7 +83,7 @@ function readVolume() {
     const level = localStorage.getItem(VOLUME_KEY)
     const old = localStorage.getItem(OLD_VOLUME_KEY)
     // A volume set before the slider followed the ear: the same loudness as then.
-    const stored = level !== null ? Number(level) : old !== null ? Math.cbrt(Number(old)) : NaN
+    const stored = level !== null ? Number(level) : old !== null ? levelOf(Number(old)) : NaN
     return Number.isFinite(stored) ? Math.min(1, Math.max(0, stored)) : 0.8
   } catch {
     return 0.8
@@ -333,12 +334,6 @@ const audio = typeof Audio !== 'undefined' ? new Audio() : null
  */
 let gainFactor = 1
 const albumGains = new Map<string, number | null>()
-
-/**
- * The ear hears loudness logarithmically, the element's volume is linear: with the slider straight on it, the first
- * few percent did almost everything. Cubed (as system mixers do), every step of the slider sounds about as big.
- */
-const loudness = (level: number) => level ** 3
 
 /** Pause and play fade (0 silent – 1 full), instead of cutting the sound off. */
 let fadeLevel = 1
