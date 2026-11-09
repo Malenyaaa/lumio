@@ -31,6 +31,8 @@ export function WrappedBanner() {
   return (
     <Link
       to={`/listen/wrapped/${year}`}
+      // The story opens over the page at once (a page transition would keep the header over it for a moment).
+      viewTransition={false}
       className="group relative flex items-center gap-4 overflow-hidden rounded-xl p-5 transition-transform duration-300 hover:scale-[1.01] active:scale-[0.99]"
       style={paletteStyle(palette)}
     >

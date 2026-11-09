@@ -175,8 +175,9 @@
 }
 
 /* Patterns (Op-Art). */
+/* One stripe and gap per tile, so moving by a tile loops without a seam. */
 .wrapped-stripes {
-  background: repeating-linear-gradient(90deg, currentColor 0 14px, transparent 14px 28px);
+  background: linear-gradient(90deg, currentColor 0 14px, transparent 14px 28px) 0 0 / 28px 100%;
 }
 
 .wrapped-stripes-move {
@@ -317,6 +318,12 @@
 /* Entrances with a little overshoot, for the loud ones. */
 .wrapped-spring {
   animation-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1.35) !important;
+}
+
+/* Paused: the slide is a still frame. */
+.wrapped-paused,
+.wrapped-paused * {
+  animation-play-state: paused !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

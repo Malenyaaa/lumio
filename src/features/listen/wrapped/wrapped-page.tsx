@@ -8,9 +8,10 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePlaylistActions } from '@/features/listen/playlists'
 import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
+import { cn } from '@/lib/utils'
 import { Backdrop } from './backdrop'
 import { deckFor, lookFor, LOOKS, TOPICS, topicAvailable } from './deck'
-import { contrast, Grain, paletteStyle, type WrappedSlide } from './slide-kit'
+import { contrast, Grain, paletteStyle, PausedContext, type WrappedSlide } from './slide-kit'
 import { SLIDES } from './slides'
 import { useWrapped, useWrappedYears, WRAPPED_RELEASE, type Wrapped } from './wrapped-data'
 import { YearTile } from './year-tile'
@@ -112,7 +113,7 @@ function WrappedStory({ year }: { year: number }) {
   const t = useMessages(messages)
   const navigate = useNavigate()
   const wrapped = useWrapped(year)
-  const close = () => void navigate('/listen/wrapped')
+  const close = () => void navigate('/listen/wrapped', { state: { keepScroll: true }, preventScrollReset: true })
   if (wrapped.isLoading || !wrapped.data) {
     return (
       <StoryFrame onClose={close} closeLabel={t.close} style={paletteStyle(LOOKS[0]!.palettes[0]!)}>
@@ -244,7 +245,7 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
     <StoryFrame onClose={onClose} closeLabel={t.close} style={paletteStyle(palette)} top={bars}>
       {look.grain && <Grain />}
       <div
-        className="absolute inset-0 touch-manipulation"
+        className={cn('absolute inset-0 touch-manipulation', held && 'wrapped-paused')}
         // A tap on the left third goes back, elsewhere on; held a moment, the slide pauses (as in stories). Tapping
         // through never flashes the pause.
         onPointerDown={(event) => {
@@ -276,7 +277,9 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
           style={{ '--wrapped-shadow': contrast(palette.color, '#000000') > 10 ? '0 1px 14px rgb(0 0 0 / 0.45)' : '0 1px 12px rgb(255 255 255 / 0.4)' } as CSSProperties}
         >
           {slide.backdrop !== false && <Backdrop id={slide.id} year={data.year} look={look} palette={palette} />}
-          <Slide data={data} look={look} palette={palette} active />
+          <PausedContext.Provider value={held}>
+            <Slide data={data} look={look} palette={palette} active />
+          </PausedContext.Provider>
         </div>
         {/* The next slide's color sweeps across as it comes (not for the first). */}
         {index > 0 && <div key={`wipe-${slide.id}`} aria-hidden className="wrapped-wipe pointer-events-none absolute inset-y-0 -inset-x-8 z-10" style={{ background: palette.accent }} />}

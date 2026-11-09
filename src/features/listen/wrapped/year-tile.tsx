@@ -25,6 +25,10 @@ export function YearTile({ year, label }: { year: number; label: string }) {
   return (
     <Link
       to={`/listen/wrapped/${year}`}
+      state={{ keepScroll: true }}
+      preventScrollReset
+      // The story opens over the page at once: a page transition would keep the header over it for a moment.
+      viewTransition={false}
       className="group relative flex aspect-[4/5] flex-col justify-between overflow-hidden rounded-xl p-4 transition-transform duration-300 hover:-rotate-1 hover:scale-[1.02] active:scale-[0.98]"
       style={paletteStyle(palette)}
     >

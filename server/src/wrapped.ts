@@ -127,11 +127,15 @@ function rowsOfYear(store: Store, userId: string, year: number, timeZone: string
   return store.wrappedRows(userId, from, to).filter((row) => partsIn(row.startedAt, timeZone).year === year)
 }
 
+/**
+ * The years with a Wrapped to show: songs were played then (a year of podcasts only has none), and it is out. Its
+ * edges are the person's: a year whose songs all fall on the far side of midnight in their zone is left out too.
+ */
 export function wrappedYears(store: Store, userId: string, now: Date, timeZone: string) {
-  const years = new Set<number>()
-  // A UTC year may start a little early or late in the person's zone: its neighbours are checked by Wrapped itself.
-  for (const year of store.listeningYears(userId)) years.add(year)
-  return [...years].filter((year) => wrappedReady(year, now, timeZone)).sort((a, b) => b - a)
+  return store
+    .listeningYears(userId)
+    .filter((year) => wrappedReady(year, now, timeZone) && rowsOfYear(store, userId, year, timeZone).some((row) => row.kind === 'audio'))
+    .sort((a, b) => b - a)
 }
 
 export function wrappedFor(store: Store, userId: string, year: number, timeZone: string): Wrapped | null {

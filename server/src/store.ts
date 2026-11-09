@@ -388,11 +388,11 @@ export class Store {
       .all(userId, before) as Array<{ key: string; title: string; artist: string | null; subtitle: string | null }>
   }
 
-  /** The years someone listened in (as UTC years; Wrapped settles the edges in the person's time zone). */
+  /** The years someone listened to songs in (as UTC years; Wrapped settles the edges in the person's time zone). */
   listeningYears(userId: string): number[] {
     const rows = this.db
       .prepare(
-        "SELECT DISTINCT CAST(strftime('%Y', started_at / 1000, 'unixepoch') AS INTEGER) AS year FROM plays WHERE user_id = ? AND kind IN ('audio', 'podcast') AND seconds > 0 ORDER BY year DESC",
+        "SELECT DISTINCT CAST(strftime('%Y', started_at / 1000, 'unixepoch') AS INTEGER) AS year FROM plays WHERE user_id = ? AND kind = 'audio' AND seconds > 0 ORDER BY year DESC",
       )
       .all(userId) as Array<{ year: number }>
     return rows.map((row) => row.year)

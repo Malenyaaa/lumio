@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import { random } from '../deck'
-import { accentText, Body, In, displayClass, type WrappedSlide } from '../slide-kit'
+import { accentText, Body, In, displayClass, usePausedRef, type WrappedSlide } from '../slide-kit'
 import { personality } from './personality-tunnel'
 
 const messages = defineMessages({
@@ -26,12 +26,14 @@ const GLYPHS = '!<>-_\\/[]{}—=+*^?#ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 /** The word scrambling through random glyphs until it settles, letter by letter (text-animation kit). */
 function Scramble({ text, active, seed }: { text: string; active: boolean; seed: number }) {
   const [shown, setShown] = useState(text)
+  const paused = usePausedRef()
   useEffect(() => {
     if (!active) return
     const next = random(seed)
     const plan = [...text].map(() => ({ start: Math.floor(next() * 12), end: 14 + Math.floor(next() * 26) }))
     let frame = 0
     const timer = window.setInterval(() => {
+      if (paused.current) return
       frame += 1
       setShown(
         [...text]
@@ -41,7 +43,7 @@ function Scramble({ text, active, seed }: { text: string; active: boolean; seed:
       if (frame > 42) window.clearInterval(timer)
     }, 45)
     return () => window.clearInterval(timer)
-  }, [text, active, seed])
+  }, [text, active, seed, paused])
   return <span aria-label={text}>{shown}</span>
 }
 

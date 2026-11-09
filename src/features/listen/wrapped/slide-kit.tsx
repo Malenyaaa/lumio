@@ -2,7 +2,7 @@ import '@fontsource/archivo-black/latin-400.css'
 import '@fontsource/figtree/latin-900.css'
 import './wrapped.css'
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { FadeImage } from '@/components/media/fade-image'
 import { useAuthedSession } from '@/features/auth/session'
 import { useItem } from '@/features/items/queries'
@@ -120,19 +120,38 @@ export const accentText = (palette: Palette, on = palette.background) => (contra
 const reducedMotion =() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /** Counts up to `value` once shown (the big numbers). */
+/** The story is paused (held, or Space): a slide's own moving parts stand still too, like its CSS animations. */
+export const PausedContext = createContext(false)
+
+/** Whether the story is paused, as a ref (for animation loops that keep running and only skip their steps). */
+export function usePausedRef() {
+  const paused = useContext(PausedContext)
+  const ref = useRef(paused)
+  useEffect(() => {
+    ref.current = paused
+  }, [paused])
+  return ref
+}
+
+/** Counts up to `value` once shown (the big numbers); a pause holds it where it is. */
 export function useCountUp(value: number, active: boolean, ms = 1400, delay = 0) {
   const [shown, setShown] = useState(0)
   const still = reducedMotion()
+  const paused = usePausedRef()
   useEffect(() => {
     if (!active || still) return
-    const start = performance.now() + delay
+    // Time counted only while not paused.
+    let elapsed = -delay
+    let previous = performance.now()
     let frame = requestAnimationFrame(function step(now) {
-      const progress = Math.max(0, Math.min(1, (now - start) / ms))
+      if (!paused.current) elapsed += now - previous
+      previous = now
+      const progress = Math.max(0, Math.min(1, elapsed / ms))
       setShown(Math.round(value * (1 - Math.pow(1 - progress, 3))))
       if (progress < 1) frame = requestAnimationFrame(step)
     })
     return () => cancelAnimationFrame(frame)
-  }, [value, active, ms, delay, still])
+  }, [value, active, ms, delay, still, paused])
   return still ? value : shown
 }
 

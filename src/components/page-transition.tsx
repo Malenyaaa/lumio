@@ -4,7 +4,7 @@ import { useLocation, useNavigationType } from 'react-router'
 const supportsViewTransitions = typeof document !== 'undefined' && 'startViewTransition' in document
 
 /** Sections with their own navigation: moving between their sub-pages keeps the frame and only swaps the content. */
-const SECTIONS = ['/settings']
+const SECTIONS = ['/settings', '/listen/wrapped']
 
 /** Scroll positions of pages left, by history entry, for frames that scroll in a panel of their own (Listen). */
 const positions = new Map<string, number>()
@@ -19,13 +19,15 @@ const pageKey = (pathname: string) => SECTIONS.find((section) => pathname === se
  * that support it), which would double up. Also resets scroll on forward navigation; back/forward keep the position.
  */
 export function PageTransition({ children }: { children: ReactNode }) {
-  const { pathname, key } = useLocation()
+  const { pathname, key, state } = useLocation()
+  // An overlay opened or closed over the page (Wrapped's story): the page underneath stays where it was.
+  const keepScroll = !!(state as { keepScroll?: boolean } | null)?.keepScroll
   const navigationType = useNavigationType()
 
   useLayoutEffect(() => {
     const root = scrollRoot()
     if (!root) {
-      if (navigationType !== 'POP') window.scrollTo(0, 0)
+      if (navigationType !== 'POP' && !keepScroll) window.scrollTo(0, 0)
       return
     }
     // Remembered while scrolling: by the time the page is left, the next one may already have cut the panel short.
@@ -42,7 +44,8 @@ export function PageTransition({ children }: { children: ReactNode }) {
         if (Math.abs(root.scrollTop - top) > 1 && performance.now() < until) frame = requestAnimationFrame(restore)
       }
       restore()
-    } else root.scrollTo(0, 0)
+    } else if (keepScroll) positions.set(key, root.scrollTop)
+    else root.scrollTo(0, 0)
     // Scrolling by hand while it waits for the page means the user is elsewhere already: stop restoring.
     const stop = () => cancelAnimationFrame(frame)
     root.addEventListener('wheel', stop, { passive: true })
