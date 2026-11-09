@@ -12,7 +12,7 @@ function Card({ track, index }: { track: WrappedTrack; index: number }) {
   const angle = (index - 2) * 9
   return (
     <div
-      className="absolute bottom-0 left-1/2 w-36 origin-bottom animate-in fade-in-0 slide-in-from-bottom-24 duration-700 fill-mode-both"
+      className="absolute bottom-10 left-1/2 w-36 origin-bottom animate-in fade-in-0 slide-in-from-bottom-24 duration-700 fill-mode-both"
       style={{ transform: `translateX(-50%) rotate(${angle}deg) translateY(${Math.abs(index - 2) * 10}px)`, animationDelay: `${200 + index * 130}ms`, zIndex: 5 - Math.abs(index - 2) }}
     >
       <Picture src={cover} className="aspect-square w-full border-4 border-white" />
@@ -34,7 +34,8 @@ export default {
             {t.title}
           </Headline>
         </In>
-        <div className="relative h-52 shrink-0">
+        {/* Room below the cards: turned, their corners reach lower than they stand. */}
+        <div className="relative h-60 shrink-0">
           {tracks.map((track, index) => (
             <Card key={track.key} track={track} index={index} />
           ))}
