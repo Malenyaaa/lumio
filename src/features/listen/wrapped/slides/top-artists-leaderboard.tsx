@@ -30,7 +30,7 @@ export default {
                 <Avatar name={first!.name} size="size-20" />
               </div>
               <div className="min-w-0">
-                <p className={`truncate text-4xl ${displayClass(look)}`} style={{ color: palette.accent }}>
+                <p className={`truncate text-2xl ${displayClass(look)}`} style={{ color: palette.accent }}>
                   {first!.name}
                 </p>
                 <span className="mt-1 inline-block bg-black px-2 py-0.5 text-xs font-bold text-white">{t.minutes(number.format(first!.minutes))}</span>

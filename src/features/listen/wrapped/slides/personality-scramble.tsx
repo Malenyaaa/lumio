@@ -58,7 +58,7 @@ export default {
           <In from="fade">
             <p className="font-mono text-sm opacity-80">{t.lead}</p>
           </In>
-          <p className={`min-h-[1.1em] text-6xl break-words ${displayClass(look)}`} style={{ color: palette.accent }}>
+          <p className={`min-h-[1.1em] text-[clamp(2.4rem,12vw,3.5rem)] ${displayClass(look)}`} style={{ color: palette.accent }}>
             <Scramble text={t[kind]} active={active} seed={data.year} />
           </p>
           <In delay={2200}>

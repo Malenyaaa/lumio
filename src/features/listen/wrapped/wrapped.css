@@ -221,8 +221,9 @@
   padding: 0.02em 0.22em;
 }
 
+/* Outlined type: the stroke takes the color set as WebkitTextStrokeColor (the text itself is transparent). */
 .wrapped-outline {
-  -webkit-text-stroke: 2px currentColor;
+  -webkit-text-stroke-width: 2px;
   color: transparent;
 }
 

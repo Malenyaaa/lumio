@@ -37,7 +37,7 @@ export default {
                 className={`flex items-baseline justify-between gap-3 px-7 py-3 ${index % 2 ? 'wrapped-slab-right' : 'wrapped-slab-left'}`}
                 style={{ background, color, animationDelay: `${250 + index * 120}ms` }}
               >
-                <span className={`min-w-0 truncate text-3xl ${displayClass(look)}`}>
+                <span className={`min-w-0 truncate text-2xl ${displayClass(look)}`}>
                   {index + 1}. {artist.name}
                 </span>
                 <span className="shrink-0 text-sm font-bold tabular-nums">{t.minutes(compact.format(artist.minutes))}</span>

@@ -19,7 +19,7 @@ export default {
         <In from="zoom" className="relative -rotate-2 rounded-sm p-7 pb-10 text-[#141414] shadow-2xl" style={{ background: '#bddc64' }}>
           <div aria-hidden className="wrapped-grain absolute inset-0 opacity-25 mix-blend-multiply" />
           <p className="relative inline-block -rotate-1 bg-white px-3 py-1 text-sm font-semibold tracking-wide uppercase shadow">{t.label}</p>
-          <p className="relative mt-4 font-[Archivo_Black] text-[5.5rem] leading-[0.85] tracking-tighter tabular-nums">{number.format(minutes)}</p>
+          <p className="relative mt-4 font-[Archivo_Black] text-[clamp(2.5rem,17vw,4.6rem)] sm:text-[4.2rem] leading-[0.85] tracking-tighter tabular-nums">{number.format(minutes)}</p>
           {data.topDay && (
             <p className="relative mt-5 text-base font-semibold">
               {t.note(day.format(new Date(`${data.topDay.date}T00:00:00Z`)), number.format(data.topDay.minutes))}

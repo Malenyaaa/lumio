@@ -24,7 +24,7 @@ export default {
         <div aria-hidden className="wrapped-stripes absolute inset-x-0 top-0 h-16 opacity-25" />
         <Body className="justify-center gap-4 pb-24">
           <In from="fade">
-            <p className={`wrapped-outline text-[6.5rem] leading-[0.85] ${displayClass(look)}`}>{data.year}</p>
+            <p className={`wrapped-outline text-[6.5rem] leading-[0.85] ${displayClass(look)}`} style={{ WebkitTextStrokeColor: palette.color }}>{data.year}</p>
           </In>
           <div className="grid grid-cols-2 gap-2">
             {tiles.map(([label, value], index) => (

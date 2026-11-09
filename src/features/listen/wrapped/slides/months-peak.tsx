@@ -22,7 +22,7 @@ export default {
           <p className="text-2xl font-bold">{t.lead}</p>
         </In>
         <In delay={200} from="left">
-          <Headline look={look} className="-skew-y-3 text-7xl break-words">
+          <Headline look={look} className="-skew-y-3 text-[clamp(2.4rem,13vw,4rem)] sm:text-6xl">
             <span style={{ color: palette.accent }}>{month.format(new Date(Date.UTC(data.year, peak, 1)))}</span>
           </Headline>
         </In>
