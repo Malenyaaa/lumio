@@ -315,6 +315,156 @@
   }
 }
 
+/* More changes between slides (transition.tsx): each covers, then uncovers, in 640ms. */
+.wrapped-rise,
+.wrapped-diagonal,
+.wrapped-circle,
+.wrapped-blind,
+.wrapped-pincer-top,
+.wrapped-pincer-bottom,
+.wrapped-spin-cover {
+  animation-duration: 640ms;
+  animation-timing-function: cubic-bezier(0.7, 0, 0.3, 1);
+  animation-fill-mode: both;
+}
+
+.wrapped-rise {
+  animation-name: wrapped-rise;
+}
+
+@keyframes wrapped-rise {
+  from {
+    transform: translateY(102%);
+  }
+  45%,
+  55% {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-102%);
+  }
+}
+
+.wrapped-diagonal {
+  animation-name: wrapped-diagonal;
+}
+
+@keyframes wrapped-diagonal {
+  from {
+    transform: translate(-60%, 60%);
+  }
+  45%,
+  55% {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(60%, -60%);
+  }
+}
+
+.wrapped-circle {
+  animation-name: wrapped-circle;
+}
+
+@keyframes wrapped-circle {
+  from {
+    clip-path: circle(0% at 50% 55%);
+  }
+  50% {
+    clip-path: circle(80% at 50% 55%);
+    opacity: 1;
+  }
+  to {
+    clip-path: circle(80% at 50% 55%);
+    opacity: 0;
+  }
+}
+
+.wrapped-blind {
+  animation-name: wrapped-blind;
+  animation-duration: 560ms;
+}
+
+@keyframes wrapped-blind {
+  from {
+    transform: scaleY(0);
+    transform-origin: top;
+  }
+  45%,
+  55% {
+    transform: scaleY(1);
+    transform-origin: top;
+  }
+  56% {
+    transform-origin: bottom;
+  }
+  to {
+    transform: scaleY(0);
+    transform-origin: bottom;
+  }
+}
+
+.wrapped-pincer-top {
+  animation-name: wrapped-pincer-top;
+}
+
+.wrapped-pincer-bottom {
+  animation-name: wrapped-pincer-bottom;
+}
+
+@keyframes wrapped-pincer-top {
+  from,
+  to {
+    transform: translateY(-101%);
+  }
+  45%,
+  55% {
+    transform: translateY(0);
+  }
+}
+
+@keyframes wrapped-pincer-bottom {
+  from,
+  to {
+    transform: translateY(101%);
+  }
+  45%,
+  55% {
+    transform: translateY(0);
+  }
+}
+
+.wrapped-spin-cover {
+  animation-name: wrapped-spin-cover;
+}
+
+@keyframes wrapped-spin-cover {
+  from {
+    transform: rotate(-90deg) scale(0);
+  }
+  50% {
+    transform: rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: rotate(45deg) scale(1.1);
+    opacity: 0;
+  }
+}
+
+/* The next slide coming out of a blur (the zoom transition, no cover). */
+.wrapped-enter-zoom {
+  animation: wrapped-enter-zoom 650ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes wrapped-enter-zoom {
+  from {
+    opacity: 0;
+    transform: scale(1.25);
+    filter: blur(14px);
+  }
+}
+
 /* Entrances with a little overshoot, for the loud ones. */
 .wrapped-spring {
   animation-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1.35) !important;

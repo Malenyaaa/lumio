@@ -10,6 +10,7 @@ import { usePlaylistActions } from '@/features/listen/playlists'
 import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { Backdrop } from './backdrop'
+import { enterClass, TransitionLayer, transitionInto } from './transition'
 import { deckFor, lookFor, LOOKS, TOPICS, topicAvailable } from './deck'
 import { contrast, Grain, paletteStyle, PausedContext, type WrappedSlide } from './slide-kit'
 import { SLIDES } from './slides'
@@ -198,6 +199,8 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
   const last = index === slides.length - 1
   const palette = look.palettes[index % look.palettes.length]!
   const slide = slides[index]!
+  // How it changes into this slide (drawn like the slides; never twice the same in a row).
+  const transition = transitionInto(slide.id, slides[index - 1]?.id, data.year)
   const Slide = slide.Component
 
   const go = (next: number) => {
@@ -288,7 +291,11 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
       >
         <div
           key={slide.id}
-          className="absolute inset-0 overflow-hidden animate-in fade-in-0 duration-300 [animation-delay:250ms] fill-mode-both [&_p]:[text-shadow:var(--wrapped-shadow)]"
+          className={cn(
+            'absolute inset-0 overflow-hidden [&_p]:[text-shadow:var(--wrapped-shadow)]',
+            // Under a cover it appears while covered; a zoom brings it in itself.
+            index > 0 && transition === 'zoom' ? enterClass(transition) : 'animate-in fade-in-0 duration-300 [animation-delay:250ms] fill-mode-both',
+          )}
           // A soft shadow against the text color, so it reads over the moving backdrop.
           style={{ '--wrapped-shadow': contrast(palette.color, '#000000') > 10 ? '0 1px 14px rgb(0 0 0 / 0.45)' : '0 1px 12px rgb(255 255 255 / 0.4)' } as CSSProperties}
         >
@@ -300,7 +307,9 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
           </PausedContext.Provider>
         </div>
         {/* The next slide's color sweeps across as it comes (not for the first). */}
-        {index > 0 && <div key={`wipe-${slide.id}`} aria-hidden className="wrapped-wipe pointer-events-none absolute inset-y-0 -inset-x-8 z-10" style={{ background: palette.accent }} />}
+        {index > 0 && transition !== 'zoom' && (
+          <TransitionLayer key={`change-${slide.id}`} kind={transition} color={palette.accent} second={look.palettes[(index + 1) % look.palettes.length]!.accent} />
+        )}
       </div>
       {last && (
         <div className="absolute inset-x-0 bottom-0 z-20 flex justify-center gap-2 px-6 pb-[max(1.25rem,var(--safe-bottom))]">
