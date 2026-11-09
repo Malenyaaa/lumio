@@ -3,7 +3,11 @@ package de.nauren.lumio;
 import android.content.Context;
 import android.media.AudioManager;
 import android.provider.Settings;
+import android.view.Window;
 import android.view.WindowManager;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -75,6 +79,24 @@ public class SystemControlsPlugin extends Plugin {
             WindowManager.LayoutParams attributes = getActivity().getWindow().getAttributes();
             attributes.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
             getActivity().getWindow().setAttributes(attributes);
+        });
+        call.resolve();
+    }
+
+    /**
+     * The video player's fullscreen: no status or navigation bar. Swiped in from the edge they show only for a moment
+     * and hide again by themselves (immersive), instead of staying.
+     */
+    @PluginMethod
+    public void setImmersive(PluginCall call) {
+        boolean on = Boolean.TRUE.equals(call.getBoolean("on", false));
+        getActivity().runOnUiThread(() -> {
+            Window window = getActivity().getWindow();
+            WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(window, window.getDecorView());
+            if (on) {
+                controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                controller.hide(WindowInsetsCompat.Type.systemBars());
+            } else controller.show(WindowInsetsCompat.Type.systemBars());
         });
         call.resolve();
     }

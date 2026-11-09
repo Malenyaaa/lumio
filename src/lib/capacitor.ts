@@ -1,5 +1,5 @@
 import { App } from '@capacitor/app'
-import { Capacitor, registerPlugin, SystemBars } from '@capacitor/core'
+import { Capacitor, registerPlugin } from '@capacitor/core'
 import { ScreenOrientation } from '@capacitor/screen-orientation'
 
 /**
@@ -15,16 +15,12 @@ export function onCapacitorBack(handler: () => void) {
 /** Leaving from the start page: to the background, so music plays on (as media apps do). */
 export const minimizeCapacitorApp = () => void App.minimizeApp()
 
-/** The video player: no system bars, turned to landscape; and back. */
+/** The video player: no system bars (swiped in, they hide again by themselves), turned to landscape; and back. */
 export async function setCapacitorFullscreen(on: boolean) {
   try {
-    if (on) {
-      await SystemBars.hide()
-      await ScreenOrientation.lock({ orientation: 'landscape' })
-    } else {
-      await SystemBars.show()
-      await ScreenOrientation.unlock()
-    }
+    await SystemControls.setImmersive({ on })
+    if (on) await ScreenOrientation.lock({ orientation: 'landscape' })
+    else await ScreenOrientation.unlock()
   } catch {
     // An older WebView or a device without these: the player still works.
   }
@@ -63,6 +59,7 @@ interface SystemControlsPlugin {
   getBrightness(): Promise<{ value: number }>
   setBrightness(options: { value: number }): Promise<void>
   resetBrightness(): Promise<void>
+  setImmersive(options: { on: boolean }): Promise<void>
 }
 
 /** The device's media volume and the brightness of Lumio's window, 0..1 (the video player's swipe gestures). */

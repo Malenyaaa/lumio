@@ -899,7 +899,8 @@ function Player({ id }: { id: string }) {
       // overflow-clip, not -hidden: a hidden overflow is still a scroll container, and the oversized blurred cover behind
       // audio (or a focus moving into view) could scroll the whole player off by a few pixels, leaving bare strips.
       className={cn('dark relative h-svh overflow-clip bg-black text-foreground', settings.subtitleStyle === 'custom' && 'subs-custom', !controlsVisible && 'cursor-none')}
-      onPointerMove={wake}
+      // A finger brings the controls back by a tap (onTouchTap), not by moving: swipes (brightness, volume) leave them hidden.
+      onPointerMove={(event) => event.pointerType !== 'touch' && wake()}
       // Tabbing into the (possibly faded-out) controls brings them back.
       onFocus={wake}
     >
@@ -1070,6 +1071,7 @@ function Player({ id }: { id: string }) {
 
         {touch && !panelOpen && (
           <TouchTransport
+            visible={controlsVisible && !appPip}
             paused={state.paused}
             onTogglePlay={togglePlay}
             onSeekBy={seekBy}

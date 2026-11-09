@@ -203,11 +203,13 @@ export function TouchTransport({
   onSeekBy,
   skipBackSeconds,
   skipForwardSeconds,
-}: Pick<PlayerControlsProps, 'onTogglePlay' | 'onSeekBy' | 'skipBackSeconds' | 'skipForwardSeconds'> & { paused: boolean }) {
+  visible,
+}: Pick<PlayerControlsProps, 'onTogglePlay' | 'onSeekBy' | 'skipBackSeconds' | 'skipForwardSeconds'> & { paused: boolean; visible: boolean }) {
   const t = useMessages(controlsMessages)
   const BackIcon = BACK_ICONS[skipBackSeconds as keyof typeof BACK_ICONS] ?? IconRewindBackward10
   const ForwardIcon = FORWARD_ICONS[skipForwardSeconds as keyof typeof FORWARD_ICONS] ?? IconRewindForward10
-  const round = 'pointer-events-auto grid place-items-center rounded-full bg-black/35 text-white outline-none backdrop-blur-sm active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-white/70'
+  // Hidden controls can't be hit: a tap on the picture then only brings them back.
+  const round = cn(visible ? 'pointer-events-auto' : 'pointer-events-none', 'grid place-items-center rounded-full bg-black/35 text-white outline-none backdrop-blur-sm active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-white/70')
   return (
     // Taps beside the buttons reach the picture (show/hide the controls, double tap to skip).
     <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-10">
