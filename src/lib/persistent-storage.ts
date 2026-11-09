@@ -7,10 +7,11 @@ import { inNativeApp } from '@/lib/native-app'
  * Without it, the browser may clear everything by itself when the disk runs low. Checked and asked for right when the
  * site loads. Browsers decide on their own: Chrome and Edge grant it silently to installed or often used sites,
  * Firefox asks the user (some versions only after the user did something on the page), Safari grants it to apps on
- * the home screen. So it is asked on load; a no shows a notice at once (what it means for downloads) and is asked
- * again on the first click or key press. While the browser shows its own question (Firefox), a notice says what it is
- * about and why to allow it. A change in the site's settings while Lumio is open is noticed and checked again.
- * Dismissing the notice hides it for this visit only: a no is said again the next time Lumio opens.
+ * the home screen. So it is asked on load, quietly, and again on the first click or key press. A no only matters for
+ * downloads: the notice (what it means for them) comes when one starts, and the downloads page shows it too; nobody
+ * who never downloads is bothered. While the browser shows its own question (Firefox), a notice says what it is about
+ * and why to allow it. A change in the site's settings while Lumio is open is noticed and checked again. Dismissing
+ * the notice hides it for this visit.
  */
 export type PersistentState = 'checking' | 'asking' | 'granted' | 'denied' | 'unsupported'
 
@@ -20,16 +21,15 @@ const ASKING_AFTER_MS = 400
 const DISMISSED_KEY = 'lumio.storageNotice.dismissed'
 
 let state: PersistentState = 'checking'
-/** Whether the notice is shown (denied, and not dismissed; or shown again by a download). */
+/** Whether the notice is shown (the browser asking, or a download started while denied and not dismissed). */
 let noticeOpen = false
 const listeners = new Set<() => void>()
 
 function set(next: PersistentState) {
   state = next
-  // The browser's question is explained every time; a no only until the notice is dismissed.
+  // The browser's question is explained every time; a no waits for a download (remindPersistentStorage).
   if (next === 'asking') noticeOpen = true
   else if (next !== 'denied') noticeOpen = false
-  else if (!dismissed()) noticeOpen = true
   for (const listener of listeners) listener()
 }
 
@@ -124,7 +124,7 @@ export const persistentState = () => state
 
 /** Shows the notice again (starting a download while storage isn't kept for good). */
 export function remindPersistentStorage() {
-  if (state !== 'denied' || noticeOpen) return
+  if (state !== 'denied' || noticeOpen || dismissed()) return
   noticeOpen = true
   for (const listener of listeners) listener()
 }

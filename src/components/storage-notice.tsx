@@ -9,7 +9,9 @@ import { dismissStorageNotice, requestPersistentStorage, usePersistentStorage } 
 const messages = defineMessages({
   de: {
     title: 'Downloads werden nicht dauerhaft gespeichert',
-    body: 'Der Browser hat dauerhaften Speicher abgelehnt. Downloads funktionieren dann nicht oder nicht zuverlässig: Der Browser kann sie jederzeit löschen, etwa wenn der Speicherplatz knapp wird.',
+    body: 'Der Browser hat dauerhaften Speicher abgelehnt. Downloads funktionieren trotzdem, der Browser darf sie aber wieder löschen, wenn der Speicherplatz knapp wird.',
+    installed: 'Lumio ist schon installiert, der Browser entscheidet trotzdem selbst. Ganz sicher bleiben Downloads in der Lumio-App für Android, Windows oder Linux.',
+    brave: 'Brave gewährt dauerhaften Speicher grundsätzlich nicht. Ganz sicher bleiben Downloads in der Lumio-App oder in Chrome, Edge oder Firefox.',
     chrome: 'Chrome und Edge entscheiden selbst: Installiere Lumio als App (Symbol in der Adressleiste) oder setze ein Lesezeichen, dann erneut versuchen.',
     firefox: 'Firefox: Erlaube über das Schloss in der Adressleiste „Daten im dauerhaften Speicher ablegen“, dann erneut versuchen.',
     safari: 'Safari: Füge Lumio zum Home-Bildschirm bzw. Dock hinzu und öffne es von dort.',
@@ -23,7 +25,9 @@ const messages = defineMessages({
   },
   en: {
     title: "Downloads aren't stored for good",
-    body: "The browser declined persistent storage. Downloads then don't work, or not reliably: the browser may delete them at any time, for example when disk space runs low.",
+    body: 'The browser declined persistent storage. Downloads still work, but the browser may delete them again when disk space runs low.',
+    installed: 'Lumio is installed already; the browser still decides on its own. Downloads are kept for sure in the Lumio app for Android, Windows or Linux.',
+    brave: 'Brave never grants persistent storage. Downloads are kept for sure in the Lumio app, or in Chrome, Edge or Firefox.',
     chrome: 'Chrome and Edge decide on their own: install Lumio as an app (the icon in the address bar) or bookmark it, then try again.',
     firefox: 'Firefox: allow “Store data in persistent storage” via the lock in the address bar, then try again.',
     safari: 'Safari: add Lumio to the home screen or Dock and open it from there.',
@@ -39,12 +43,15 @@ const messages = defineMessages({
 
 function browserHint(t: (typeof messages)['de']) {
   const agent = navigator.userAgent
+  if ('brave' in navigator) return t.brave
+  // Installed already (a home-screen or desktop app of the browser): installing is no advice.
+  if (window.matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone) return t.installed
   if (/firefox/i.test(agent)) return t.firefox
   if (/safari/i.test(agent) && !/chrome|chromium|edg/i.test(agent)) return t.safari
   return t.chrome
 }
 
-/** Shown when the browser declined persistent storage (see persistent-storage): what that means for downloads. */
+/** Shown when a download starts while the browser declined persistent storage (see persistent-storage). */
 export function StorageNotice() {
   const t = useMessages(messages)
   const { state, noticeOpen } = usePersistentStorage()
@@ -52,10 +59,7 @@ export function StorageNotice() {
   if (!noticeOpen) return null
   const asking = state === 'asking'
   return (
-    <NoticeCard
-      role="alert"
-      
-    >
+    <NoticeCard role="alert">
       <div className="flex gap-3">
         <IconDatabaseExclamation className="mt-0.5 size-5 shrink-0 text-amber-500" />
         <div className="min-w-0 flex-1 space-y-2">
