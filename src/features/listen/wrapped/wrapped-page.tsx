@@ -149,7 +149,7 @@ function StoryFrame({ onClose, closeLabel, style, top, children }: { onClose: ()
         <div className="absolute inset-x-0 top-0 z-30 space-y-3 px-3 pt-[max(0.75rem,var(--safe-top))]">
           {top}
           <div className="flex justify-end">
-            <button type="button" aria-label={closeLabel} onClick={onClose} className="grid size-10 place-items-center rounded-full bg-black/25 text-white outline-none backdrop-blur-sm">
+            <button type="button" aria-label={closeLabel} onClick={onClose} className="grid size-10 place-items-center rounded-full bg-black/55 text-white outline-none backdrop-blur-sm">
               <IconX className="size-5" />
             </button>
           </div>
@@ -241,9 +241,12 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
     return () => window.removeEventListener('keydown', key)
   })
 
+  // The bars in the slide's text color, with a faint glow in the opposite one: they show on any background.
+  const ink = slide.ink ?? palette.color
+  const halo = contrast(ink, '#000000') > 10 ? 'rgb(0 0 0 / 0.55)' : 'rgb(255 255 255 / 0.6)'
   const bars = (
     <div className="relative">
-      <div className="flex gap-1" style={{ color: palette.color }}>
+      <div className="flex gap-1" style={{ color: ink, filter: `drop-shadow(0 0 2px ${halo})` }}>
         {slides.map((slide, position) => (
           <div key={slide.id} className="h-1 flex-1 overflow-hidden rounded-full bg-current/25">
             <div className="h-full rounded-full bg-current" style={{ width: position < index ? '100%' : position > index ? '0%' : last ? '100%' : `${Math.min(100, (elapsed / SLIDE_MS) * 100)}%` }} />

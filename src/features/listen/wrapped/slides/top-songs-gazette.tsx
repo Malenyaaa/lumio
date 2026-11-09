@@ -11,6 +11,7 @@ export default {
   id: 'top-songs-gazette',
   topic: 'top-songs',
   backdrop: false,
+  ink: '#16160e',
   Component: ({ data, palette }) => {
     const t = useMessages(messages)
     const { number } = useFormats()

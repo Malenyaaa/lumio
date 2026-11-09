@@ -13,6 +13,7 @@ export default {
   id: 'intro-starfield',
   topic: 'intro',
   backdrop: false,
+  ink: '#ffffff',
   Component: ({ data, look }) => {
     const t = useMessages(messages)
     const stars = useMemo(() => {

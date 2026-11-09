@@ -13,6 +13,7 @@ export default {
   id: 'top-artists-orbit',
   topic: 'top-artists',
   backdrop: false,
+  ink: '#ffffff',
   Component: ({ data, look, palette }) => {
     const t = useMessages(messages)
     const artists = data.topArtists.slice(0, 5)

@@ -12,6 +12,7 @@ export default {
   id: 'comfort-glow',
   topic: 'comfort',
   backdrop: false,
+  ink: '#ffffff',
   Component: ({ data, look, palette }) => {
     const t = useMessages(messages)
     const track = data.comfort!

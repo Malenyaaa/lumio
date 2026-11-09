@@ -37,6 +37,8 @@ export interface WrappedSlide {
   since?: number
   /** false: the slide brings its own full background (no moving backdrop behind it). */
   backdrop?: boolean
+  /** The color of text on that background (for the progress bars over it), when it isn't the year's. */
+  ink?: string
   Component: (props: SlideProps) => ReactNode
 }
 
