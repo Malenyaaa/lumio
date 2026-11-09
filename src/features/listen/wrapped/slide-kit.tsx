@@ -347,6 +347,19 @@ export function useSubject(data: Wrapped, spot: Spot | null, size = 480): Subjec
   }
 }
 
+/** A closed, smooth line through the points (Catmull-Rom as Bézier curves). */
+export function smoothLoop(points: Array<[number, number]>) {
+  const at = (index: number) => points[(index + points.length) % points.length]!
+  let path = `M ${at(0)[0]} ${at(0)[1]}`
+  for (let index = 0; index < points.length; index++) {
+    const [p0, p1, p2, p3] = [at(index - 1), at(index), at(index + 1), at(index + 2)]
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6]
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6]
+    path += ` C ${c1[0]} ${c1[1]}, ${c2[0]} ${c2[1]}, ${p2[0]} ${p2[1]}`
+  }
+  return `${path} Z`
+}
+
 /**
  * Each month's number one among the year's top artists (null for a month without them): who wore the crown when.
  * From the top artists' months, so a month's real number one may be missing when they weren't in the year's top ten.

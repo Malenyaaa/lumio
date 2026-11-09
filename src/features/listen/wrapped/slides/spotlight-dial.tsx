@@ -2,7 +2,7 @@ import { useId } from 'react'
 import { FadeImage } from '@/components/media/fade-image'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import type { Look } from '../deck'
-import { Body, contrast, Headline, In, useFormats, useSubject, type Palette, type WrappedSlide } from '../slide-kit'
+import { Body, contrast, Headline, In, smoothLoop, useFormats, useSubject, type Palette, type WrappedSlide } from '../slide-kit'
 
 const messages = defineMessages({
   de: { peak: 'Monat mit den meisten Streams:', minutes: (value: string) => `${value} Minuten` },
@@ -14,19 +14,6 @@ const CENTER = SIZE / 2
 /** The ring with the months, and how far the shape reaches beyond it at most. */
 const RING = 90
 const REACH = 50
-
-/** A closed, smooth line through the points (Catmull-Rom as Bézier curves). */
-function smoothLoop(points: Array<[number, number]>) {
-  const at = (index: number) => points[(index + points.length) % points.length]!
-  let path = `M ${at(0)[0]} ${at(0)[1]}`
-  for (let index = 0; index < points.length; index++) {
-    const [p0, p1, p2, p3] = [at(index - 1), at(index), at(index + 1), at(index + 2)]
-    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6]
-    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6]
-    path += ` C ${c1[0]} ${c1[1]}, ${c2[0]} ${c2[1]}, ${p2[0]} ${p2[1]}`
-  }
-  return `${path} Z`
-}
 
 /**
  * The chart's colors from the year's look, so it belongs with the rest of that Wrapped: its colors that stand out

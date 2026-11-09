@@ -1,6 +1,7 @@
+import { useId } from 'react'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import '../spotlights.css'
-import { accentText, Body, Headline, In, Picture, useFormats, useSubject, type WrappedSlide } from '../slide-kit'
+import { accentText, Body, Headline, In, Picture, smoothLoop, useFormats, useSubject, type WrappedSlide } from '../slide-kit'
 
 const messages = defineMessages({
   de: {
@@ -21,7 +22,7 @@ const messages = defineMessages({
 
 const SIZE = 360
 const CENTER = SIZE / 2
-/** Where the bars start (just outside the picture), and how far the longest reaches beyond that. */
+/** Where the wave starts (just outside the picture), and how far its highest crest reaches beyond that. */
 const INNER = 80
 const REACH = 72
 
@@ -29,8 +30,8 @@ const REACH = 72
 const angleOf = (month: number) => (month / 12) * Math.PI * 2 - Math.PI / 2
 
 /**
- * The picture as a sun: the months as twelve thick rays bursting out of it one after another, each as long as the
- * month was, light beams turning slowly behind; the place above, the name below.
+ * The picture as a sun: around it one wave with a crest for each month, as high as the month was, light beams turning
+ * slowly behind; the place above, the name below.
  */
 export default {
   id: 'spotlight-sunburst',
@@ -43,9 +44,19 @@ export default {
     const first = subject.rank === 0
     const peak = subject.peakMonth
     const ink = accentText(palette)
-    // Without months every ray alike: a plain sun.
+    const fill = useId()
+    // Without months every crest alike: a plain sun. Rooted, so one big month doesn't leave the rest flat.
     const max = Math.max(1, ...subject.months)
-    const length = (index: number) => (peak === null ? REACH * 0.55 : Math.max(6, ((subject.months[index] ?? 0) / max) * REACH))
+    const length = (index: number) => (peak === null ? REACH * 0.55 : REACH * (0.15 + 0.85 * Math.sqrt((subject.months[index] ?? 0) / max)))
+    const at = (angle: number, radius: number): [number, number] => [CENTER + Math.cos(angle) * radius, CENTER + Math.sin(angle) * radius]
+    // A crest in each month, a trough between two (lower than the lower of them), so it reads as a wave.
+    const points = Array.from({ length: 12 }, (_, index) => [
+      at(angleOf(index), INNER + length(index)),
+      at(angleOf(index) + Math.PI / 12, INNER + 4 + 0.55 * Math.min(length(index), length((index + 1) % 12))),
+    ]).flat()
+    const wave = smoothLoop(points)
+    const color = first ? palette.accent : 'currentColor'
+    const crest = peak === null ? null : at(angleOf(peak), INNER + length(peak))
     return (
       <Body className="items-center justify-center gap-3 text-center">
         <In from={first ? 'zoom' : 'fall'}>
@@ -67,44 +78,50 @@ export default {
             }}
           />
           <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="relative w-full overflow-visible" aria-hidden>
-            {Array.from({ length: 12 }, (_, index) => {
-              const angle = angleOf(index)
-              const [cos, sin] = [Math.cos(angle), Math.sin(angle)]
-              const tip = INNER + length(index)
-              const label = tip + 17
-              return (
-                <g key={index}>
-                  <line
-                    x1={CENTER + cos * INNER}
-                    y1={CENTER + sin * INNER}
-                    x2={CENTER + cos * tip}
-                    y2={CENTER + sin * tip}
-                    pathLength="1"
-                    stroke={index === peak ? ink : 'currentColor'}
-                    strokeOpacity={index === peak || peak === null ? 1 : 0.75}
-                    strokeWidth="15"
-                    strokeLinecap="round"
-                    className="wrapped-spot-draw"
-                    style={{ animationDuration: '700ms', animationDelay: `${500 + index * 70}ms` }}
-                  />
-                  {peak !== null && (
-                    <text
-                      x={CENTER + cos * label}
-                      y={CENTER + sin * label}
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                      fontSize={index === peak ? 14 : 11}
-                      fontWeight="900"
-                      fill={index === peak ? ink : 'currentColor'}
-                      className="animate-in fade-in-0 fill-mode-both"
-                      style={{ animationDelay: `${1000 + index * 70}ms` }}
-                    >
-                      {shortMonth.format(new Date(Date.UTC(data.year, index, 1))).slice(0, 1).toUpperCase()}
-                    </text>
-                  )}
-                </g>
-              )
-            })}
+            <defs>
+              <radialGradient id={fill} gradientUnits="userSpaceOnUse" cx={CENTER} cy={CENTER} r={INNER + REACH}>
+                <stop offset="45%" stopColor={color} stopOpacity={first ? 0.8 : 0.4} />
+                <stop offset="100%" stopColor={color} stopOpacity={first ? 0.35 : 0.12} />
+              </radialGradient>
+            </defs>
+            {/* The wave rising out of the picture, then its line drawn round. */}
+            <g className="wrapped-spring animate-in zoom-in-50 fade-in-0 duration-1000 fill-mode-both [animation-delay:400ms]" style={{ transformOrigin: 'center' }}>
+              <path d={wave} fill={`url(#${fill})`} />
+            </g>
+            <path d={wave} pathLength="1" fill="none" stroke={first ? ink : 'currentColor'} strokeWidth="4" strokeLinejoin="round" className="wrapped-spot-draw" style={{ animationDelay: '700ms' }} />
+            {peak !== null &&
+              Array.from({ length: 12 }, (_, index) => {
+                const [x, y] = at(angleOf(index), INNER + length(index) + 17)
+                return (
+                  <text
+                    key={index}
+                    x={x}
+                    y={y}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontSize={index === peak ? 14 : 11}
+                    fontWeight="900"
+                    fill={index === peak ? ink : 'currentColor'}
+                    className="animate-in fade-in-0 fill-mode-both"
+                    style={{ animationDelay: `${1000 + index * 70}ms` }}
+                  >
+                    {shortMonth.format(new Date(Date.UTC(data.year, index, 1))).slice(0, 1).toUpperCase()}
+                  </text>
+                )
+              })}
+            {/* The busiest month's crest. */}
+            {crest && (
+              <circle
+                cx={crest[0]}
+                cy={crest[1]}
+                r="7"
+                fill={ink}
+                stroke="currentColor"
+                strokeWidth="3"
+                className="animate-in zoom-in-0 fill-mode-both"
+                style={{ animationDelay: '1500ms', transformOrigin: `${crest[0]}px ${crest[1]}px` }}
+              />
+            )}
           </svg>
           <div className="absolute top-1/2 left-1/2 w-[38%] -translate-x-1/2 -translate-y-1/2">
             <In from="zoom" delay={150} className="relative">
