@@ -1,7 +1,8 @@
 import { useId } from 'react'
 import { FadeImage } from '@/components/media/fade-image'
 import { defineMessages, useMessages } from '@/lib/i18n'
-import { Body, Headline, In, useArtistImage, useFormats, type WrappedSlide } from '../slide-kit'
+import type { Look } from '../deck'
+import { Body, contrast, Headline, In, useArtistImage, useFormats, type Palette, type WrappedSlide } from '../slide-kit'
 
 const messages = defineMessages({
   de: { peak: 'Monat mit den meisten Streams:' },
@@ -27,6 +28,23 @@ function smoothLoop(points: Array<[number, number]>) {
   return `${path} Z`
 }
 
+/**
+ * The chart's colors from the year's look, so it belongs with the rest of that Wrapped: its colors that stand out
+ * from this slide, darkest in the middle to lightest at the edge (as Spotify's violet-to-yellow flame). The ring
+ * takes the lightest that the dark month names read on.
+ */
+function chartColors(look: Look, palette: Palette) {
+  const all = [...new Set(look.palettes.flatMap((entry) => [entry.accent, ...(entry.background.match(/#[0-9a-f]{6}/gi) ?? [])]))]
+  const standing = all.filter((color) => contrast(color, palette.background) >= 1.5)
+  const byLight = (standing.length >= 3 ? standing : all).sort((a, b) => contrast(a, '#000000') - contrast(b, '#000000'))
+  const spread = [0, 1 / 3, 2 / 3, 1].map((share) => byLight[Math.round(share * (byLight.length - 1))]!)
+  const ring = [...all].reverse().find((color) => contrast(color, INK) >= 4.5) ?? '#ffffff'
+  return { stops: spread, ring }
+}
+
+/** The lines and month names. */
+const INK = '#1a1033'
+
 /** Months clockwise from the top (January at about one o'clock), as on Spotify's dial. */
 const angleOf = (month: number) => ((month + 0.5) / 12) * Math.PI * 2 - Math.PI / 2
 
@@ -37,7 +55,7 @@ const angleOf = (month: number) => ((month + 0.5) / 12) * Math.PI * 2 - Math.PI 
 export default {
   id: 'months-artist-dial',
   topic: 'months',
-  Component: ({ data, look }) => {
+  Component: ({ data, look, palette }) => {
     const t = useMessages(messages)
     const { month, shortMonth } = useFormats()
     const gradient = useId()
@@ -58,6 +76,7 @@ export default {
       const low = RING + 10 + REACH * 0.45 * Math.sqrt(Math.min(share, next))
       points.push([CENTER + Math.cos(between) * low, CENTER + Math.sin(between) * low])
     }
+    const colors = chartColors(look, palette)
     const peak = angleOf(top.peakMonth)
     // On the tip of the busiest month (it reaches out the furthest).
     const pointer = RING + 14 + REACH
@@ -73,25 +92,24 @@ export default {
           <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-full overflow-visible" aria-hidden>
             <defs>
               <radialGradient id={gradient} cx="50%" cy="50%" r="50%">
-                <stop offset="55%" stopColor="#8b5cf6" />
-                <stop offset="68%" stopColor="#ff4d4d" />
-                <stop offset="85%" stopColor="#ff9a1f" />
-                <stop offset="100%" stopColor="#ffe14d" />
+                {colors.stops.map((color, index) => (
+                  <stop key={index} offset={`${55 + index * 15}%`} stopColor={color} />
+                ))}
               </radialGradient>
             </defs>
             {/* The chart: growing out of the ring. */}
             <g className="wrapped-spring animate-in zoom-in-50 fade-in-0 duration-1000 fill-mode-both [animation-delay:300ms]" style={{ transformOrigin: 'center' }}>
-              <path d={smoothLoop(points)} fill={`url(#${gradient})`} stroke="#1a1033" strokeWidth="4" strokeLinejoin="round" />
+              <path d={smoothLoop(points)} fill={`url(#${gradient})`} stroke={INK} strokeWidth="4" strokeLinejoin="round" />
             </g>
-            <circle cx={CENTER} cy={CENTER} r={RING} fill="#b3adff" stroke="#1a1033" strokeWidth="3" />
-            <circle cx={CENTER} cy={CENTER} r={RING - 22} fill="none" stroke="#1a1033" strokeWidth="2" />
+            <circle cx={CENTER} cy={CENTER} r={RING} fill={colors.ring} stroke={INK} strokeWidth="3" />
+            <circle cx={CENTER} cy={CENTER} r={RING - 22} fill="none" stroke={INK} strokeWidth="2" />
             {Array.from({ length: 12 }, (_, index) => {
               const edge = ((index + 1) / 12) * Math.PI * 2 - Math.PI / 2
               const middle = angleOf(index)
               const label = RING - 11
               return (
                 <g key={index}>
-                  <line x1={CENTER + Math.cos(edge) * (RING - 22)} y1={CENTER + Math.sin(edge) * (RING - 22)} x2={CENTER + Math.cos(edge) * RING} y2={CENTER + Math.sin(edge) * RING} stroke="#1a1033" strokeWidth="2" />
+                  <line x1={CENTER + Math.cos(edge) * (RING - 22)} y1={CENTER + Math.sin(edge) * (RING - 22)} x2={CENTER + Math.cos(edge) * RING} y2={CENTER + Math.sin(edge) * RING} stroke={INK} strokeWidth="2" />
                   <text
                     x={CENTER + Math.cos(middle) * label}
                     y={CENTER + Math.sin(middle) * label}
@@ -99,7 +117,7 @@ export default {
                     dominantBaseline="central"
                     fontSize="11"
                     fontWeight="800"
-                    fill="#1a1033"
+                    fill={INK}
                     transform={`rotate(${(middle * 180) / Math.PI + 90} ${CENTER + Math.cos(middle) * label} ${CENTER + Math.sin(middle) * label})`}
                   >
                     {shortMonth.format(new Date(Date.UTC(data.year, index, 1))).replace('.', '').toUpperCase()}

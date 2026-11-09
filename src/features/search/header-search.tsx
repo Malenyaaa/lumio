@@ -205,7 +205,8 @@ export function HeaderSearch({ persistent = false }: { persistent?: boolean }) {
 
   // The persistent field shows results only while it is being used.
   const [focused, setFocused] = useState(false)
-  const phoneListen = persistent && mode === 'listen'
+  // Only the search page's own field (on a phone); the header's field in a narrow window stays as it is.
+  const phoneListen = persistent && onSearchPage && mode === 'listen'
   const panelVisible =
     listing && open && (showingRecent ? recent.entries.length > 0 : term.length > 0) && (!persistent || focused || openOn === pathname)
 

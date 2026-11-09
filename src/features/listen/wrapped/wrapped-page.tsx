@@ -13,6 +13,7 @@ import { deckFor, lookFor, LOOKS, TOPICS, topicAvailable } from './deck'
 import { contrast, Grain, paletteStyle, type WrappedSlide } from './slide-kit'
 import { SLIDES } from './slides'
 import { useWrapped, useWrappedYears, WRAPPED_RELEASE, type Wrapped } from './wrapped-data'
+import { YearTile } from './year-tile'
 
 const messages = defineMessages({
   de: {
@@ -96,22 +97,9 @@ function WrappedIndex() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {years.data.map((year) => {
-            // Each year's tile in that year's look.
-            const colors = lookFor(year).palettes[0]!
-            return (
-              <Link
-                key={year}
-                to={`/listen/wrapped/${year}`}
-                className="group relative flex aspect-[4/5] flex-col justify-between overflow-hidden rounded-xl p-4 transition-transform active:scale-[0.98]"
-                style={paletteStyle(colors)}
-              >
-                <span aria-hidden className="absolute -right-10 -bottom-10 size-40 rounded-full opacity-90 transition-transform duration-500 group-hover:scale-110" style={{ background: colors.accent }} />
-                <span className="relative text-sm font-bold">{t.title}</span>
-                <span className="relative text-5xl font-extrabold tracking-tighter">{year}</span>
-              </Link>
-            )
-          })}
+          {years.data.map((year) => (
+            <YearTile key={year} year={year} label={t.title} />
+          ))}
         </div>
       )}
     </div>

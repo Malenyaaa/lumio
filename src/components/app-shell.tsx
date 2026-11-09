@@ -24,10 +24,13 @@ import {
   IconSun,
   IconUser,
 } from '@tabler/icons-react'
-import { useEffect, useState } from 'react'
+import { IconChevronLeft, IconChevronRight } from '@tabler/icons-react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate, Outlet, useLocation, useMatch, useNavigate } from 'react-router'
 import { AppBrand } from '@/components/app-switcher'
 import { Link } from '@/components/link'
+import { scrollRowMessages } from '@/components/media/messages'
+import { useDragScroll } from '@/components/media/scroll-row'
 import { shellMessages } from '@/components/messages'
 import { PageTransition } from '@/components/page-transition'
 import { Button } from '@/components/ui/button'
@@ -169,8 +172,20 @@ function Nav() {
     ...navLinks.map((link) => ({ key: `plugin:${link.id}`, to: link.href, label: link.label, external: link.external })),
   ]
 
+  const scroll = useRef<HTMLElement>(null)
+  const { canLeft, canRight, page } = useOverflowArrows(scroll, active)
+  const s = useMessages(scrollRowMessages)
+  const fade = `${canLeft ? 'transparent, black 2.5rem' : 'black'}, ${canRight ? 'black calc(100% - 2.5rem), transparent' : 'black'}`
+
   return (
-    <nav className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
+    // More entries than room: they scroll (dragged with the mouse too), faded at the edge where more is, with arrows.
+    <div className="relative flex min-w-0 items-center">
+      {canLeft && <NavArrow side="left" label={s.back} onClick={() => page(-1)} />}
+      <nav
+        ref={scroll}
+        className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] data-dragging:cursor-grabbing data-dragging:select-none data-dragging:*:pointer-events-none"
+        style={{ maskImage: `linear-gradient(to right, ${fade})`, WebkitMaskImage: `linear-gradient(to right, ${fade})` }}
+      >
       {entries.map((entry) => (
         <Link
           key={entry.key}
@@ -185,7 +200,61 @@ function Nav() {
           {entry.label}
         </Link>
       ))}
-    </nav>
+      </nav>
+      {canRight && <NavArrow side="right" label={s.forward} onClick={() => page(1)} />}
+    </div>
+  )
+}
+
+/** Whether a scrolling strip has more to either side, paging it, and keeping the active entry in view. */
+function useOverflowArrows(strip: React.RefObject<HTMLElement | null>, active: string | undefined) {
+  const [canLeft, setCanLeft] = useState(false)
+  const [canRight, setCanRight] = useState(false)
+  useDragScroll(strip)
+  useEffect(() => {
+    const element = strip.current
+    if (!element) return
+    const update = () => {
+      setCanLeft(element.scrollLeft > 4)
+      setCanRight(element.scrollLeft + element.clientWidth < element.scrollWidth - 4)
+    }
+    update()
+    element.addEventListener('scroll', update, { passive: true })
+    const observer = new ResizeObserver(update)
+    observer.observe(element)
+    for (const child of element.children) observer.observe(child)
+    return () => {
+      element.removeEventListener('scroll', update)
+      observer.disconnect()
+    }
+  }, [strip])
+  // The current entry comes into view (a category further along, opened from elsewhere).
+  useEffect(() => {
+    strip.current?.querySelector<HTMLElement>('[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+  }, [strip, active])
+  const page = (direction: 1 | -1) => {
+    const element = strip.current
+    if (element) element.scrollBy({ left: direction * element.clientWidth * 0.7, behavior: 'smooth' })
+  }
+  return { canLeft, canRight, page }
+}
+
+function NavArrow({ side, label, onClick }: { side: 'left' | 'right'; label: string; onClick: () => void }) {
+  const Icon = side === 'left' ? IconChevronLeft : IconChevronRight
+  return (
+    <button
+      type="button"
+      // The entries stay reachable by Tab (the strip scrolls to them); the arrows are a pointer convenience.
+      tabIndex={-1}
+      aria-label={label}
+      onClick={onClick}
+      className={cn(
+        'absolute z-10 grid size-7 place-items-center rounded-full bg-background/80 text-foreground shadow-sm ring-1 ring-foreground/10 backdrop-blur transition-transform hover:scale-110',
+        side === 'left' ? 'left-0' : 'right-0',
+      )}
+    >
+      <Icon className="size-4" />
+    </button>
   )
 }
 

@@ -31,7 +31,7 @@ const FRICTION = 0.94
  * Lets a mouse drag the row like a finger swipes it: press, pull sideways, let go, and it glides out. A press that
  * barely moves stays a normal click; one that dragged doesn't open the card it was released on.
  */
-function useDragScroll(track: RefObject<HTMLDivElement | null>) {
+export function useDragScroll(track: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const element = track.current
     if (!element) return
