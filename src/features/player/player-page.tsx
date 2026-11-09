@@ -691,7 +691,7 @@ function Player({ id }: { id: string }) {
   const touch = useTouch()
   // Lumio's Android app: swiping up and down sets the brightness (left) and the volume (right).
   const gesturesOn = inCapacitor() && touch && !isAudio && settings.playerGestures
-  const gestures = useSwipeGestures(gesturesOn)
+  const gestures = useSwipeGestures(gesturesOn, settings.playerGestureDeadzone)
   const lastTap = useRef<{ at: number; side: 'back' | 'forward' | null; wasAwake: boolean } | null>(null)
   const [skipHint, setSkipHint] = useState<{ side: 'back' | 'forward'; seconds: number; key: number } | null>(null)
   const onTouchTap = (event: React.PointerEvent) => {

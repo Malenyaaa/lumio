@@ -205,6 +205,7 @@ export function HeaderSearch({ persistent = false }: { persistent?: boolean }) {
 
   // The persistent field shows results only while it is being used.
   const [focused, setFocused] = useState(false)
+  const phoneListen = persistent && mode === 'listen'
   const panelVisible =
     listing && open && (showingRecent ? recent.entries.length > 0 : term.length > 0) && (!persistent || focused || openOn === pathname)
 
@@ -221,6 +222,7 @@ export function HeaderSearch({ persistent = false }: { persistent?: boolean }) {
             className={cn(
               'pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 text-muted-foreground',
               persistent ? 'left-4 size-5' : 'left-2.5 size-4',
+              phoneListen && 'max-md:dark:text-black/70',
             )}
           />
           <input
@@ -239,12 +241,16 @@ export function HeaderSearch({ persistent = false }: { persistent?: boolean }) {
             onKeyDown={onKeyDown}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
-            placeholder={persistent ? t.placeholderListen : t.placeholder}
+            placeholder={phoneListen ? t.placeholderListen : t.placeholder}
             className={cn(
               'outline-none transition-[background-color,box-shadow] placeholder:text-muted-foreground',
               persistent
                 ? 'h-11 w-full rounded-full bg-surface pl-12 pr-10 text-[15px] hover:bg-surface-hover hover:shadow-[inset_0_0_0_1px_var(--color-muted-foreground)] focus-visible:bg-surface-hover focus-visible:shadow-[inset_0_0_0_2px_var(--color-foreground)]'
                 : 'h-9 w-52 rounded-lg border border-input bg-background/80 pl-8 pr-8 text-sm backdrop-blur focus-visible:border-foreground/35 focus-visible:bg-background sm:w-72',
+              // Phones: the page itself is the surface's color there, so the field stands out on its own: in Listen white
+              // (as in Spotify), in Watch a lighter grey with an outline.
+              persistent && 'max-md:bg-muted max-md:shadow-[inset_0_0_0_1px_var(--color-border)] max-md:focus-visible:bg-muted',
+              phoneListen && 'max-md:dark:bg-white max-md:dark:text-black max-md:dark:placeholder:text-black/55 max-md:dark:shadow-none max-md:dark:focus-visible:bg-white',
             )}
           />
           {((!persistent && !onSearchPage) || value) && (
@@ -258,6 +264,7 @@ export function HeaderSearch({ persistent = false }: { persistent?: boolean }) {
             className={cn(
               'absolute top-1/2 grid -translate-y-1/2 place-items-center rounded-full text-muted-foreground hover:text-foreground',
               persistent ? 'right-2.5 size-7' : 'right-1.5 size-6',
+              phoneListen && 'max-md:dark:text-black/70',
             )}
           >
             <IconX className={persistent ? 'size-5' : 'size-4'} />

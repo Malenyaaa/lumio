@@ -27,6 +27,7 @@ import { formatClock } from '@/lib/format'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import { portraitImageUrl } from '@/lib/images'
 import { cn } from '@/lib/utils'
+import { TrackArtists } from '../track-artists'
 import { TrackMenu } from '../track-menu'
 import { SleepTimerMenu } from './sleep-timer-menu'
 import { useLyrics } from './lyrics'
@@ -40,15 +41,15 @@ import { SourceLink } from './queue-source'
 import { LyricsView, Queue } from './side-panel'
 
 const messages = defineMessages({
-  de: { close: 'Player schließen', playingFrom: 'Wiedergabe aus', queueTitle: 'Warteschlange', lyricsTitle: 'Songtext' },
-  en: { close: 'Close player', playingFrom: 'Playing from', queueTitle: 'Queue', lyricsTitle: 'Lyrics' },
+  de: { close: 'Player schließen', playingFrom: 'Wiedergabe aus', queueTitle: 'Warteschlange', closeLyrics: 'Songtext schließen' },
+  en: { close: 'Close player', playingFrom: 'Playing from', queueTitle: 'Queue', closeLyrics: 'Close lyrics' },
 })
 
 /**
  * The phone's full-screen player (as in Spotify): it slides up from the mini player and is swiped down to close. The
  * first screen is the cover (swiped sideways for the next or previous song), the title, the seek bar and the
- * transport; below it scroll the lyrics, the artist, the credits and what comes next. The queue and the full lyrics
- * open as sheets over it. It must sit inside `ListenControlsProvider`.
+ * transport; below it scroll the lyrics, the artist, the credits and what comes next. The queue opens as a sheet over
+ * it, the full lyrics over all of it. It must sit inside `ListenControlsProvider`.
  */
 export function PhonePlayer() {
   const { pathname } = useLocation()
@@ -181,7 +182,7 @@ function Player({ track }: { track: BaseItemDto }) {
       </div>
 
       <div className="space-y-4 px-4 pb-[max(2rem,var(--safe-bottom))]">
-        <NowPlayingDetails track={track} />
+        <NowPlayingDetails track={track} onExpandLyrics={() => setPhoneSheet('lyrics')} />
       </div>
     </SheetBody>
   )
@@ -399,20 +400,57 @@ function QueueSheet({ open }: { open: boolean }) {
   )
 }
 
-/** The whole lyrics, sung along on the cover's color. */
+/**
+ * The whole lyrics over all of the screen, sung along on the cover's color (as in Spotify): the song on top, the seek
+ * bar and play/pause below. Swiped down (or the chevron), it goes back to the player.
+ */
 function LyricsSheet({ track, open }: { track: BaseItemDto; open: boolean }) {
   const { api } = useAuthedSession()
   const t = useMessages(messages)
+  const bar = useMessages(playerBarMessages)
+  const state = usePlayerControls()
   const tint = useDominantColor(portraitImageUrl(api, track, { fillHeight: 64 })).data ?? 'rgb(64 64 64)'
   return (
     <Sheet open={open} onOpenChange={(next) => !next && setPhoneSheet(null)}>
-      <SheetContent className="h-[calc(100dvh-1rem)] text-white" style={{ background: `color-mix(in srgb, ${tint} 70%, black)` }}>
-        <SheetTitle className="px-5 text-base font-bold">
-          {t.lyricsTitle} · <span className="font-normal text-white/75">{track.Name}</span>
-        </SheetTitle>
-        <SheetBody className="px-0">
+      <SheetContent
+        handle={false}
+        className="dark h-dvh max-h-none rounded-none pb-0 text-white ring-0"
+        style={{ background: `color-mix(in srgb, ${tint} 70%, black)` }}
+      >
+        <div className="flex shrink-0 items-center gap-2 px-4 pt-[max(0.75rem,var(--safe-top))] pb-2">
+          <button type="button" onClick={() => setPhoneSheet(null)} aria-label={t.closeLyrics} className="grid size-10 shrink-0 place-items-center rounded-full outline-none">
+            <IconChevronDown className="size-7" />
+          </button>
+          <div className="min-w-0 flex-1 text-center leading-tight">
+            <SheetTitle className="truncate text-sm font-bold">{track.Name}</SheetTitle>
+            <p className="truncate text-xs text-white/75">
+              <TrackArtists track={track} linked={false} />
+            </p>
+          </div>
+          <div aria-hidden className="size-10 shrink-0" />
+        </div>
+        <SheetBody className="px-1 [mask-image:linear-gradient(to_bottom,transparent,black_1.5rem,black_calc(100%-3rem),transparent)]">
           <LyricsView track={track} big={false} />
         </SheetBody>
+        <div className="shrink-0 space-y-3 px-6 pt-2 pb-[max(1.5rem,var(--safe-bottom))]">
+          <Seek />
+          <div className="flex justify-center">
+            <button
+              type="button"
+              aria-label={state.playing ? bar.pause : bar.play}
+              onClick={state.toggle}
+              className="grid size-16 place-items-center rounded-full bg-white text-black outline-none transition-transform active:scale-95"
+            >
+              {state.buffering && !state.playing ? (
+                <IconLoader2 className="size-7 animate-spin" />
+              ) : state.playing ? (
+                <IconPlayerPauseFilled className="size-7" />
+              ) : (
+                <IconPlayerPlayFilled className="size-7 translate-x-0.5" />
+              )}
+            </button>
+          </div>
+        </div>
       </SheetContent>
     </Sheet>
   )

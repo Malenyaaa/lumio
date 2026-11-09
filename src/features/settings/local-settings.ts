@@ -84,6 +84,8 @@ export interface LocalSettings {
   autoPip: boolean
   /** Lumio's Android app: swiping up and down in the video player sets the brightness (left) and the volume (right). */
   playerGestures: boolean
+  /** Share of the screen's height (percent), at the top and at the bottom, where the swipes are left to the system's bars. */
+  playerGestureDeadzone: number
   /** Lumio's Android app: newer versions are downloaded in the background and offered for installing. */
   autoUpdate: boolean
   /** Animate page changes. */
@@ -209,6 +211,7 @@ export const DEFAULT_SETTINGS: LocalSettings = {
   pauseSpotlightSeconds: 10,
   autoPip: true,
   playerGestures: true,
+  playerGestureDeadzone: 10,
   autoUpdate: true,
   pageAnimations: true,
   toasts: true,

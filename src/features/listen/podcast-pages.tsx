@@ -289,7 +289,7 @@ export function PodcastsPage() {
 
       {searching ? (
         <section className="px-4 sm:px-8">
-          <h2 className="mb-1 text-2xl font-bold tracking-tight">{t.results(debounced.trim())}</h2>
+          <h2 className="mb-1 text-2xl font-extrabold tracking-tight">{t.results(debounced.trim())}</h2>
           <PodcastGrid podcasts={search.data ?? []} loading={search.isLoading} />
           {!search.isLoading && !search.data?.length && <p className="text-sm text-muted-foreground">{t.noResults}</p>}
         </section>
@@ -301,7 +301,7 @@ export function PodcastsPage() {
           {followed.episodes.length > 0 && <EpisodeSection title={t.newEpisodes} episodes={followed.episodes.slice(0, 20)} showPodcast limit={5} />}
           <FollowedPodcastsRow />
           <section className="space-y-3 px-4 sm:px-8">
-            <h2 className="text-2xl font-bold tracking-tight">{t.top}</h2>
+            <h2 className="text-2xl font-extrabold tracking-tight">{t.top}</h2>
             <div className="flex flex-wrap gap-2">
               {[{ id: undefined, label: t.all }, ...PODCAST_GENRES.map((entry) => ({ id: entry.id, label: entry[locale] }))].map((entry) => (
                 <button
@@ -329,7 +329,7 @@ function EpisodeSection({ title, episodes, showPodcast, limit = 10 }: { title: s
   const [all, setAll] = useState(false)
   return (
     <section className="px-4 sm:px-8">
-      <h2 className="mb-3 text-2xl font-bold tracking-tight">{title}</h2>
+      <h2 className="mb-3 text-2xl font-extrabold tracking-tight">{title}</h2>
       <div className="max-w-4xl divide-y divide-border/60">
         {episodes.slice(0, all ? undefined : limit).map((episode) => (
           <EpisodeRow key={episode.guid} episode={episode} showPodcast={showPodcast} />
@@ -684,7 +684,7 @@ function PodcastAbout({ show, info }: { show: Podcast; info: ReturnType<typeof u
   })() : undefined
   return (
     <aside className="min-w-0 space-y-4 lg:pt-1">
-      <h2 className="text-2xl font-bold tracking-tight">{t.about}</h2>
+      <h2 className="text-2xl font-extrabold tracking-tight">{t.about}</h2>
       {description && (
         <div>
           <p className={cn('whitespace-pre-line text-sm leading-relaxed text-foreground/85', !open && 'line-clamp-4')}>
@@ -896,7 +896,7 @@ export function EpisodePage() {
         <div className="space-y-10">
           {notes && (
             <section>
-              <h2 className="mb-3 text-2xl font-bold tracking-tight">{t.notes}</h2>
+              <h2 className="mb-3 text-2xl font-extrabold tracking-tight">{t.notes}</h2>
               <p className="whitespace-pre-line break-words text-sm leading-relaxed text-foreground/85">
                 <Linkified text={notes} />
               </p>
@@ -904,7 +904,7 @@ export function EpisodePage() {
           )}
           {transcript.length > 0 && (
             <section>
-              <h2 className="mb-3 text-2xl font-bold tracking-tight">{t.transcript}</h2>
+              <h2 className="mb-3 text-2xl font-extrabold tracking-tight">{t.transcript}</h2>
               <div ref={transcriptBox} className="relative max-h-[28rem] space-y-3 overflow-y-auto rounded-xl bg-muted/50 p-5 [scrollbar-width:thin]">
                 {transcript.map((cue, index) => (
                   <button
@@ -928,7 +928,7 @@ export function EpisodePage() {
         </div>
         {chapters.length > 0 && (
           <section>
-            <h2 className="mb-3 text-2xl font-bold tracking-tight">{t.chapters}</h2>
+            <h2 className="mb-3 text-2xl font-extrabold tracking-tight">{t.chapters}</h2>
             <ol className="space-y-0.5">
               {chapters.map((chapter, index) => (
                 <li key={`${chapter.start}-${index}`}>

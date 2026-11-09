@@ -46,7 +46,7 @@ export function SearchPage() {
       <div className="flex px-4 md:hidden">
         <HeaderSearch persistent />
       </div>
-      {term && <h1 className="px-4 text-2xl font-bold tracking-tight sm:px-8">{t.results}</h1>}
+      {term && <h1 className="px-4 text-2xl font-extrabold tracking-tight sm:px-8">{t.results}</h1>}
       {!term && <p className="px-4 text-sm text-muted-foreground sm:px-8">{t.hint}</p>}
       {term && results.isLoading && <MediaRow title={t.searching} loading squareLoading={mode === 'listen'} />}
       {term && !results.isLoading && groups.length === 0 && mode !== 'listen' && (

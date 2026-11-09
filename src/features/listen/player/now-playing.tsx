@@ -1,4 +1,5 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
+import { IconArrowsDiagonal } from '@tabler/icons-react'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useNavigate } from 'react-router'
 import { Link } from '@/components/link'
@@ -30,6 +31,7 @@ import { TrackArtists } from '../track-artists'
 const messages = defineMessages({
   de: {
     lyricsPreview: 'Vorschau der Lyrics',
+    lyricsFullscreen: 'Songtext im Vollbild',
     aboutArtist: 'Über den Künstler',
     listeners: (n: string) => `${n} Hörer`,
     onTour: 'Auf Tour',
@@ -67,6 +69,7 @@ const messages = defineMessages({
   },
   en: {
     lyricsPreview: 'Lyrics preview',
+    lyricsFullscreen: 'Lyrics in fullscreen',
     aboutArtist: 'About the artist',
     listeners: (n: string) => `${n} listeners`,
     onTour: 'On tour',
@@ -261,14 +264,17 @@ export function NowPlaying({ track }: { track: BaseItemDto }) {
   )
 }
 
-/** Below the cover: lyrics, the artist and their concerts, the credits, what comes next (also the phone's player). */
-export function NowPlayingDetails({ track }: { track: BaseItemDto }) {
+/**
+ * Below the cover: lyrics, the artist and their concerts, the credits, what comes next (also the phone's player, whose
+ * lyrics open in fullscreen: `onExpandLyrics`).
+ */
+export function NowPlayingDetails({ track, onExpandLyrics }: { track: BaseItemDto; onExpandLyrics?: () => void }) {
   const artistId = artistsOf(track)[0]?.id
   const artist = useItem(artistId ?? '', !!artistId)
   const external = !!externalOf(track)
   return (
     <>
-      {!external && <LyricsPreview track={track} />}
+      {!external && <LyricsPreview track={track} onExpand={onExpandLyrics} />}
       {artistId && artist.data && <AboutArtist artist={artist.data} />}
       {artist.data?.Name && <ArtistTour name={artist.data.Name} artistId={artist.data.Id!} />}
       {!external && <SongInfoCard track={track} />}
@@ -293,9 +299,10 @@ const cardAction = 'shrink-0 text-xs font-semibold text-muted-foreground hover:t
 
 /**
  * A small window onto the lyrics on the cover's colour, moving like the full lyrics: the lines slide up as the song
- * goes on, the sung one lit, the coming ones dimmed. A click opens the full lyrics.
+ * goes on, the sung one lit, the coming ones dimmed. A click opens the full lyrics (in the side panel, or `onExpand`,
+ * which then also shows an expand icon, as in Spotify).
  */
-function LyricsPreview({ track }: { track: BaseItemDto }) {
+function LyricsPreview({ track, onExpand }: { track: BaseItemDto; onExpand?: () => void }) {
   const { api } = useAuthedSession()
   const t = useMessages(messages)
   const lyrics = useLyrics(track)
@@ -317,11 +324,19 @@ function LyricsPreview({ track }: { track: BaseItemDto }) {
   return (
     <button
       type="button"
-      onClick={() => toggleListenPanel('lyrics')}
+      onClick={() => (onExpand ? onExpand() : toggleListenPanel('lyrics'))}
+      aria-label={onExpand ? t.lyricsFullscreen : undefined}
       className="block w-full space-y-3 rounded-lg p-4 text-left text-white transition-[filter,background-color] duration-500 hover:brightness-110"
       style={{ background: tint ?? 'var(--muted)' }}
     >
-      <span className="block text-sm font-bold">{t.lyricsPreview}</span>
+      <span className="flex items-center justify-between gap-3">
+        <span className="text-sm font-bold">{t.lyricsPreview}</span>
+        {onExpand && (
+          <span aria-hidden className="-my-1.5 grid size-8 shrink-0 place-items-center rounded-full bg-black/25">
+            <IconArrowsDiagonal className="size-4" />
+          </span>
+        )}
+      </span>
       <span className="relative block h-[6.75rem] overflow-hidden">
         <span ref={list} className="block space-y-1 transition-transform duration-500 ease-out">
           {lines.map((line, index) => (

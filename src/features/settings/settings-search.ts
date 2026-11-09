@@ -94,6 +94,7 @@ function useEntries(): Entry[] {
     ['controls', 'controls-hide', controls.hideLabel, controls.hideHint],
     ['controls', 'pause-spotlight', controls.spotlightLabel, controls.spotlightHint],
     inCapacitor() && ['controls', 'player-gestures', controls.gesturesLabel, controls.gesturesHint],
+    inCapacitor() && ['controls', 'player-gesture-deadzone', controls.deadzoneLabel, controls.deadzoneHint],
     ['downloads', 'storage', play.storage, play.storageDescription],
     cellular && ['downloads', 'downloads-wifi-only', play.wifiOnlyLabel, play.wifiOnlyHint],
     ['downloads', 'video-download-quality', `${play.videoDownloadQualityLabel} (${play.videoDownloadsTitle})`, play.videoDownloadQualityHint],

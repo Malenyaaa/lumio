@@ -48,9 +48,10 @@ function store(patch: { brightness?: number | 'auto'; volume?: number }) {
  * right half the device's media volume (as in phone video players); pulled below no brightness, it switches to the
  * system's automatic brightness. What was set last applies again to the next film or episode. Gives the pointer
  * handlers for the picture, and the level to show while swiping; `consumed()` tells the tap handler that the touch was
- * a swipe.
+ * a swipe. Touches starting in the top or bottom `deadzone` (percent of the screen's height) are left to the system's
+ * bars.
  */
-export function useSwipeGestures(enabled: boolean) {
+export function useSwipeGestures(enabled: boolean, deadzone: number) {
   const start = useRef<{ x: number; y: number; kind: Kind; from: number; height: number } | null>(null)
   const swiping = useRef(false)
   const pending = useRef<Level | null>(null)
@@ -104,6 +105,8 @@ export function useSwipeGestures(enabled: boolean) {
     onPointerDown: (event: PointerEvent) => {
       swiping.current = false
       if (!enabled || event.pointerType !== 'touch') return
+      const edge = (window.innerHeight * deadzone) / 100
+      if (event.clientY < edge || event.clientY > window.innerHeight - edge) return
       const rect = event.currentTarget.getBoundingClientRect()
       const kind: Kind = event.clientX - rect.left < rect.width / 2 ? 'brightness' : 'volume'
       start.current = { x: event.clientX, y: event.clientY, kind, from: current.current[kind], height: rect.height }

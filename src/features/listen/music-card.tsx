@@ -173,7 +173,7 @@ export function CardRow({
       {(title || action) && (
         <div className="flex items-baseline justify-between gap-4 px-4 sm:px-8">
           <div className="min-w-0">
-            <h2 className="text-2xl font-bold tracking-tight">{title}</h2>
+            <h2 className="text-2xl font-extrabold tracking-tight">{title}</h2>
             {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
           </div>
           {action}

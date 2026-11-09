@@ -21,7 +21,7 @@ function Key({ children }: { children: string }) {
   return <kbd className="rounded-md border bg-muted px-1.5 py-0.5 font-mono text-xs">{children}</kbd>
 }
 
-const RESET_KEYS = ['keyboardShortcuts', 'controlsHideSeconds', 'pauseSpotlightSeconds', 'playerGestures'] as const
+const RESET_KEYS = ['keyboardShortcuts', 'controlsHideSeconds', 'pauseSpotlightSeconds', 'playerGestures', 'playerGestureDeadzone'] as const
 
 export function ControlsPage() {
   const { settings, update } = useLocalSettings()
@@ -85,6 +85,14 @@ export function ControlsPage() {
             hint={t.gesturesHint}
             checked={settings.playerGestures}
             onChange={(checked) => update({ playerGestures: checked })}
+          />
+          <SelectField
+            id="player-gesture-deadzone"
+            label={t.deadzoneLabel}
+            hint={t.deadzoneHint}
+            value={settings.playerGestureDeadzone}
+            options={[0, 5, 10, 15, 20].map((value) => ({ value, label: value ? `${value} %` : t.noDeadzone }))}
+            onChange={(value) => update({ playerGestureDeadzone: value })}
           />
         </Section>
       )}

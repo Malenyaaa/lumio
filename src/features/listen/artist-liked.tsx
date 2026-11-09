@@ -78,7 +78,7 @@ export function LikedFromArtist({ artist }: { artist: BaseItemDto }) {
   if (!songs.length && !releases.length) return null
   return (
     <section className="w-full shrink-0 xl:w-80">
-      <h2 className="mb-3 text-2xl font-bold tracking-tight">{t.youLike}</h2>
+      <h2 className="mb-3 text-2xl font-extrabold tracking-tight">{t.youLike}</h2>
       <Link to={`/listen/artist/${artist.Id}/liked`} className="flex items-center gap-4 rounded-md p-2 transition-colors hover:bg-foreground/[0.07]">
         <LikedArtistCover artist={artist} className="size-20" badge="size-7 border-2" />
         <div className="min-w-0">

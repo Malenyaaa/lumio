@@ -120,7 +120,7 @@ export function ListenHome() {
     <div className="relative isolate space-y-10 pb-12 pt-20">
       <MoodGradient />
       <section className="space-y-4 px-4 sm:px-8">
-        <h1 className="text-3xl font-bold tracking-tight">{greeting}</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight">{greeting}</h1>
         {/* Like Spotify's top grid: the last few things played, one click away. */}
         <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
           {recent.isLoading

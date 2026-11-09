@@ -1,6 +1,7 @@
 package de.nauren.lumio;
 
 import android.content.Context;
+import android.content.pm.ActivityInfo;
 import android.media.AudioManager;
 import android.provider.Settings;
 import android.view.Window;
@@ -85,7 +86,8 @@ public class SystemControlsPlugin extends Plugin {
 
     /**
      * The video player's fullscreen: no status or navigation bar. Swiped in from the edge they show only for a moment
-     * and hide again by themselves (immersive), instead of staying.
+     * and hide again by themselves (immersive), instead of staying. The screen turns to landscape, either way round as
+     * the phone is held (the sensor's, not one fixed side), and is free again afterwards.
      */
     @PluginMethod
     public void setImmersive(PluginCall call) {
@@ -96,7 +98,11 @@ public class SystemControlsPlugin extends Plugin {
             if (on) {
                 controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
                 controller.hide(WindowInsetsCompat.Type.systemBars());
-            } else controller.show(WindowInsetsCompat.Type.systemBars());
+                getActivity().setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+            } else {
+                controller.show(WindowInsetsCompat.Type.systemBars());
+                getActivity().setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+            }
         });
         call.resolve();
     }

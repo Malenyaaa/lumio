@@ -70,6 +70,9 @@ export const controlsMessages = defineMessages({
     touch: 'Touch',
     gesturesLabel: 'Wischgesten im Video-Player',
     gesturesHint: 'Auf der linken Hälfte nach oben oder unten wischen ändert die Helligkeit, auf der rechten die Lautstärke.',
+    deadzoneLabel: 'Freier Rand oben und unten',
+    deadzoneHint: 'In diesem Teil der Bildschirmhöhe zählen Wischgesten nicht, damit die Android-Navigation und die Statusleiste normal bedienbar bleiben.',
+    noDeadzone: 'Keiner',
   },
   en: {
     title: 'Controls',
@@ -98,6 +101,9 @@ export const controlsMessages = defineMessages({
     touch: 'Touch',
     gesturesLabel: 'Swipe gestures in the video player',
     gesturesHint: 'Swiping up or down on the left half sets the brightness, on the right half the volume.',
+    deadzoneLabel: 'Free edge at the top and bottom',
+    deadzoneHint: 'Swipes starting in this share of the screen height are ignored, so the Android navigation and status bar keep working.',
+    noDeadzone: 'None',
   },
 })
 

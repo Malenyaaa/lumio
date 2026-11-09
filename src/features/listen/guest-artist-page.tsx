@@ -125,7 +125,7 @@ export function GuestArtistPage() {
 
       <div className="space-y-12">
         <section className="max-w-4xl px-4 sm:px-8">
-          <h2 className="mb-3 text-2xl font-bold tracking-tight">{t.performed}</h2>
+          <h2 className="mb-3 text-2xl font-extrabold tracking-tight">{t.performed}</h2>
           {loading && Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="mb-1 h-14 rounded-md" />)}
           {!loading && !songs.length && <p className="text-sm text-muted-foreground">{t.nothing}</p>}
           {songs.map((track, index) => (
@@ -135,7 +135,7 @@ export function GuestArtistPage() {
 
         {!!credited.data?.length && (
           <section className="max-w-4xl px-4 sm:px-8">
-            <h2 className="mb-3 text-2xl font-bold tracking-tight">{t.credited}</h2>
+            <h2 className="mb-3 text-2xl font-extrabold tracking-tight">{t.credited}</h2>
             {credited.data.map((track, index) => (
               <TrackTableRow key={track.Id} track={track} number={index + 1} cover onPlay={() => music.play(credited.data, index, { source: `${source}:credited` })} />
             ))}
@@ -144,7 +144,7 @@ export function GuestArtistPage() {
 
         {bio && (
           <section className="max-w-4xl space-y-3 px-4 sm:px-8">
-            <h2 className="text-2xl font-bold tracking-tight">{t.about}</h2>
+            <h2 className="text-2xl font-extrabold tracking-tight">{t.about}</h2>
             <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{bio}</p>
           </section>
         )}

@@ -254,7 +254,7 @@ export function ArtistPage({ item }: { item: BaseItemDto }) {
         <div className="flex flex-col gap-8 px-4 sm:px-8 xl:flex-row">
           {(tracks.isLoading || popular.length > 0) && (
             <section className="min-w-0 max-w-4xl flex-1">
-              <h2 className="mb-3 text-2xl font-bold tracking-tight">{t.popular}</h2>
+              <h2 className="mb-3 text-2xl font-extrabold tracking-tight">{t.popular}</h2>
               <div>
                 {tracks.isLoading && Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="mb-1 h-14 rounded-md" />)}
                 {shownPopular.map(({ track, plays }, index) => (
@@ -285,7 +285,7 @@ export function ArtistPage({ item }: { item: BaseItemDto }) {
         {/* About */}
         {(bio || listeners) && (
           <section className="px-4 sm:px-8">
-            <h2 className="mb-3 text-2xl font-bold tracking-tight">{t.about}</h2>
+            <h2 className="mb-3 text-2xl font-extrabold tracking-tight">{t.about}</h2>
             <About artist={item} image={banner ?? photo} listeners={listeners ? t.listeners(number.format(listeners)) : undefined} bio={bio} />
           </section>
         )}
@@ -326,7 +326,7 @@ function Discography({ artistId, albums, tracks, loading }: { artistId: string; 
   return (
     <section className="space-y-3">
       <div className="flex items-baseline justify-between gap-4 px-4 sm:px-8">
-        <h2 className="text-2xl font-bold tracking-tight">{t.discography}</h2>
+        <h2 className="text-2xl font-extrabold tracking-tight">{t.discography}</h2>
         {list.length > 6 && (
           <Link to={`/listen/artist/${artistId}/discography`} className="shrink-0 text-sm font-semibold text-muted-foreground hover:text-foreground hover:underline">
             {t.showAll}

@@ -193,7 +193,7 @@ export function ConcertList({
   return (
     <section className="px-4 sm:px-8">
       <div className="mb-3 flex items-baseline justify-between gap-4">
-        <h2 className="text-2xl font-bold tracking-tight">{title}</h2>
+        <h2 className="text-2xl font-extrabold tracking-tight">{title}</h2>
         {action}
       </div>
       <ul className="max-w-4xl">
@@ -326,7 +326,7 @@ export function ConcertPage() {
       <div className="space-y-12">
         {event.artists.length > 0 && (
           <section className="px-4 sm:px-8">
-            <h2 className="mb-3 text-2xl font-bold tracking-tight">{t.lineup}</h2>
+            <h2 className="mb-3 text-2xl font-extrabold tracking-tight">{t.lineup}</h2>
             <ul className="grid max-w-4xl gap-1 sm:grid-cols-2">
               {event.artists.map((artist, index) => {
                 const own = findArtist(artist.name)
@@ -368,7 +368,7 @@ export function ConcertPage() {
         )}
 
         <section className="px-4 sm:px-8">
-          <h2 className="mb-3 text-2xl font-bold tracking-tight">{t.venue}</h2>
+          <h2 className="mb-3 text-2xl font-extrabold tracking-tight">{t.venue}</h2>
           <div className="grid max-w-4xl overflow-hidden rounded-xl bg-muted sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
             <div className="space-y-1 p-6">
               <p className="text-lg font-bold">{venue.name}</p>
@@ -393,7 +393,7 @@ export function ConcertPage() {
 
         {(from || presale || notes.length > 0 || event.seatmap) && (
           <section className="px-4 sm:px-8">
-            <h2 className="mb-3 text-2xl font-bold tracking-tight">{t.details}</h2>
+            <h2 className="mb-3 text-2xl font-extrabold tracking-tight">{t.details}</h2>
             <div className="max-w-4xl space-y-3 text-sm">
               {from && <p className="font-semibold">{t.price(from, to)}</p>}
               {presale && <p>{t.presale(presale)}</p>}

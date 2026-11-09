@@ -484,7 +484,7 @@ export function FollowListPage({ kind }: { kind: 'following' | 'followers' }) {
   ]
   return (
     <div className="space-y-5 px-4 pb-12 pt-20 sm:px-8">
-      <h1 className="text-3xl font-bold tracking-tight">{kind === 'followers' ? t.followersRow : t.followingRow}</h1>
+      <h1 className="text-3xl font-extrabold tracking-tight">{kind === 'followers' ? t.followersRow : t.followingRow}</h1>
       {kind === 'following' && own && (
         <div className="flex gap-2">
           {filters.map(([value, label]) => (

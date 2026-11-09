@@ -3,13 +3,13 @@ import {
   IconArrowsDiagonal,
   IconArrowsDiagonalMinimize2,
   IconChevronLeft,
-  IconGripVertical,
   IconLayoutSidebarRightCollapse,
+  IconMenu2,
   IconPlayerPlayFilled,
   IconSettings,
   IconX,
 } from '@tabler/icons-react'
-import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type PointerEvent, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
 import { Link } from '@/components/link'
 import { useTouch } from '@/lib/use-media-query'
 import { FadeImage } from '@/components/media/fade-image'
@@ -716,8 +716,10 @@ let draggedQueueIndex: number | null = null
 function QueueRow({ uid, item, index, kind, current }: { uid: string; item: BaseItemDto; index: number; kind: QueueKind; current?: boolean }) {
   const { api } = useAuthedSession()
   const t = useMessages(messages)
-  // Fingers move rows by their handle (the browser's drag and drop is mouse only); the menu is a long press there.
+  // Fingers move rows by their handle or by resting on them (the browser's drag and drop is mouse only); the menu is a
+  // longer press there.
   const touch = useTouch()
+  const drag = useQueueRowDrag(index, touch && !current)
   const cover = portraitImageUrl(api, item, { fillHeight: 96 })
   // Offline, songs that need the network are greyed out (the player skips them).
   const unavailable = useUnavailable(item)
@@ -732,6 +734,7 @@ function QueueRow({ uid, item, index, kind, current }: { uid: string; item: Base
   return (
     <TrackContextMenu track={item} onRemove={current ? undefined : () => music.remove(index)} removeLabel={t.removeFromQueue}>
       <div
+        {...drag.row}
         data-uid={uid}
         data-queue-index={index}
         data-queue-kind={kind}
@@ -799,7 +802,16 @@ function QueueRow({ uid, item, index, kind, current }: { uid: string; item: Base
           </span>
         </span>
         {touch ? (
-          !current && <QueueHandle index={index} label={t.moveInQueue(item.Name ?? '')} />
+          !current && (
+            <button
+              type="button"
+              aria-label={t.moveInQueue(item.Name ?? '')}
+              {...drag.handle}
+              className="grid size-10 shrink-0 cursor-grab touch-none place-items-center text-muted-foreground"
+            >
+              <IconMenu2 className="size-5" />
+            </button>
+          )
         ) : (
           <span className="opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-data-popup-open:opacity-100">
             <TrackMenu track={item} visible onRemove={current ? undefined : () => music.remove(index)} removeLabel={t.removeFromQueue} />
@@ -810,13 +822,21 @@ function QueueRow({ uid, item, index, kind, current }: { uid: string; item: Base
   )
 }
 
+/** How long a finger rests on a queue row before it lifts the row (moving earlier scrolls the list instead). */
+const LIFT_DELAY = 280
+
 /**
- * A queue row's handle for fingers: pulled up or down, the row follows and a line shows where it would land (before or
- * after the row under the finger, in that row's part of the queue); letting go moves it there.
+ * Moving a queue row with a finger: from its handle at once, or from anywhere on the row after resting there a moment
+ * (it lifts; held still longer, the row's menu opens instead). Pulled up or down, the row follows and a line shows where
+ * it would land (before or after the row under the finger, in that row's part of the queue); letting go moves it there.
+ * Gives the row's ref and handlers, and the handle's handlers.
  */
-function QueueHandle({ index, label }: { index: number; label: string }) {
-  const start = useRef<{ y: number; row: HTMLElement } | null>(null)
+function useQueueRowDrag(index: number, enabled: boolean) {
+  const rowRef = useRef<HTMLDivElement>(null)
+  const start = useRef<{ y: number; x: number; id: number; lifted: boolean; timer: number } | null>(null)
   const target = useRef<{ row: HTMLElement; after: boolean } | null>(null)
+  // A tap that lifted the row is no tap (it doesn't play the song).
+  const swallowClick = useRef(false)
 
   const clearMark = () => {
     target.current?.row.removeAttribute('data-drop')
@@ -834,52 +854,103 @@ function QueueHandle({ index, label }: { index: number; label: string }) {
     row.dataset.drop = after ? 'after' : 'before'
     target.current = { row, after }
   }
+  const lift = (pointerId: number) => {
+    const row = rowRef.current
+    const at = start.current
+    if (!row || !at) return
+    at.lifted = true
+    swallowClick.current = true
+    try {
+      row.setPointerCapture(pointerId)
+    } catch {
+      // The finger already left.
+    }
+    row.style.zIndex = '10'
+    row.style.background = 'var(--muted)'
+    row.style.boxShadow = '0 8px 24px rgb(0 0 0 / 0.35)'
+    navigator.vibrate?.(10)
+  }
+  const reset = () => {
+    const at = start.current
+    start.current = null
+    if (at) window.clearTimeout(at.timer)
+    clearMark()
+    const row = rowRef.current
+    if (row) row.style.transform = row.style.zIndex = row.style.background = row.style.boxShadow = ''
+  }
 
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      // The sheet around the queue must not take this drag for closing it.
-      data-base-ui-swipe-ignore=""
-      className="grid size-10 shrink-0 cursor-grab touch-none place-items-center text-muted-foreground"
-      onPointerDown={(event) => {
-        const row = event.currentTarget.closest<HTMLElement>('[data-queue-index]')
-        if (!row) return
-        event.stopPropagation()
-        event.currentTarget.setPointerCapture(event.pointerId)
-        start.current = { y: event.clientY, row }
-        row.style.zIndex = '10'
-        row.style.background = 'var(--muted)'
-      }}
-      onPointerMove={(event) => {
-        const at = start.current
-        if (!at) return
-        at.row.style.transform = `translateY(${event.clientY - at.y}px)`
-        markAt(event.clientY, at.row)
-      }}
-      onPointerUp={() => {
-        const at = start.current
-        if (!at) return
-        start.current = null
-        at.row.style.transform = ''
-        at.row.style.zIndex = ''
-        at.row.style.background = ''
-        const drop = target.current
-        clearMark()
-        if (!drop) return
-        const to = Number(drop.row.dataset.queueIndex)
-        music.reorder(index, drop.after ? to + 1 : to, drop.row.dataset.queueKind as QueueKind)
-      }}
-      onPointerCancel={() => {
-        const at = start.current
-        start.current = null
-        clearMark()
-        if (at) at.row.style.transform = at.row.style.zIndex = at.row.style.background = ''
-      }}
-    >
-      <IconGripVertical className="size-5" />
-    </button>
-  )
+  // While a row is lifted the list must not scroll under the finger (only a listener that may cancel can stop it).
+  useEffect(() => {
+    const row = rowRef.current
+    if (!row || !enabled) return
+    const hold = (event: TouchEvent) => {
+      if (start.current?.lifted && event.cancelable) event.preventDefault()
+    }
+    row.addEventListener('touchmove', hold, { passive: false })
+    return () => row.removeEventListener('touchmove', hold)
+  }, [enabled])
+
+  const move = (event: PointerEvent) => {
+    const at = start.current
+    if (!at || event.pointerId !== at.id) return
+    if (!at.lifted) {
+      // Moved before resting: the list scrolls.
+      if (Math.abs(event.clientY - at.y) > 8 || Math.abs(event.clientX - at.x) > 8) reset()
+      return
+    }
+    rowRef.current!.style.transform = `translateY(${event.clientY - at.y}px)`
+    markAt(event.clientY, rowRef.current!)
+  }
+  const up = (event: PointerEvent) => {
+    const at = start.current
+    if (!at || event.pointerId !== at.id) return
+    const drop = at.lifted ? target.current : null
+    reset()
+    if (!drop) return
+    const to = Number(drop.row.dataset.queueIndex)
+    music.reorder(index, drop.after ? to + 1 : to, drop.row.dataset.queueKind as QueueKind)
+  }
+
+  const row = enabled
+    ? {
+        ref: rowRef,
+        // The sheet around the queue must not take these drags for closing it.
+        'data-base-ui-swipe-ignore': '',
+        onPointerDown: (event: PointerEvent) => {
+          if (event.pointerType !== 'touch' || !event.isPrimary) return
+          swallowClick.current = false
+          reset()
+          const timer = window.setTimeout(() => lift(event.pointerId), LIFT_DELAY)
+          start.current = { y: event.clientY, x: event.clientX, id: event.pointerId, lifted: false, timer }
+        },
+        onPointerMove: move,
+        onPointerUp: up,
+        onPointerCancel: reset,
+        // Held still past the lift, the row's menu opens: the row goes back to its place.
+        onContextMenu: () => {
+          if (start.current && !target.current) reset()
+        },
+        onClickCapture: (event: MouseEvent) => {
+          if (!swallowClick.current) return
+          swallowClick.current = false
+          event.stopPropagation()
+          event.preventDefault()
+        },
+      }
+    : { ref: rowRef }
+
+  const handle = {
+    'data-base-ui-swipe-ignore': '',
+    onPointerDown: (event: PointerEvent) => {
+      if (!rowRef.current) return
+      event.stopPropagation()
+      reset()
+      start.current = { y: event.clientY, x: event.clientX, id: event.pointerId, lifted: false, timer: 0 }
+      lift(event.pointerId)
+    },
+  }
+
+  return { row, handle }
 }
 
 /**

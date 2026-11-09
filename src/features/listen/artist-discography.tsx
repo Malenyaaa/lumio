@@ -106,7 +106,7 @@ export function ArtistDiscographyPage() {
   return (
     <div className="space-y-4 pb-12 pt-20">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 sm:px-8">
-        <h1 className="mr-auto min-w-0 truncate text-2xl font-bold tracking-tight">
+        <h1 className="mr-auto min-w-0 truncate text-2xl font-extrabold tracking-tight">
           {artist ? (
             <Link to={titlePath('MusicArtist', id)} className="hover:underline">
               {artist.Name}

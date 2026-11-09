@@ -1,6 +1,5 @@
 import { App } from '@capacitor/app'
 import { Capacitor, registerPlugin } from '@capacitor/core'
-import { ScreenOrientation } from '@capacitor/screen-orientation'
 
 /**
  * Lumio's own Android app (Capacitor): the device's back button, the system bars and the screen's orientation, and
@@ -15,12 +14,13 @@ export function onCapacitorBack(handler: () => void) {
 /** Leaving from the start page: to the background, so music plays on (as media apps do). */
 export const minimizeCapacitorApp = () => void App.minimizeApp()
 
-/** The video player: no system bars (swiped in, they hide again by themselves), turned to landscape; and back. */
+/**
+ * The video player: no system bars (swiped in, they hide again by themselves), turned to landscape (either way round,
+ * as the phone is held); and back.
+ */
 export async function setCapacitorFullscreen(on: boolean) {
   try {
     await SystemControls.setImmersive({ on })
-    if (on) await ScreenOrientation.lock({ orientation: 'landscape' })
-    else await ScreenOrientation.unlock()
   } catch {
     // An older WebView or a device without these: the player still works.
   }
@@ -59,6 +59,7 @@ interface SystemControlsPlugin {
   getBrightness(): Promise<{ value: number }>
   setBrightness(options: { value: number }): Promise<void>
   resetBrightness(): Promise<void>
+  /** Also turns the screen to landscape (either way round) while on, and lets it turn freely again when off. */
   setImmersive(options: { on: boolean }): Promise<void>
 }
 
