@@ -28,7 +28,7 @@ export default {
               />
             ))}
           </div>
-          <div className="mt-1 flex justify-between text-xs font-semibold opacity-75">
+          <div className="mt-1 flex justify-between text-xs font-semibold">
             {[0, 6, 12, 18, 24].map((hour) => (
               <span key={hour}>{hour}</span>
             ))}

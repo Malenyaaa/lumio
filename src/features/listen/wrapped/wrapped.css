@@ -227,6 +227,98 @@
   color: transparent;
 }
 
+/* Backdrops (backdrop.tsx). */
+.wrapped-drift {
+  animation: wrapped-drift 18s ease-in-out infinite alternate;
+}
+
+@keyframes wrapped-drift {
+  50% {
+    transform: translate(40px, -30px) scale(1.2);
+  }
+  to {
+    transform: translate(-20px, 20px) scale(0.95);
+  }
+}
+
+.wrapped-aurora {
+  animation: wrapped-aurora 9s ease-in-out infinite alternate;
+  border-radius: 50%;
+}
+
+@keyframes wrapped-aurora {
+  50% {
+    border-radius: 60% 40% 70% 30%;
+    transform: translate(10%, 12%) rotate(40deg) scale(1.15);
+  }
+  to {
+    border-radius: 30% 70% 40% 60%;
+    transform: translate(-8%, 4%) rotate(-30deg);
+  }
+}
+
+.wrapped-ring {
+  animation: wrapped-ring 4.4s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+  opacity: 0;
+}
+
+@keyframes wrapped-ring {
+  from {
+    transform: scale(0.15);
+    opacity: 0.8;
+  }
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+.wrapped-bubble {
+  animation: wrapped-bubble 10s linear infinite;
+}
+
+@keyframes wrapped-bubble {
+  to {
+    transform: translateY(-115dvh) translateX(30px);
+  }
+}
+
+.wrapped-tumble {
+  animation: wrapped-tumble 9s ease-in-out infinite alternate;
+}
+
+@keyframes wrapped-tumble {
+  from {
+    transform: translateY(0) rotate(0deg) scale(0.9);
+  }
+  to {
+    transform: translateY(-26px) rotate(160deg) scale(1.1);
+  }
+}
+
+/* The color sweeping over the slide as the next one comes. */
+.wrapped-wipe {
+  animation: wrapped-wipe 620ms cubic-bezier(0.7, 0, 0.3, 1) both;
+}
+
+@keyframes wrapped-wipe {
+  from {
+    transform: translateX(-102%) skewX(-12deg);
+  }
+  45%,
+  55% {
+    transform: translateX(0) skewX(0);
+  }
+  to {
+    transform: translateX(102%) skewX(-12deg);
+  }
+}
+
+/* Entrances with a little overshoot, for the loud ones. */
+.wrapped-spring {
+  animation-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1.35) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   [class*='wrapped-'] {
     animation-duration: 1ms !important;

@@ -20,7 +20,7 @@ export default {
         <div aria-hidden className="wrapped-rings absolute inset-x-0 -bottom-40 h-96 opacity-15" />
         <Body className="items-center justify-center gap-5 text-center">
           <In>
-            <p className="text-sm font-bold tracking-[0.25em] uppercase opacity-80">{t.congrats}</p>
+            <p className="text-sm font-bold tracking-[0.25em] uppercase">{t.congrats}</p>
           </In>
           <In delay={200} from="zoom" className="relative">
             <svg aria-hidden viewBox="0 0 120 60" className="absolute -top-14 left-1/2 w-28 -translate-x-1/2" fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round">

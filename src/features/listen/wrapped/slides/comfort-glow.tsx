@@ -11,6 +11,7 @@ const messages = defineMessages({
 export default {
   id: 'comfort-glow',
   topic: 'comfort',
+  backdrop: false,
   Component: ({ data, look, palette }) => {
     const t = useMessages(messages)
     const track = data.comfort!
@@ -18,7 +19,7 @@ export default {
     return (
       <>
         {cover && <FadeImage src={cover} alt="" aria-hidden className="absolute inset-0 size-full scale-125 object-cover opacity-60 blur-2xl saturate-150" />}
-        <div aria-hidden className="absolute inset-0 bg-black/40" />
+        <div aria-hidden className="absolute inset-0 bg-black/55" />
         <Body className="items-center justify-center gap-6 text-center text-white">
           <In>
             <p className="text-lg font-bold">{t.lead}</p>
@@ -30,10 +31,10 @@ export default {
             <Headline look={look} className="text-4xl">
               {track.title}
             </Headline>
-            {track.artist && <p className="mt-1 text-lg font-bold opacity-85">{track.artist}</p>}
+            {track.artist && <p className="mt-1 text-lg font-bold">{track.artist}</p>}
           </In>
           <In delay={900}>
-            <p className="wrapped-neon text-5xl font-black" style={{ color: palette.accent }}>
+            <p className="wrapped-neon text-5xl font-black" style={{ color: '#ffffff', textShadow: `0 0 18px ${palette.accent}, 0 0 44px ${palette.accent}` }}>
               {t.days(track.days)}
             </p>
           </In>

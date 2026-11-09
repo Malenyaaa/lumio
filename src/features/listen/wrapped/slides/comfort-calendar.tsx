@@ -1,5 +1,5 @@
 import { defineMessages, useMessages } from '@/lib/i18n'
-import { Body, Headline, In, Picture, useTrackCover, type WrappedSlide } from '../slide-kit'
+import { contrast, Body, Headline, In, Picture, useTrackCover, type WrappedSlide } from '../slide-kit'
 
 const messages = defineMessages({
   de: { lead: 'Dein Wohlfühlsong', line: (days: number) => `An ${days} verschiedenen Tagen bist du zu ihm zurückgekehrt.` },
@@ -26,7 +26,7 @@ export default {
             <Headline look={look} className="text-3xl break-words">
               {track.title}
             </Headline>
-            {track.artist && <p className="mt-1 font-bold opacity-85">{track.artist}</p>}
+            {track.artist && <p className="mt-1 font-bold">{track.artist}</p>}
           </div>
         </In>
         <In delay={400} from="zoom" className="rounded-xl bg-white p-4 text-[#111] shadow-xl">
@@ -34,7 +34,7 @@ export default {
             {Array.from({ length: 35 }, (_, index) => (
               <span key={index} className="grid aspect-square place-items-center rounded-md bg-black/5 text-sm font-black">
                 {index < ticks && (
-                  <span className="animate-in zoom-in-0 fill-mode-both" style={{ color: palette.accent, animationDelay: `${700 + index * 60}ms` }}>
+                  <span className="animate-in zoom-in-0 fill-mode-both" style={{ color: contrast(palette.accent, '#ffffff') >= 3 ? palette.accent : '#111111', animationDelay: `${700 + index * 60}ms` }}>
                     ✓
                   </span>
                 )}

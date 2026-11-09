@@ -29,7 +29,7 @@ export default {
           <Headline look={look} className="text-4xl break-words">
             {track.title}
           </Headline>
-          {track.artist && <p className="mt-1 text-xl font-bold opacity-85">{track.artist}</p>}
+          {track.artist && <p className="mt-1 text-xl font-bold">{track.artist}</p>}
           <p className="mt-3 text-lg">{t.plays(number.format(track.plays))}</p>
         </In>
       </Body>

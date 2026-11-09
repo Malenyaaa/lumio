@@ -46,7 +46,7 @@ export default {
               <p className={`text-3xl text-[#f1ff47] tabular-nums ${displayClass(look)}`}>{number.format(data.plays)}</p>
             </div>
           </div>
-          <p className="border-t border-white/15 px-5 py-2.5 text-xs font-bold tracking-[0.2em] uppercase opacity-80">Lumio Wrapped {data.year}</p>
+          <p className="border-t border-white/15 px-5 py-2.5 text-xs font-bold tracking-[0.2em] uppercase">Lumio Wrapped {data.year}</p>
         </In>
       </Body>
     )

@@ -1,5 +1,5 @@
 import { defineMessages, useMessages } from '@/lib/i18n'
-import { Body, In, useFormats, type WrappedSlide } from '../slide-kit'
+import { contrast, Body, In, useFormats, type WrappedSlide } from '../slide-kit'
 
 const messages = defineMessages({
   de: { masthead: 'The Wrapped Gazette', edition: (year: number) => `Jahresausgabe ${year}`, headline: 'Die Charts des Jahres', plays: (value: string) => `${value} Streams` },
@@ -10,6 +10,7 @@ const messages = defineMessages({
 export default {
   id: 'top-songs-gazette',
   topic: 'top-songs',
+  backdrop: false,
   Component: ({ data, palette }) => {
     const t = useMessages(messages)
     const { number } = useFormats()
@@ -28,7 +29,7 @@ export default {
           <ol className="mt-5 divide-y divide-[#16160e]/25 border-y border-[#16160e]">
             {data.topTracks.slice(0, 5).map((track, index) => (
               <li key={track.key} className="flex items-baseline gap-3 py-2.5">
-                <span className="wrapped-letterpress font-serif text-3xl font-black" style={{ color: palette.accent, animationDelay: `${400 + index * 140}ms` }}>
+                <span className="wrapped-letterpress font-serif text-3xl font-black" style={{ color: contrast(palette.accent, '#f3efe3') >= 3 ? palette.accent : '#d83a1e', animationDelay: `${400 + index * 140}ms` }}>
                   {index + 1}
                 </span>
                 <In delay={450 + index * 140} from="fade" className="min-w-0 flex-1">

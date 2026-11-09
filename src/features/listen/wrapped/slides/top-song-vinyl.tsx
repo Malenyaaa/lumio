@@ -38,8 +38,8 @@ export default {
           <Headline look={look} className="text-4xl break-words">
             {track.title}
           </Headline>
-          {track.artist && <p className="mt-1 text-xl font-bold opacity-85">{track.artist}</p>}
-          <p className="mt-3 text-base font-semibold opacity-80">{t.minutes(number.format(track.plays), number.format(track.minutes))}</p>
+          {track.artist && <p className="mt-1 text-xl font-bold">{track.artist}</p>}
+          <p className="mt-3 text-base font-semibold">{t.minutes(number.format(track.plays), number.format(track.minutes))}</p>
         </In>
       </Body>
     )

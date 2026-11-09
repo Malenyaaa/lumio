@@ -1,15 +1,16 @@
 import { IconLoader2, IconPlayerPauseFilled, IconPlaylistAdd, IconReload, IconX } from '@tabler/icons-react'
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 import { Link } from '@/components/link'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePlaylistActions } from '@/features/listen/playlists'
 import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
+import { Backdrop } from './backdrop'
 import { deckFor, lookFor, LOOKS, TOPICS, topicAvailable } from './deck'
-import { Grain, paletteStyle, type WrappedSlide } from './slide-kit'
+import { contrast, Grain, paletteStyle, type WrappedSlide } from './slide-kit'
 import { SLIDES } from './slides'
 import { useWrapped, useWrappedYears, WRAPPED_RELEASE, type Wrapped } from './wrapped-data'
 
@@ -159,14 +160,20 @@ function StoryFrame({ onClose, closeLabel, style, top, children }: { onClose: ()
   )
 }
 
-/** The year's slides: one per topic the year draws (deck.ts), leaving out those the data has nothing for. */
+/**
+ * The year's slides: one per topic the year draws (deck.ts), leaving out those the data has nothing for. `?slide=<id>`
+ * shows just that slide with the year's data (for working on the slides).
+ */
 function useStorySlides(data: Wrapped): WrappedSlide[] {
+  const only = useSearchParams()[0].get('slide')
   return useMemo(() => {
+    const single = only ? SLIDES.find((slide) => slide.id === only) : undefined
+    if (single) return [single]
     const deck = deckFor(data.year, SLIDES)
     return TOPICS.filter((topic) => deck.has(topic) && topicAvailable(topic, data))
       .map((topic) => SLIDES.find((slide) => slide.id === deck.get(topic)))
       .filter((slide): slide is WrappedSlide => !!slide)
-  }, [data])
+  }, [data, only])
 }
 
 function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
@@ -182,7 +189,8 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
   const pressedAt = useRef(0)
   const last = index === slides.length - 1
   const palette = look.palettes[index % look.palettes.length]!
-  const Slide = slides[index]!.Component
+  const slide = slides[index]!
+  const Slide = slide.Component
 
   const go = (next: number) => {
     setIndex(Math.max(0, Math.min(slides.length - 1, next)))
@@ -223,12 +231,21 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
   })
 
   const bars = (
-    <div className="flex gap-1" style={{ color: palette.color }}>
-      {slides.map((slide, position) => (
-        <div key={slide.id} className="h-1 flex-1 overflow-hidden rounded-full bg-current/25">
-          <div className="h-full rounded-full bg-current" style={{ width: position < index ? '100%' : position > index ? '0%' : last ? '100%' : `${Math.min(100, (elapsed / SLIDE_MS) * 100)}%` }} />
-        </div>
-      ))}
+    <div className="relative">
+      <div className="flex gap-1" style={{ color: palette.color }}>
+        {slides.map((slide, position) => (
+          <div key={slide.id} className="h-1 flex-1 overflow-hidden rounded-full bg-current/25">
+            <div className="h-full rounded-full bg-current" style={{ width: position < index ? '100%' : position > index ? '0%' : last ? '100%' : `${Math.min(100, (elapsed / SLIDE_MS) * 100)}%` }} />
+          </div>
+        ))}
+      </div>
+      {/* Paused: said right under the bars. */}
+      {held && !last && (
+        <span className="absolute top-3 left-0 flex items-center gap-1 rounded-full bg-black/70 px-3 py-1 text-xs font-semibold text-white">
+          <IconPlayerPauseFilled className="size-3" />
+          {t.paused}
+        </span>
+      )}
     </div>
   )
 
@@ -257,19 +274,21 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
           setHeld(false)
         }}
       >
-        <div key={slides[index]!.id} className="absolute inset-0 overflow-hidden animate-in fade-in-0 duration-500">
+        <div
+          key={slide.id}
+          className="absolute inset-0 overflow-hidden animate-in fade-in-0 duration-300 [animation-delay:250ms] fill-mode-both [&_p]:[text-shadow:var(--wrapped-shadow)]"
+          // A soft shadow against the text color, so it reads over the moving backdrop.
+          style={{ '--wrapped-shadow': contrast(palette.color, '#000000') > 10 ? '0 1px 14px rgb(0 0 0 / 0.45)' : '0 1px 12px rgb(255 255 255 / 0.4)' } as CSSProperties}
+        >
+          {slide.backdrop !== false && <Backdrop id={slide.id} year={data.year} look={look} palette={palette} />}
           <Slide data={data} look={look} palette={palette} active />
         </div>
-        {held && !last && (
-          <span className="absolute bottom-[max(1rem,var(--safe-bottom))] left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/40 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm">
-            <IconPlayerPauseFilled className="size-3" />
-            {t.paused}
-          </span>
-        )}
+        {/* The next slide's color sweeps across as it comes (not for the first). */}
+        {index > 0 && <div key={`wipe-${slide.id}`} aria-hidden className="wrapped-wipe pointer-events-none absolute inset-y-0 -inset-x-8 z-10" style={{ background: palette.accent }} />}
       </div>
       {last && (
         <div className="absolute inset-x-0 bottom-0 z-20 flex justify-center gap-2 px-6 pb-[max(1.25rem,var(--safe-bottom))]">
-          <Button variant="outline" className="border-current/30 bg-black/20 text-current backdrop-blur-sm hover:bg-black/30" onClick={() => go(0)}>
+          <Button className="bg-black/80 text-white hover:bg-black/70" onClick={() => go(0)}>
             <IconReload />
             {t.replay}
           </Button>

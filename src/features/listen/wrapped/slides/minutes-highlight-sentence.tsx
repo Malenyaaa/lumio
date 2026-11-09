@@ -41,7 +41,7 @@ export default {
         </In>
         {data.topArtists[0] && (
           <In delay={900}>
-            <p className="text-xl font-bold opacity-85">{t.artist(data.topArtists[0].name)}</p>
+            <p className="text-xl font-bold">{t.artist(data.topArtists[0].name)}</p>
           </In>
         )}
       </Body>

@@ -1,5 +1,5 @@
 import { defineMessages, useMessages } from '@/lib/i18n'
-import { Body, Headline, In, Picture, useArtistImage, useFormats, type WrappedSlide } from '../slide-kit'
+import { accentText, Body, Headline, In, Picture, useArtistImage, useFormats, type WrappedSlide } from '../slide-kit'
 
 const messages = defineMessages({
   de: { lead: 'Dein*e Top-Künstler*in war', streams: (value: string) => `${value} Streams. Ganz klar die Nummer eins.` },
@@ -21,10 +21,10 @@ export default {
           <path d="M-40 520 C 80 420, 160 620, 260 460 S 420 260, 460 180 L 460 300 C 380 380, 320 560, 220 600 S 40 640, -40 660 Z" fill={palette.accent} className="animate-in fade-in-0 duration-1000" />
         </svg>
         {[
-          [12, 72],
-          [44, 80],
-          [76, 58],
-          [86, 34],
+          [4, 86],
+          [84, 90],
+          [88, 12],
+          [3, 14],
         ].map(([x, y], index) => (
           <span key={index} aria-hidden className="wrapped-float absolute text-4xl" style={{ left: `${x}%`, top: `${y}%`, animationDelay: `${index * -1.2}s` }}>
             ♛
@@ -36,7 +36,7 @@ export default {
           </In>
           <In delay={200}>
             <Headline look={look} className="text-5xl break-words" >
-              <span style={{ color: palette.accent }}>{top.name}</span>
+              <span style={{ color: accentText(palette) }}>{top.name}</span>
             </Headline>
           </In>
           <In delay={400} from="zoom" className="self-center">

@@ -30,8 +30,8 @@ export default {
           <Headline look={look} className="text-4xl break-words">
             {album.name}
           </Headline>
-          {album.artist && <p className="mt-1 text-xl font-bold opacity-85">{album.artist}</p>}
-          <p className="mt-3 text-base font-semibold opacity-80">{t.minutes(number.format(data.topAlbums[0]!.minutes))}</p>
+          {album.artist && <p className="mt-1 text-xl font-bold">{album.artist}</p>}
+          <p className="mt-3 text-base font-semibold">{t.minutes(number.format(data.topAlbums[0]!.minutes))}</p>
         </In>
       </Body>
     )

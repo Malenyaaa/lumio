@@ -12,12 +12,13 @@ const PLANETS = ['#ff8a1e', '#f774c2', '#12d861', '#8b7bff', '#f1ff47']
 export default {
   id: 'top-artists-orbit',
   topic: 'top-artists',
+  backdrop: false,
   Component: ({ data, look, palette }) => {
     const t = useMessages(messages)
     const artists = data.topArtists.slice(0, 5)
     return (
       <>
-        <div aria-hidden className="absolute inset-0 bg-black/60" />
+        <div aria-hidden className="absolute inset-0 bg-[#07070d]/90" />
         <div
           aria-hidden
           className="absolute top-1/2 -left-56 size-80 -translate-y-1/2 animate-pulse rounded-full"
@@ -26,7 +27,7 @@ export default {
         <svg aria-hidden viewBox="0 0 400 700" className="absolute inset-0 size-full" fill="none">
           <circle cx="-40" cy="380" r="330" stroke="currentColor" strokeOpacity="0.5" strokeWidth="1.5" className="wrapped-draw" />
         </svg>
-        <Body className="gap-4">
+        <Body className="gap-4 text-white">
           <In>
             <Headline look={look} className="text-3xl">
               {t.title}
@@ -42,7 +43,7 @@ export default {
                 <In key={artist.name} delay={500 + index * 220} from="zoom" className="absolute flex items-center gap-3" style={{ left: `${(x / 400) * 100}%`, top: `${(y / 580) * 100}%` }}>
                   <span className="size-8 shrink-0 rounded-full shadow-[0_0_20px_currentColor]" style={{ background: PLANETS[index], color: PLANETS[index] }} />
                   <span className="max-w-40">
-                    <span className="block text-sm font-bold opacity-80">{index + 1}</span>
+                    <span className="block text-sm font-bold">{index + 1}</span>
                     <span className="block text-lg leading-tight font-extrabold" style={{ color: PLANETS[index] }}>
                       {artist.name}
                     </span>

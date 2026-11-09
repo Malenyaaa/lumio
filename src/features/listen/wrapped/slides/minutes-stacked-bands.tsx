@@ -40,7 +40,7 @@ export default {
         </div>
         <In delay={800} className="space-y-2 px-7">
           <p className="text-2xl font-extrabold">{t.lead}</p>
-          <p className="text-lg font-semibold opacity-85">{t.hours(number.format(hours), number.format(days))}</p>
+          <p className="text-lg font-semibold">{t.hours(number.format(hours), number.format(days))}</p>
         </In>
       </Body>
     )

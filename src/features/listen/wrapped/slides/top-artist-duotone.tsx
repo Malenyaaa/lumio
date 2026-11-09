@@ -42,7 +42,7 @@ export default {
             <Headline look={look} className="text-5xl break-words">
               {top.name}
             </Headline>
-            <p className="mt-2 text-lg font-semibold opacity-85">{t.minutes(number.format(top.minutes))}</p>
+            <p className="mt-2 text-lg font-semibold">{t.minutes(number.format(top.minutes))}</p>
           </In>
         </Body>
       </>

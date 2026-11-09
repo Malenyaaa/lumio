@@ -1,5 +1,5 @@
 import { defineMessages, useMessages } from '@/lib/i18n'
-import { Body, In, Picture, useFormats, useTrackCover, type WrappedSlide } from '../slide-kit'
+import { contrast, Body, In, Picture, useFormats, useTrackCover, type WrappedSlide } from '../slide-kit'
 
 const messages = defineMessages({
   de: { lead: (date: string) => `${date}. Das Jahr beginnt mit:` },
@@ -20,7 +20,7 @@ export default {
       <Body className="justify-center gap-6">
         <In from="fade" className="-rotate-2 rounded-xl bg-black/80 p-5 font-mono text-[#e5ffe9] shadow-2xl">
           <p className="text-sm opacity-70">$ wrapped --first {data.year}</p>
-          <p className="mt-3 text-sm" style={{ color: palette.accent }}>
+          <p className="mt-3 text-sm" style={{ color: contrast(palette.accent, '#141414') >= 4.5 ? palette.accent : '#e5ffe9' }}>
             {t.lead(date)}
           </p>
           <p className="mt-2 text-2xl leading-snug font-bold">

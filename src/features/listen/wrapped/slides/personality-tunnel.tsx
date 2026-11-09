@@ -54,7 +54,7 @@ export default {
           <span className="relative text-5xl">✦</span>
         </div>
         <In delay={800}>
-          <p className="text-sm font-bold tracking-[0.25em] uppercase opacity-80">{t.lead}</p>
+          <p className="text-sm font-bold tracking-[0.25em] uppercase">{t.lead}</p>
           <Headline look={look} className="mt-2 text-5xl">
             {t[kind]}
           </Headline>

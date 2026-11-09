@@ -12,6 +12,7 @@ const messages = defineMessages({
 export default {
   id: 'intro-starfield',
   topic: 'intro',
+  backdrop: false,
   Component: ({ data, look }) => {
     const t = useMessages(messages)
     const stars = useMemo(() => {
@@ -20,16 +21,16 @@ export default {
     }, [data.year])
     return (
       <>
-        <div aria-hidden className="absolute inset-0 bg-black/70" />
+        <div aria-hidden className="absolute inset-0 bg-black/85" />
         {stars.map((star, index) => (
           <span
             key={index}
             aria-hidden
-            className="absolute animate-pulse rounded-full bg-current"
+            className="absolute animate-pulse rounded-full bg-white"
             style={{ left: `${star.x}%`, top: `${star.y}%`, width: star.size, height: star.size, animationDelay: `${star.delay}s` }}
           />
         ))}
-        <Body className="items-center justify-center text-center">
+        <Body className="items-center justify-center text-center text-white">
           <In from="zoom">
             <Headline look={look} className="text-7xl">
               {data.year}

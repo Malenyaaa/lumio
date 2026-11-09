@@ -26,7 +26,7 @@ export default {
     const album = useAlbum(data.topAlbums[0], 720)
     return (
       <>
-        <div aria-hidden className="wrapped-blob absolute -top-10 -right-20 h-72 w-80 rounded-3xl opacity-80" style={{ background: 'linear-gradient(135deg, #22e1ff, #ff3bd4, #f5ff00)', filter: 'blur(4px)' }} />
+        <div aria-hidden className="wrapped-blob absolute -top-10 -right-20 h-72 w-80 rounded-3xl" style={{ background: 'linear-gradient(135deg, #22e1ff, #ff3bd4, #f5ff00)', filter: 'blur(4px)' }} />
         <Body className="justify-center gap-6">
           <In>
             <p className="text-xl font-bold">{t.lead}</p>
@@ -38,13 +38,13 @@ export default {
             <Headline look={look} className="text-4xl break-words">
               {album.name}
             </Headline>
-            <p className="mt-1 font-bold opacity-85">
+            <p className="mt-1 font-bold">
               {album.artist} · {number.format(data.topAlbums[0]!.minutes)} min
             </p>
           </In>
           {data.topAlbums.length > 1 && (
             <In delay={900} className="space-y-2">
-              <p className="text-xs font-bold tracking-wide uppercase opacity-75">{t.others}</p>
+              <p className="text-xs font-bold tracking-wide uppercase">{t.others}</p>
               {data.topAlbums.slice(1, 3).map((other) => (
                 <Small key={other.key} album={other} />
               ))}

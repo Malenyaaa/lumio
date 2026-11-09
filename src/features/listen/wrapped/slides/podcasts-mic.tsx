@@ -29,7 +29,7 @@ export default {
           </span>
         </div>
         <In delay={500}>
-          <p className="text-sm font-bold tracking-[0.2em] uppercase opacity-80">{t.top}</p>
+          <p className="text-sm font-bold tracking-[0.2em] uppercase">{t.top}</p>
           <Headline look={look} className="mt-2 text-4xl">
             {top.name}
           </Headline>

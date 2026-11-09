@@ -35,6 +35,8 @@ export interface WrappedSlide {
   topic: Topic
   /** The first year it may be drawn for: a slide added later names the coming year, so years already out stay. */
   since?: number
+  /** false: the slide brings its own full background (no moving backdrop behind it). */
+  backdrop?: boolean
   Component: (props: SlideProps) => ReactNode
 }
 
@@ -72,9 +74,13 @@ export function Body({ className, style, children }: { className?: string; style
   )
 }
 
-/** A headline in the year's face. */
-export function Headline({ look, className, children }: { look: Look; className?: string; children: ReactNode }) {
-  return <p className={cn('leading-[0.95]', displayClass(look), className)}>{children}</p>
+/** A headline in the year's face; plain text pops in word by word. */
+export function Headline({ look, className, delay = 0, children }: { look: Look; className?: string; delay?: number; children: ReactNode }) {
+  return (
+    <p className={cn('leading-[0.95]', displayClass(look), className)}>
+      {typeof children === 'string' ? <Stagger text={children} delay={delay} step={80} /> : children}
+    </p>
+  )
 }
 
 /** The slide's own background and text color (a palette may be a gradient). */
@@ -82,8 +88,34 @@ export function paletteStyle(palette: Palette): CSSProperties {
   return { background: palette.background, color: palette.color }
 }
 
-/** A color to set on the accent: the slide's background when it is a plain color, else near black. */
-export const onAccent = (palette: Palette) => (palette.background.startsWith('#') ? palette.background : '#111111')
+/** The relative luminance of a "#rrggbb" color (WCAG). */
+function luminance(hex: string) {
+  const [r, g, b] = [1, 3, 5].map((at) => {
+    const channel = parseInt(hex.slice(at, at + 2), 16) / 255
+    return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!
+}
+
+/** The contrast of two colors (1 to 21); for a gradient background, against its weakest color. */
+export function contrast(color: string, background: string) {
+  const backgrounds = background.match(/#[0-9a-f]{6}/gi) ?? ['#000000']
+  return Math.min(
+    ...backgrounds.map((other) => {
+      const [light, dark] = [luminance(color), luminance(other)].sort((a, b) => b - a)
+      return (light! + 0.05) / (dark! + 0.05)
+    }),
+  )
+}
+
+/** Text set on the accent: black or white, whichever reads better. */
+export const onAccent = (palette: Palette) => (contrast('#111111', palette.accent) >= contrast('#ffffff', palette.accent) ? '#111111' : '#ffffff')
+
+/**
+ * The accent as a text color where it reads on the slide (3:1, for the large type it is used for), else the text color.
+ * `on` is the color behind it, when that isn't the slide's own.
+ */
+export const accentText = (palette: Palette, on = palette.background) => (contrast(palette.accent, on) >= 3 ? palette.accent : palette.color)
 
 const reducedMotion =() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -107,19 +139,19 @@ export function useCountUp(value: number, active: boolean, ms = 1400, delay = 0)
 type Entrance = 'rise' | 'fall' | 'left' | 'right' | 'zoom' | 'fade' | 'spin'
 
 const ENTRANCES: Record<Entrance, string> = {
-  rise: 'slide-in-from-bottom-8',
-  fall: 'slide-in-from-top-8',
-  left: 'slide-in-from-left-12',
-  right: 'slide-in-from-right-12',
-  zoom: 'zoom-in-50',
+  rise: 'slide-in-from-bottom-16',
+  fall: 'slide-in-from-top-16',
+  left: 'slide-in-from-left-24',
+  right: 'slide-in-from-right-24',
+  zoom: 'zoom-in-0',
   fade: '',
-  spin: 'spin-in-12 zoom-in-75',
+  spin: 'spin-in-45 zoom-in-0',
 }
 
 /** Comes in (from below by default) after `delay` ms. */
 export function In({ delay = 0, from = 'rise', className, style, children }: { delay?: number; from?: Entrance; className?: string; style?: CSSProperties; children: ReactNode }) {
   return (
-    <div className={cn('animate-in fade-in-0 duration-700 ease-out fill-mode-both', ENTRANCES[from], className)} style={{ animationDelay: `${delay}ms`, ...style }}>
+    <div className={cn('wrapped-spring animate-in fade-in-0 duration-700 fill-mode-both', ENTRANCES[from], className)} style={{ animationDelay: `${delay}ms`, ...style }}>
       {children}
     </div>
   )

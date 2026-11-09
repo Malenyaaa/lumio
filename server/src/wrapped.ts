@@ -14,8 +14,8 @@ export interface Wrapped {
   artists: number
   /** The year before's minutes, when there were any. */
   previousMinutes: number | null
-  /** The month each was heard most in (0 = January). */
-  topArtists: Array<{ name: string; minutes: number; plays: number; peakMonth: number }>
+  /** The month each was heard most in (0 = January), and their minutes in each month. */
+  topArtists: Array<{ name: string; minutes: number; plays: number; peakMonth: number; months: number[] }>
   topTracks: WrappedTrack[]
   /** Up to 100 songs from the library, most played first (for a playlist of the year). */
   playlistKeys: string[]
@@ -258,7 +258,7 @@ export function wrappedFor(store: Store, userId: string, year: number, timeZone:
     previousMinutes: previous.length ? Math.round(previousSeconds / 60) : null,
     topArtists: byMinutes(artists.values())
       .slice(0, 10)
-      .map(({ name, minutes, plays, months: perMonth }) => ({ name, minutes: Math.round(minutes), plays, peakMonth: perMonth.indexOf(Math.max(...perMonth)) })),
+      .map(({ name, minutes, plays, months: perMonth }) => ({ name, minutes: Math.round(minutes), plays, peakMonth: perMonth.indexOf(Math.max(...perMonth)), months: perMonth.map(Math.round) })),
     topTracks: rankedTracks.slice(0, 10).map(round),
     playlistKeys: rankedTracks
       .filter((track) => !track.key.startsWith('spotify:'))

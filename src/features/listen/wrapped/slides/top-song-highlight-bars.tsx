@@ -39,7 +39,7 @@ export default {
             <Picture src={cover} className="size-16 shrink-0" />
             <div>
               {track.artist && <p className="text-lg font-extrabold">{track.artist}</p>}
-              <p className="text-sm font-semibold opacity-80">{t.plays(number.format(track.plays))}</p>
+              <p className="text-sm font-semibold">{t.plays(number.format(track.plays))}</p>
             </div>
           </In>
         </Body>

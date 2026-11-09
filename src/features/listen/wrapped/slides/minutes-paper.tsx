@@ -1,5 +1,5 @@
 import { defineMessages, useMessages } from '@/lib/i18n'
-import { Body, In, useCountUp, useFormats, type WrappedSlide } from '../slide-kit'
+import { onAccent, Body, In, useCountUp, useFormats, type WrappedSlide } from '../slide-kit'
 
 const messages = defineMessages({
   de: { label: 'Minuten gehört', note: (day: string, minutes: string) => `Dein lautester Tag: ${day} – ${minutes} Minuten.`, next: 'Weiter so' },
@@ -29,7 +29,7 @@ export default {
           <span aria-hidden className="absolute -bottom-3 left-6 text-3xl drop-shadow">★</span>
         </In>
         <In delay={900} from="right" className="mt-8 self-end">
-          <span className="inline-block -skew-x-6 px-5 py-2 text-lg font-black tracking-wide text-white uppercase shadow-lg" style={{ background: palette.accent }}>
+          <span className="inline-block -skew-x-6 px-5 py-2 text-lg font-black tracking-wide uppercase shadow-lg" style={{ background: palette.accent, color: onAccent(palette) }}>
             {t.next} →
           </span>
         </In>

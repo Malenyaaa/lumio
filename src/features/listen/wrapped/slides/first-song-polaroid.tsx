@@ -33,7 +33,7 @@ export default {
         </In>
         <In delay={700}>
           {track.artist && <p className="text-xl font-extrabold">{track.artist}</p>}
-          <p className="mt-1 text-sm opacity-80">{t.caption(date)}</p>
+          <p className="mt-1 text-sm">{t.caption(date)}</p>
         </In>
       </Body>
     )

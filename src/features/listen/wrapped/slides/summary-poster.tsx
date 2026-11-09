@@ -29,13 +29,13 @@ export default {
           <div className="grid grid-cols-2 gap-2">
             {tiles.map(([label, value], index) => (
               <In key={label} delay={200 + index * 120} from="zoom" className="rounded-xl p-3" style={index % 3 === 0 ? { background: palette.accent, color: onAccent(palette) } : { background: 'rgb(0 0 0 / 0.22)' }}>
-                <p className="text-xs font-bold tracking-wide uppercase opacity-80">{label}</p>
+                <p className="text-xs font-bold tracking-wide uppercase">{label}</p>
                 <p className={`text-4xl tabular-nums ${displayClass(look)}`}>{value}</p>
               </In>
             ))}
           </div>
           <In delay={800} className="space-y-1 rounded-xl bg-black/20 p-3">
-            <p className="text-xs font-bold tracking-wide uppercase opacity-80">{t.top}</p>
+            <p className="text-xs font-bold tracking-wide uppercase">{t.top}</p>
             {data.topArtists[0] && (
               <p className="truncate text-lg">
                 <span className="opacity-75">{t.artist}: </span>

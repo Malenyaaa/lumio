@@ -15,7 +15,7 @@ function Row({ track, rank, delay }: { track: WrappedTrack; rank: number; delay:
       <Picture src={cover} className="size-[4.25rem] shrink-0" />
       <span className="min-w-0">
         <span className="line-clamp-2 text-lg leading-tight font-extrabold">{track.title}</span>
-        {track.artist && <span className="block truncate text-sm opacity-80">{track.artist}</span>}
+        {track.artist && <span className="block truncate text-sm">{track.artist}</span>}
       </span>
     </In>
   )

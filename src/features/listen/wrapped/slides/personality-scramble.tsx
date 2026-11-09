@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import { random } from '../deck'
-import { Body, In, displayClass, type WrappedSlide } from '../slide-kit'
+import { accentText, Body, In, displayClass, type WrappedSlide } from '../slide-kit'
 import { personality } from './personality-tunnel'
 
 const messages = defineMessages({
@@ -56,9 +56,9 @@ export default {
         <div aria-hidden className="wrapped-dots absolute inset-0 opacity-10" />
         <Body className="justify-center gap-6">
           <In from="fade">
-            <p className="font-mono text-sm opacity-80">{t.lead}</p>
+            <p className="font-mono text-sm">{t.lead}</p>
           </In>
-          <p className={`min-h-[1.1em] text-[clamp(2.4rem,12vw,3.5rem)] ${displayClass(look)}`} style={{ color: palette.accent }}>
+          <p className={`min-h-[1.1em] text-[clamp(2.4rem,12vw,3.5rem)] ${displayClass(look)}`} style={{ color: accentText(palette) }}>
             <Scramble text={t[kind]} active={active} seed={data.year} />
           </p>
           <In delay={2200}>

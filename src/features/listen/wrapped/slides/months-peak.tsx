@@ -1,5 +1,5 @@
 import { defineMessages, useMessages } from '@/lib/i18n'
-import { Body, Headline, In, useFormats, type WrappedSlide } from '../slide-kit'
+import { accentText, Body, Headline, In, useFormats, type WrappedSlide } from '../slide-kit'
 
 const messages = defineMessages({
   de: { lead: 'Dein lautester Monat', more: (minutes: string, percent: number) => `${minutes} Minuten · ${percent} % mehr als in einem üblichen Monat` },
@@ -23,7 +23,7 @@ export default {
         </In>
         <In delay={200} from="left">
           <Headline look={look} className="-skew-y-3 text-[clamp(2.4rem,13vw,4rem)] sm:text-6xl">
-            <span style={{ color: palette.accent }}>{month.format(new Date(Date.UTC(data.year, peak, 1)))}</span>
+            <span style={{ color: accentText(palette) }}>{month.format(new Date(Date.UTC(data.year, peak, 1)))}</span>
           </Headline>
         </In>
         <In delay={500}>
@@ -38,7 +38,7 @@ export default {
                   style={{ height: `${Math.max(4, (minutes / max) * 100)}%`, background: index === peak ? palette.accent : 'currentColor', opacity: index === peak ? 1 : 0.35, animationDelay: `${700 + index * 60}ms` }}
                 />
               </div>
-              <span className="text-[10px] font-bold uppercase opacity-75">{shortMonth.format(new Date(Date.UTC(data.year, index, 1))).slice(0, 1)}</span>
+              <span className="text-[10px] font-bold uppercase">{shortMonth.format(new Date(Date.UTC(data.year, index, 1))).slice(0, 1)}</span>
             </div>
           ))}
         </div>

@@ -22,8 +22,8 @@ export interface Wrapped {
   tracks: number
   artists: number
   previousMinutes: number | null
-  /** `peakMonth`: the month each was heard most in (0 = January). */
-  topArtists: Array<{ name: string; minutes: number; plays: number; peakMonth: number }>
+  /** `peakMonth`: the month each was heard most in (0 = January); `months`: their minutes in each month. */
+  topArtists: Array<{ name: string; minutes: number; plays: number; peakMonth: number; months: number[] }>
   topTracks: WrappedTrack[]
   playlistKeys: string[]
   /** `key` is the album's id in the library, or `name:…` for an album only known by name. */

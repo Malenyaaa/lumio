@@ -31,7 +31,7 @@ export default {
           <Headline look={look} className="text-5xl break-words">
             {top.name}
           </Headline>
-          <p className="mt-3 text-lg font-semibold opacity-85">{t.stats(number.format(top.minutes), number.format(top.plays))}</p>
+          <p className="mt-3 text-lg font-semibold">{t.stats(number.format(top.minutes), number.format(top.plays))}</p>
         </In>
       </Body>
     )
