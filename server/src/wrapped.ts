@@ -14,14 +14,16 @@ export interface Wrapped {
   artists: number
   /** The year before's minutes, when there were any. */
   previousMinutes: number | null
-  /** The month each was heard most in (0 = January), and their minutes in each month. */
-  topArtists: Array<{ name: string; minutes: number; plays: number; peakMonth: number; months: number[] }>
+  /** The month each was heard most in (0 = January), their minutes in each month, and how many of their songs. */
+  topArtists: Array<{ name: string; minutes: number; plays: number; peakMonth: number; months: number[]; tracks: number }>
   topTracks: WrappedTrack[]
   /** Up to 100 songs from the library, most played first (for a playlist of the year). */
   playlistKeys: string[]
-  /** `sampleKey`: one of the album's songs (for a cover when the library doesn't have the album). */
-  topAlbums: Array<{ key: string; name: string | null; artist: string | null; sampleKey: string; minutes: number }>
+  /** `sampleKey`: one of the album's songs (for a cover when the library doesn't have the album); `tracks`: how many of its songs. */
+  topAlbums: Array<{ key: string; name: string | null; artist: string | null; sampleKey: string; minutes: number; plays: number; months: number[]; tracks: number }>
   topPodcasts: Array<{ name: string; minutes: number }>
+  /** All podcast minutes (not only the top shows'). */
+  podcastMinutes: number
   /** Minutes per month (January first), hour of the day and weekday (Monday first). */
   months: number[]
   hours: number[]
@@ -56,6 +58,8 @@ export interface WrappedTrack {
   contextId: string | null
   minutes: number
   plays: number
+  /** Minutes in each month (January first). */
+  months: number[]
 }
 
 /** A stream counts from 30 seconds on. */
@@ -152,9 +156,9 @@ export function wrappedFor(store: Store, userId: string, year: number, timeZone:
   const songs = rows.filter((row) => row.kind === 'audio')
   if (!songs.length || !enoughFor(rows)) return null
 
-  const artists = new Map<string, { name: string; minutes: number; plays: number; months: number[] }>()
+  const artists = new Map<string, { name: string; minutes: number; plays: number; months: number[]; songs: Set<string> }>()
   const tracks = new Map<string, WrappedTrack>()
-  const albums = new Map<string, { key: string; name: string | null; artist: string | null; sampleKey: string; minutes: number; plays: number }>()
+  const albums = new Map<string, { key: string; name: string | null; artist: string | null; sampleKey: string; minutes: number; plays: number; months: number[]; songs: Set<string> }>()
   const podcasts = new Map<string, { name: string; minutes: number; plays: number }>()
   const days = new Map<string, number>()
   const repeats = new Map<string, number>()
@@ -167,6 +171,7 @@ export function wrappedFor(store: Store, userId: string, year: number, timeZone:
   const sources: Record<string, number> = {}
   let seconds = 0
   let plays = 0
+  let podcastSeconds = 0
 
   for (const row of rows) {
     const at = partsIn(row.startedAt, timeZone)
@@ -182,24 +187,32 @@ export function wrappedFor(store: Store, userId: string, year: number, timeZone:
     const source = row.imported ? 'spotify' : 'lumio'
     sources[source] = (sources[source] ?? 0) + minutes
     if (row.kind === 'podcast') {
+      podcastSeconds += row.seconds
       const name = row.subtitle?.trim() || row.title
       tally(podcasts, nameKey(name), () => ({ name, minutes: 0, plays: 0 }), row.seconds)
       continue
     }
     if (row.seconds >= STREAM_SECONDS) plays += 1
     const artist = artistOf(row)
-    if (artist) tally(artists, nameKey(artist), () => ({ name: artist, minutes: 0, plays: 0, months: Array<number>(12).fill(0) }), row.seconds).months[at.month]! += minutes
     // The same song from Lumio and from the imported history is one (the import points to the library's song when it
     // found it); else songs are told apart by title and artist.
     const trackKey = row.key.startsWith('spotify:') ? `name:${nameKey(row.title)}|${nameKey(artist ?? '')}` : row.key
-    const track = tally(tracks, trackKey, () => ({ key: row.key, title: row.title, artist, album: row.album, contextId: row.contextId, minutes: 0, plays: 0 }), row.seconds)
+    if (artist) {
+      const entry = tally(artists, nameKey(artist), () => ({ name: artist, minutes: 0, plays: 0, months: Array<number>(12).fill(0), songs: new Set<string>() }), row.seconds)
+      entry.months[at.month]! += minutes
+      entry.songs.add(trackKey)
+    }
+    const track = tally(tracks, trackKey, () => ({ key: row.key, title: row.title, artist, album: row.album, contextId: row.contextId, minutes: 0, plays: 0, months: Array<number>(12).fill(0) }), row.seconds)
+    track.months[at.month]! += minutes
     if (!track.album && row.album) track.album = row.album
     if (!track.contextId && row.contextId) track.contextId = row.contextId
     // A library song wins over the imported name for the key (so it plays and has a cover).
     if (track.key.startsWith('spotify:') && !row.key.startsWith('spotify:')) track.key = row.key
     if (row.contextId || row.album) {
       const albumKey = row.contextId ?? `name:${nameKey(row.album!)}|${nameKey(artist ?? '')}`
-      const album = tally(albums, albumKey, () => ({ key: albumKey, name: row.album, artist, sampleKey: row.key, minutes: 0, plays: 0 }), row.seconds)
+      const album = tally(albums, albumKey, () => ({ key: albumKey, name: row.album, artist, sampleKey: row.key, minutes: 0, plays: 0, months: Array<number>(12).fill(0), songs: new Set<string>() }), row.seconds)
+      album.months[at.month]! += minutes
+      album.songs.add(trackKey)
       if (!album.name && row.album) album.name = row.album
       if (album.sampleKey.startsWith('spotify:') && !row.key.startsWith('spotify:')) album.sampleKey = row.key
     }
@@ -213,7 +226,7 @@ export function wrappedFor(store: Store, userId: string, year: number, timeZone:
   }
 
   const byMinutes = <T extends { minutes: number }>(list: Iterable<T>) => [...list].sort((a, b) => b.minutes - a.minutes)
-  const round = <T extends { minutes: number }>(entry: T) => ({ ...entry, minutes: Math.round(entry.minutes) })
+  const round = <T extends { minutes: number; months?: number[] }>(entry: T) => ({ ...entry, minutes: Math.round(entry.minutes), ...(entry.months && { months: entry.months.map(Math.round) }) })
   // Songs by streams (as Spotify ranks them), then by time.
   const rankedTracks = [...tracks.values()].sort((a, b) => b.plays - a.plays || b.minutes - a.minutes)
 
@@ -271,7 +284,14 @@ export function wrappedFor(store: Store, userId: string, year: number, timeZone:
     previousMinutes: previous.length ? Math.round(previousSeconds / 60) : null,
     topArtists: byMinutes(artists.values())
       .slice(0, 10)
-      .map(({ name, minutes, plays, months: perMonth }) => ({ name, minutes: Math.round(minutes), plays, peakMonth: perMonth.indexOf(Math.max(...perMonth)), months: perMonth.map(Math.round) })),
+      .map(({ name, minutes, plays, months: perMonth, songs }) => ({
+        name,
+        minutes: Math.round(minutes),
+        plays,
+        peakMonth: perMonth.indexOf(Math.max(...perMonth)),
+        months: perMonth.map(Math.round),
+        tracks: songs.size,
+      })),
     topTracks: rankedTracks.slice(0, 10).map(round),
     playlistKeys: rankedTracks
       .filter((track) => !track.key.startsWith('spotify:'))
@@ -279,10 +299,11 @@ export function wrappedFor(store: Store, userId: string, year: number, timeZone:
       .map((track) => track.key),
     topAlbums: byMinutes(albums.values())
       .slice(0, 5)
-      .map(({ key, name, artist, sampleKey, minutes }) => ({ key, name, artist, sampleKey, minutes: Math.round(minutes) })),
+      .map(({ key, name, artist, sampleKey, minutes, plays, months: perMonth, songs }) => ({ key, name, artist, sampleKey, minutes: Math.round(minutes), plays, months: perMonth.map(Math.round), tracks: songs.size })),
     topPodcasts: byMinutes(podcasts.values())
       .slice(0, 3)
       .map(({ name, minutes }) => ({ name, minutes: Math.round(minutes) })),
+    podcastMinutes: Math.round(podcastSeconds / 60),
     months: months.map(Math.round),
     hours: hours.map(Math.round),
     weekdays: weekdays.map(Math.round),
@@ -295,6 +316,7 @@ export function wrappedFor(store: Store, userId: string, year: number, timeZone:
       contextId: first.contextId,
       minutes: Math.round(first.seconds / 60),
       plays: 1,
+      months: [],
       at: first.startedAt,
     },
     onRepeat,

@@ -13,6 +13,8 @@ export interface WrappedTrack {
   contextId: string | null
   minutes: number
   plays: number
+  /** Minutes in each month (January first); zeros from an older server. */
+  months: number[]
 }
 
 export interface Wrapped {
@@ -22,13 +24,15 @@ export interface Wrapped {
   tracks: number
   artists: number
   previousMinutes: number | null
-  /** `peakMonth`: the month each was heard most in (0 = January); `months`: their minutes in each month. */
-  topArtists: Array<{ name: string; minutes: number; plays: number; peakMonth: number; months: number[] }>
+  /** `peakMonth`: the month each was heard most in (0 = January); `months`: their minutes in each month; `tracks`: how many of their songs. */
+  topArtists: Array<{ name: string; minutes: number; plays: number; peakMonth: number; months: number[]; tracks: number }>
   topTracks: WrappedTrack[]
   playlistKeys: string[]
   /** `key` is the album's id in the library, or `name:…` for an album only known by name. */
-  topAlbums: Array<{ key: string; name: string | null; artist: string | null; sampleKey: string; minutes: number }>
+  topAlbums: Array<{ key: string; name: string | null; artist: string | null; sampleKey: string; minutes: number; plays: number; months: number[]; tracks: number }>
   topPodcasts: Array<{ name: string; minutes: number }>
+  /** All podcast minutes. */
+  podcastMinutes: number
   months: number[]
   hours: number[]
   /** Monday first. */
@@ -113,6 +117,8 @@ export function useSpotifyCover(key: string | null | undefined) {
  * server): what it doesn't send yet is empty, and the slides that need it are left out.
  */
 function complete(data: Partial<Wrapped>): Wrapped {
+  const noMonths = () => Array<number>(12).fill(0)
+  const track = <T extends WrappedTrack | null | undefined>(value: T): T => (value ? { ...value, months: value.months?.length === 12 ? value.months : noMonths() } : value)
   return {
     year: data.year ?? 0,
     minutes: data.minutes ?? 0,
@@ -120,17 +126,18 @@ function complete(data: Partial<Wrapped>): Wrapped {
     tracks: data.tracks ?? 0,
     artists: data.artists ?? 0,
     previousMinutes: data.previousMinutes ?? null,
-    topArtists: (data.topArtists ?? []).map((artist) => ({ ...artist, peakMonth: artist.peakMonth ?? 0, months: artist.months ?? Array<number>(12).fill(0) })),
-    topTracks: data.topTracks ?? [],
+    topArtists: (data.topArtists ?? []).map((artist) => ({ ...artist, peakMonth: artist.peakMonth ?? 0, months: artist.months ?? noMonths(), tracks: artist.tracks ?? 0 })),
+    topTracks: (data.topTracks ?? []).map(track),
     playlistKeys: data.playlistKeys ?? [],
-    topAlbums: (data.topAlbums ?? []).map((album) => ({ ...album, sampleKey: album.sampleKey ?? album.key })),
+    topAlbums: (data.topAlbums ?? []).map((album) => ({ ...album, sampleKey: album.sampleKey ?? album.key, plays: album.plays ?? 0, months: album.months ?? noMonths(), tracks: album.tracks ?? 0 })),
     topPodcasts: data.topPodcasts ?? [],
+    podcastMinutes: data.podcastMinutes ?? (data.topPodcasts ?? []).reduce((sum, podcast) => sum + podcast.minutes, 0),
     months: data.months ?? Array<number>(12).fill(0),
     hours: data.hours ?? Array<number>(24).fill(0),
     weekdays: data.weekdays ?? Array<number>(7).fill(0),
     topDay: data.topDay ?? null,
-    firstTrack: data.firstTrack ?? null,
-    onRepeat: data.onRepeat ?? null,
+    firstTrack: track(data.firstTrack) ?? null,
+    onRepeat: track(data.onRepeat) ?? null,
     newArtists: data.newArtists ?? { count: 0, top: null },
     sources: data.sources ?? {},
     daily: data.daily ?? [],
@@ -138,7 +145,7 @@ function complete(data: Partial<Wrapped>): Wrapped {
     streak: data.streak ?? null,
     lateNight: data.lateNight ?? 0,
     repeatShare: data.repeatShare ?? 0,
-    comfort: data.comfort ?? null,
+    comfort: track(data.comfort) ?? null,
   }
 }
 

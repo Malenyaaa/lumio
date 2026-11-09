@@ -2,11 +2,11 @@ import { useId } from 'react'
 import { FadeImage } from '@/components/media/fade-image'
 import { defineMessages, useMessages } from '@/lib/i18n'
 import type { Look } from '../deck'
-import { Body, contrast, Headline, In, useArtistImage, useFormats, type Palette, type WrappedSlide } from '../slide-kit'
+import { Body, contrast, Headline, In, useFormats, useSubject, type Palette, type WrappedSlide } from '../slide-kit'
 
 const messages = defineMessages({
-  de: { peak: 'Monat mit den meisten Streams:' },
-  en: { peak: 'Month with the most streams:' },
+  de: { peak: 'Monat mit den meisten Streams:', minutes: (value: string) => `${value} Minuten` },
+  en: { peak: 'Month with the most streams:', minutes: (value: string) => `${value} minutes` },
 })
 
 const SIZE = 340
@@ -49,20 +49,21 @@ const INK = '#1a1033'
 const angleOf = (month: number) => ((month + 0.5) / 12) * Math.PI * 2 - Math.PI / 2
 
 /**
- * The year's number-one artist inside a ring of months; around it a flaming shape reaching out in each month as far
- * as they were heard then: a round chart (2023). A pointer marks the month with the most streams.
+ * A place of a ranking (an artist, song or album) inside a ring of months; around it a flaming shape reaching out in
+ * each month as far as it was heard then: a round chart (2023). A pointer marks the month with the most streams.
  */
 export default {
-  id: 'months-artist-dial',
-  topic: 'months',
-  Component: ({ data, look, palette }) => {
+  id: 'spotlight-dial',
+  topic: 'spotlight',
+  series: ['artists', 'songs', 'albums'],
+  Component: ({ data, look, palette, spot }) => {
     const t = useMessages(messages)
-    const { month, shortMonth } = useFormats()
+    const { month, shortMonth, number } = useFormats()
     const gradient = useId()
-    const top = data.topArtists[0]!
-    const photo = useArtistImage(top.name, 480)
+    const top = useSubject(data, spot, 480)
+    const photo = top.image
     // Data from before the months were sent: an even ring.
-    const perMonth = top.months ?? Array<number>(12).fill(1)
+    const perMonth = top.peakMonth === null ? Array<number>(12).fill(1) : top.months
     const max = Math.max(1, ...perMonth)
     // Two points per month (its middle reaching out, its edge closer in), for the soft flame between months.
     const points: Array<[number, number]> = []
@@ -77,16 +78,17 @@ export default {
       points.push([CENTER + Math.cos(between) * low, CENTER + Math.sin(between) * low])
     }
     const colors = chartColors(look, palette)
-    const peak = angleOf(top.peakMonth)
+    const peak = angleOf(top.peakMonth ?? 0)
     // On the tip of the busiest month (it reaches out the furthest).
     const pointer = RING + 14 + REACH
     return (
       <Body className="items-center justify-center gap-4 text-center">
         <In>
-          <p className="text-2xl font-black">1.</p>
-          <Headline look={look} className="text-4xl">
+          <p className="text-2xl font-black">{top.rank + 1}.</p>
+          <Headline look={look} className="line-clamp-2 text-4xl break-words">
             {top.name}
           </Headline>
+          {top.by && <p className="mt-1 truncate text-lg font-bold">{top.by}</p>}
         </In>
         <div className="relative w-full max-w-[22rem]">
           <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-full overflow-visible" aria-hidden>
@@ -126,18 +128,24 @@ export default {
               )
             })}
             {/* The pointer at the busiest month. */}
-            <g className="animate-in zoom-in-0 fill-mode-both [animation-delay:1300ms]" style={{ transformOrigin: `${CENTER + Math.cos(peak) * pointer}px ${CENTER + Math.sin(peak) * pointer}px` }}>
+            {top.peakMonth !== null && <g className="animate-in zoom-in-0 fill-mode-both [animation-delay:1300ms]" style={{ transformOrigin: `${CENTER + Math.cos(peak) * pointer}px ${CENTER + Math.sin(peak) * pointer}px` }}>
               <circle cx={CENTER + Math.cos(peak) * pointer} cy={CENTER + Math.sin(peak) * pointer} r="15" fill="#fff" stroke="#111" strokeWidth="4" />
               <circle cx={CENTER + Math.cos(peak) * pointer} cy={CENTER + Math.sin(peak) * pointer} r="7" fill="#111" />
-            </g>
+            </g>}
           </svg>
-          <div className="absolute top-1/2 left-1/2 aspect-square w-[27%] -translate-x-1/2 -translate-y-1/2 overflow-hidden bg-black/20 shadow-lg">
+          <div className={`absolute top-1/2 left-1/2 aspect-square w-[27%] -translate-x-1/2 -translate-y-1/2 overflow-hidden bg-black/20 shadow-lg ${top.person ? '' : 'rounded-sm'}`}>
             {photo && <FadeImage src={photo} alt="" className="size-full object-cover" />}
           </div>
         </div>
         <In delay={1100}>
-          <p className="text-lg font-semibold">{t.peak}</p>
-          <p className="text-3xl font-black">{month.format(new Date(Date.UTC(data.year, top.peakMonth, 1)))}</p>
+          {top.peakMonth !== null ? (
+            <>
+              <p className="text-lg font-semibold">{t.peak}</p>
+              <p className="text-3xl font-black">{month.format(new Date(Date.UTC(data.year, top.peakMonth, 1)))}</p>
+            </>
+          ) : (
+            <p className="text-3xl font-black">{t.minutes(number.format(top.minutes))}</p>
+          )}
         </In>
       </Body>
     )

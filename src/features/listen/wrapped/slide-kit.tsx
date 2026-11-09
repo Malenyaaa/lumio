@@ -11,7 +11,7 @@ import { useArtistLookup } from '@/features/listen/credits'
 import { getLocaleTag, useLocale } from '@/lib/i18n'
 import { portraitImageUrl } from '@/lib/images'
 import { cn } from '@/lib/utils'
-import type { Look, Topic } from './deck'
+import type { Look, Series, Spot, Topic } from './deck'
 import { inLibrary, useSpotifyCover, type Wrapped, type WrappedTrack } from './wrapped-data'
 
 /**
@@ -27,6 +27,8 @@ export interface SlideProps {
   palette: Palette
   /** The slide is the one shown (counters and the like start then). */
   active: boolean
+  /** A spotlight's place of its ranking (null for the other slides). */
+  spot: Spot | null
 }
 
 export interface WrappedSlide {
@@ -39,6 +41,15 @@ export interface WrappedSlide {
   backdrop?: boolean
   /** The color of text on that background (for the progress bars over it), when it isn't the year's. */
   ink?: string
+  /** A spotlight (topic `spotlight`): the rankings it can show a place of; it gets that place as `spot`. */
+  series?: Series[]
+  /**
+   * A special (topic `special`): how much the year stands out for it, 1 being just enough for the slide (below: left
+   * out). The story takes the two strongest.
+   */
+  special?: (data: Wrapped) => number
+  /** A special: the topic it follows (at the end of that topic's part of the story when the topic isn't shown). */
+  after?: Topic
   Component: (props: SlideProps) => ReactNode
 }
 
@@ -284,4 +295,66 @@ export function partOfDay(hours: number[]) {
 /** Minutes as hours or days, when that says more. */
 export function inHours(minutes: number) {
   return { hours: Math.round(minutes / 60), days: Math.round((minutes / 60 / 24) * 10) / 10 }
+}
+
+/** One place of a ranking, whichever ranking: what a spotlight slide shows. */
+export interface Subject {
+  series: Series
+  /** 0 for the top. */
+  rank: number
+  name: string
+  /** The artist of a song or album. */
+  by: string | null
+  minutes: number
+  plays: number
+  /** Minutes in each month (January first); all zeros from an older server. */
+  months: number[]
+  /** The month heard most in (0 = January), or null without months. */
+  peakMonth: number | null
+  /** How many different songs (of an artist or album); 0 when unknown. */
+  tracks: number
+  /** The artist's photo or the song's or album's cover. */
+  image: string | undefined
+  /** An artist (round pictures suit them). */
+  person: boolean
+}
+
+/** A spotlight's place of its ranking, with its picture. */
+export function useSubject(data: Wrapped, spot: Spot | null, size = 480): Subject {
+  const series = spot?.series ?? 'artists'
+  const rank = spot?.rank ?? 0
+  const artist = series === 'artists' ? data.topArtists[rank] : undefined
+  const track = series === 'songs' ? data.topTracks[rank] : undefined
+  const albumEntry = series === 'albums' ? data.topAlbums[rank] : undefined
+  const photo = useArtistImage(artist?.name, size)
+  const cover = useTrackCover(track, size)
+  const album = useAlbum(albumEntry, size)
+  const entry = artist ?? track ?? albumEntry
+  const months = entry?.months?.length === 12 ? entry.months : Array<number>(12).fill(0)
+  const max = Math.max(...months)
+  return {
+    series,
+    rank,
+    name: artist?.name ?? track?.title ?? album.name,
+    by: track?.artist ?? (albumEntry ? album.artist : null),
+    minutes: entry?.minutes ?? 0,
+    plays: entry?.plays ?? 0,
+    months,
+    peakMonth: max > 0 ? months.indexOf(max) : null,
+    tracks: artist?.tracks ?? albumEntry?.tracks ?? 0,
+    image: artist ? photo : track ? cover : album.cover,
+    person: series === 'artists',
+  }
+}
+
+/**
+ * Each month's number one among the year's top artists (null for a month without them): who wore the crown when.
+ * From the top artists' months, so a month's real number one may be missing when they weren't in the year's top ten.
+ */
+export function monthlyCrowns(data: Wrapped) {
+  return Array.from({ length: 12 }, (_, month) => {
+    let best: Wrapped['topArtists'][number] | null = null
+    for (const artist of data.topArtists) if ((artist.months[month] ?? 0) > (best?.months[month] ?? 0)) best = artist
+    return best && (best.months[month] ?? 0) > 0 ? { name: best.name, minutes: best.months[month]! } : null
+  })
 }

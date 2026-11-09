@@ -11,7 +11,7 @@ import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n
 import { cn } from '@/lib/utils'
 import { Backdrop } from './backdrop'
 import { enterClass, TransitionLayer, transitionInto } from './transition'
-import { deckFor, lookFor, LOOKS, TOPICS, topicAvailable } from './deck'
+import { lookFor, LOOKS, singleSlide, storyFor, type StorySlide } from './deck'
 import { contrast, Grain, paletteStyle, PausedContext, type WrappedSlide } from './slide-kit'
 import { SLIDES } from './slides'
 import { useWrapped, useWrappedYears, WRAPPED_RELEASE, type Wrapped } from './wrapped-data'
@@ -161,19 +161,19 @@ function StoryFrame({ onClose, closeLabel, style, top, children }: { onClose: ()
 }
 
 /**
- * The year's slides: one per topic the year draws (deck.ts), leaving out those the data has nothing for. `?slide=<id>`
- * shows just that slide with the year's data (for working on the slides).
+ * The year's slides, as the year's plan and the person's data make them (deck.ts). `?slide=<id>` shows just that slide
+ * with the year's data (for working on the slides; a spotlight at `&series=<artists|songs|albums>&rank=<0…>`).
  */
-function useStorySlides(data: Wrapped): WrappedSlide[] {
-  const only = useSearchParams()[0].get('slide')
+function useStorySlides(data: Wrapped): Array<StorySlide<WrappedSlide>> {
+  const [params] = useSearchParams()
+  const only = params.get('slide')
+  const series = params.get('series')
+  const rank = Number(params.get('rank') ?? 0) || 0
   return useMemo(() => {
     const single = only ? SLIDES.find((slide) => slide.id === only) : undefined
-    if (single) return [single]
-    const deck = deckFor(data.year, SLIDES)
-    return TOPICS.filter((topic) => deck.has(topic) && topicAvailable(topic, data))
-      .map((topic) => SLIDES.find((slide) => slide.id === deck.get(topic)))
-      .filter((slide): slide is WrappedSlide => !!slide)
-  }, [data, only])
+    if (single) return [singleSlide(single, series, rank)]
+    return storyFor(data, SLIDES)
+  }, [data, only, series, rank])
 }
 
 function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
@@ -184,7 +184,7 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
   const [failed, setFailed] = useState<string[]>([])
   const drawn = useStorySlides(data)
   const slides = useMemo(() => {
-    const left = drawn.filter((slide) => !failed.includes(slide.id))
+    const left = drawn.filter((entry) => !failed.includes(entry.key))
     return left.length ? left : drawn.slice(-1)
   }, [drawn, failed])
   const look = lookFor(data.year)
@@ -198,9 +198,9 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
   const holdTimer = useRef(0)
   const last = index === slides.length - 1
   const palette = look.palettes[index % look.palettes.length]!
-  const slide = slides[index]!
+  const { slide, key: slideKey, spot } = slides[index]!
   // How it changes into this slide (drawn like the slides; never twice the same in a row).
-  const transition = transitionInto(slide.id, slides[index - 1]?.id, data.year)
+  const transition = transitionInto(slideKey, slides[index - 1]?.key, data.year)
   const Slide = slide.Component
 
   const go = (next: number) => {
@@ -247,8 +247,8 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
   const bars = (
     <div className="relative">
       <div className="flex gap-1" style={{ color: ink, filter: `drop-shadow(0 0 2px ${halo})` }}>
-        {slides.map((slide, position) => (
-          <div key={slide.id} className="h-1 flex-1 overflow-hidden rounded-full bg-current/25">
+        {slides.map((entry, position) => (
+          <div key={entry.key} className="h-1 flex-1 overflow-hidden rounded-full bg-current/25">
             <div className="h-full rounded-full bg-current" style={{ width: position < index ? '100%' : position > index ? '0%' : last ? '100%' : `${Math.min(100, (elapsed / SLIDE_MS) * 100)}%` }} />
           </div>
         ))}
@@ -293,7 +293,7 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
         }}
       >
         <div
-          key={slide.id}
+          key={slideKey}
           className={cn(
             'absolute inset-0 overflow-hidden [&_p]:[text-shadow:var(--wrapped-shadow)]',
             // Under a cover it appears while covered; a zoom brings it in itself.
@@ -302,16 +302,16 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
           // A soft shadow against the text color, so it reads over the moving backdrop.
           style={{ '--wrapped-shadow': contrast(palette.color, '#000000') > 10 ? '0 1px 14px rgb(0 0 0 / 0.45)' : '0 1px 12px rgb(255 255 255 / 0.4)' } as CSSProperties}
         >
-          {slide.backdrop !== false && <Backdrop id={slide.id} year={data.year} look={look} palette={palette} />}
+          {slide.backdrop !== false && <Backdrop id={slideKey} year={data.year} look={look} palette={palette} />}
           <PausedContext.Provider value={held}>
-            <SlideBoundary onError={() => setFailed((list) => [...list, slide.id])}>
-              <Slide data={data} look={look} palette={palette} active />
+            <SlideBoundary onError={() => setFailed((list) => [...list, slideKey])}>
+              <Slide data={data} look={look} palette={palette} spot={spot} active />
             </SlideBoundary>
           </PausedContext.Provider>
         </div>
         {/* The next slide's color sweeps across as it comes (not for the first). */}
         {index > 0 && transition !== 'zoom' && (
-          <TransitionLayer key={`change-${slide.id}`} kind={transition} seed={`${slide.id}:${data.year}`} color={palette.accent} second={look.palettes[(index + 1) % look.palettes.length]!.accent} />
+          <TransitionLayer key={`change-${slideKey}`} kind={transition} seed={`${slideKey}:${data.year}`} color={palette.accent} second={look.palettes[(index + 1) % look.palettes.length]!.accent} />
         )}
       </div>
       {last && (
