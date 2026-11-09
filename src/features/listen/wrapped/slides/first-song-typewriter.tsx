@@ -14,7 +14,7 @@ export default {
     const t = useMessages(messages)
     const track = data.firstTrack!
     const cover = useTrackCover(track, 320)
-    const date = new Intl.DateTimeFormat(useFormats().locale, { day: 'numeric', month: 'long' }).format(track.at)
+    const date = useFormats().localDay.format(track.at)
     const text = `${track.title}${track.artist ? ` – ${track.artist}` : ''}`
     return (
       <Body className="justify-center gap-6">

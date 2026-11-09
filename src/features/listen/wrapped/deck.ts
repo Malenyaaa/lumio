@@ -85,7 +85,9 @@ export function topicAvailable(topic: Topic, data: Wrapped) {
     case 'streak':
       return !!data.streak && data.streak.days >= 3
     case 'personality':
-      return data.plays >= 50
+      return data.plays >= 50 && data.repeatShare > 0
+    case 'months':
+      return data.months.some((minutes) => minutes > 0)
     default:
       return true
   }

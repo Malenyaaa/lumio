@@ -40,16 +40,24 @@ export interface WrappedSlide {
   Component: (props: SlideProps) => ReactNode
 }
 
+/** A date format that gives nothing for a date that isn't one, instead of throwing (and taking the story down). */
+function dates(locale: string, options: Intl.DateTimeFormatOptions) {
+  const format = new Intl.DateTimeFormat(locale, options)
+  return { format: (value: Date | number | undefined) => (value !== undefined && Number.isFinite(new Date(value).getTime()) ? format.format(value) : '') }
+}
+
 export function useFormats() {
   const locale = getLocaleTag(useLocale())
   return {
     locale,
     number: new Intl.NumberFormat(locale),
     compact: new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }),
-    day: new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', timeZone: 'UTC' }),
-    weekday: new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' }),
-    month: new Intl.DateTimeFormat(locale, { month: 'long', timeZone: 'UTC' }),
-    shortMonth: new Intl.DateTimeFormat(locale, { month: 'short', timeZone: 'UTC' }),
+    day: dates(locale, { day: 'numeric', month: 'long', timeZone: 'UTC' }),
+    /** A moment's day in the viewer's own time zone (when a play started). */
+    localDay: dates(locale, { day: 'numeric', month: 'long' }),
+    weekday: dates(locale, { weekday: 'long', timeZone: 'UTC' }),
+    month: dates(locale, { month: 'long', timeZone: 'UTC' }),
+    shortMonth: dates(locale, { month: 'short', timeZone: 'UTC' }),
   }
 }
 

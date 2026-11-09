@@ -83,7 +83,7 @@ export function useWrapped(year: number) {
       const response = await request(`/me/wrapped/${year}?tz=${encodeURIComponent(timeZone())}`)
       if (response.status === 404 || response.status === 403) return null
       if (!response.ok) throw new Error('Lumio server unavailable')
-      return (await response.json()) as Wrapped
+      return complete((await response.json()) as Partial<Wrapped>)
     },
   })
 }
@@ -106,6 +106,40 @@ export function useSpotifyCover(key: string | null | undefined) {
       return ((await response.json()) as { thumbnail_url?: string }).thumbnail_url ?? null
     },
   }).data ?? undefined
+}
+
+/**
+ * A Wrapped as this version of the app expects it, from a server that may be older (an app updated before its
+ * server): what it doesn't send yet is empty, and the slides that need it are left out.
+ */
+function complete(data: Partial<Wrapped>): Wrapped {
+  return {
+    year: data.year ?? 0,
+    minutes: data.minutes ?? 0,
+    plays: data.plays ?? 0,
+    tracks: data.tracks ?? 0,
+    artists: data.artists ?? 0,
+    previousMinutes: data.previousMinutes ?? null,
+    topArtists: (data.topArtists ?? []).map((artist) => ({ ...artist, peakMonth: artist.peakMonth ?? 0, months: artist.months ?? Array<number>(12).fill(0) })),
+    topTracks: data.topTracks ?? [],
+    playlistKeys: data.playlistKeys ?? [],
+    topAlbums: (data.topAlbums ?? []).map((album) => ({ ...album, sampleKey: album.sampleKey ?? album.key })),
+    topPodcasts: data.topPodcasts ?? [],
+    months: data.months ?? Array<number>(12).fill(0),
+    hours: data.hours ?? Array<number>(24).fill(0),
+    weekdays: data.weekdays ?? Array<number>(7).fill(0),
+    topDay: data.topDay ?? null,
+    firstTrack: data.firstTrack ?? null,
+    onRepeat: data.onRepeat ?? null,
+    newArtists: data.newArtists ?? { count: 0, top: null },
+    sources: data.sources ?? {},
+    daily: data.daily ?? [],
+    activeDays: data.activeDays ?? 0,
+    streak: data.streak ?? null,
+    lateNight: data.lateNight ?? 0,
+    repeatShare: data.repeatShare ?? 0,
+    comfort: data.comfort ?? null,
+  }
 }
 
 /** Whether a library id (not an imported service's key, nor an album known only by name). */

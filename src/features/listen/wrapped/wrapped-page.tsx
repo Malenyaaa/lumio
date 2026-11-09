@@ -1,5 +1,5 @@
 import { IconLoader2, IconPlayerPauseFilled, IconPlaylistAdd, IconReload, IconX } from '@tabler/icons-react'
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { Component, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { toast } from 'sonner'
@@ -177,9 +177,17 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
   const t = useMessages(messages)
   const navigate = useNavigate()
   const { create } = usePlaylistActions()
-  const slides = useStorySlides(data)
+  // Slides that failed to draw (their data missing, say) drop out; the story goes on without them.
+  const [failed, setFailed] = useState<string[]>([])
+  const drawn = useStorySlides(data)
+  const slides = useMemo(() => {
+    const left = drawn.filter((slide) => !failed.includes(slide.id))
+    return left.length ? left : drawn.slice(-1)
+  }, [drawn, failed])
   const look = lookFor(data.year)
-  const [index, setIndex] = useState(0)
+  const [chosen, setIndex] = useState(0)
+  // Within the slides left (one may just have dropped out).
+  const index = Math.min(chosen, slides.length - 1)
   const [elapsed, setElapsed] = useState(0)
   const running = useRef(0)
   const [held, setHeld] = useState(false)
@@ -284,7 +292,9 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
         >
           {slide.backdrop !== false && <Backdrop id={slide.id} year={data.year} look={look} palette={palette} />}
           <PausedContext.Provider value={held}>
-            <Slide data={data} look={look} palette={palette} active />
+            <SlideBoundary onError={() => setFailed((list) => [...list, slide.id])}>
+              <Slide data={data} look={look} palette={palette} active />
+            </SlideBoundary>
           </PausedContext.Provider>
         </div>
         {/* The next slide's color sweeps across as it comes (not for the first). */}
@@ -318,4 +328,22 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
       )}
     </StoryFrame>
   )
+}
+
+/** Keeps a slide that fails to draw from taking the page down: it is reported and left out. */
+class SlideBoundary extends Component<{ onError: () => void; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  componentDidCatch(error: Error) {
+    console.error('Wrapped slide failed', error)
+    this.props.onError()
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children
+  }
 }
