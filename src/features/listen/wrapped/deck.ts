@@ -30,6 +30,8 @@ export type Topic =
   | 'comfort'
   | 'streak'
   | 'podcasts'
+  /** Audio dramas and audiobooks. */
+  | 'spoken'
   | 'summary'
   /** One place of a ranking (artists, songs or albums), shown for each place of a countdown. */
   | 'spotlight'
@@ -52,7 +54,7 @@ const OPENING: Topic[] = ['minutes', 'first-song', 'personality']
 const PARTS: Topic[][] = [
   ['top-artist', 'top-artists', 'discoveries'],
   ['top-song', 'top-songs', 'repeat', 'comfort'],
-  ['album', 'podcasts'],
+  ['album', 'podcasts', 'spoken'],
   ['months', 'clock', 'streak'],
 ]
 
@@ -127,6 +129,8 @@ export function topicWorth(topic: Topic, data: Wrapped): number {
     case 'podcasts':
       // An hour or two over the whole year is no podcast year.
       return data.podcastMinutes >= 120 && data.topPodcasts.length > 0 ? 1 + Math.min(2, (data.podcastMinutes / Math.max(1, data.minutes)) * 5) : 0
+    case 'spoken':
+      return data.spokenMinutes >= 120 && data.topSpoken.length > 0 ? 1 + Math.min(2, (data.spokenMinutes / Math.max(1, data.minutes)) * 4) : 0
     case 'comfort':
       return data.comfort && data.comfort.days >= 10 ? Math.min(3, data.comfort.days / 25) : 0
     case 'streak':

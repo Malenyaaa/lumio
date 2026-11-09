@@ -5,7 +5,7 @@ import { accentText, Body, Headline, In, useCountUp, type WrappedSlide } from '.
 
 const messages = defineMessages({
   de: {
-    title: 'Frühaufsteher*in',
+    title: 'Früh\u00adauf\u00adsteher*in',
     share: 'deiner Musik lief zwischen 5 und 9 Uhr morgens. Der Kaffee hatte nie eine Chance gegen dich.',
     favourite: (hour: number) => `Deine Lieblingsstunde: ${hour} Uhr`,
   },
@@ -59,7 +59,7 @@ export default {
           <div className="absolute inset-x-0 bottom-0 h-1 rounded-full bg-current" />
         </div>
         <In delay={500}>
-          <Headline look={look} className="text-5xl">
+          <Headline look={look} className="text-5xl break-words">
             {t.title}
           </Headline>
         </In>

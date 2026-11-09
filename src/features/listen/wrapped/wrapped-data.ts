@@ -33,6 +33,12 @@ export interface Wrapped {
   topPodcasts: Array<{ name: string; minutes: number }>
   /** All podcast minutes. */
   podcastMinutes: number
+  /**
+   * Audio dramas and audiobooks (told apart from songs by their chapters; not among the songs, artists and albums), by
+   * series or author: how many episodes or books, the one heard most, one of its chapters (`sampleKey`) for a cover.
+   */
+  topSpoken: Array<{ name: string; minutes: number; episodes: number; episode: string | null; sampleKey: string; contextId: string | null }>
+  spokenMinutes: number
   months: number[]
   hours: number[]
   /** Monday first. */
@@ -132,6 +138,8 @@ function complete(data: Partial<Wrapped>): Wrapped {
     topAlbums: (data.topAlbums ?? []).map((album) => ({ ...album, sampleKey: album.sampleKey ?? album.key, plays: album.plays ?? 0, months: album.months ?? noMonths(), tracks: album.tracks ?? 0 })),
     topPodcasts: data.topPodcasts ?? [],
     podcastMinutes: data.podcastMinutes ?? (data.topPodcasts ?? []).reduce((sum, podcast) => sum + podcast.minutes, 0),
+    topSpoken: data.topSpoken ?? [],
+    spokenMinutes: data.spokenMinutes ?? 0,
     months: data.months ?? Array<number>(12).fill(0),
     hours: data.hours ?? Array<number>(24).fill(0),
     weekdays: data.weekdays ?? Array<number>(7).fill(0),

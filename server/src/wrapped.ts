@@ -24,6 +24,12 @@ export interface Wrapped {
   topPodcasts: Array<{ name: string; minutes: number }>
   /** All podcast minutes (not only the top shows'). */
   podcastMinutes: number
+  /**
+   * Audio dramas and audiobooks (heard as songs, but told apart by their chapters): by series or author, with how many
+   * of its episodes or books, the one heard most and one of its chapters (for a cover). Not in the songs, artists, albums.
+   */
+  topSpoken: Array<{ name: string; minutes: number; episodes: number; episode: string | null; sampleKey: string; contextId: string | null }>
+  spokenMinutes: number
   /** Minutes per month (January first), hour of the day and weekday (Monday first). */
   months: number[]
   hours: number[]
@@ -124,11 +130,51 @@ function tally<T extends { minutes: number; plays: number }>(map: Map<string, T>
   return entry
 }
 
-/** Plays within the year in the time zone (the query takes a little more on both sides). */
+/** Plays within the year in the time zone (the query takes a little more on both sides), audio dramas told apart. */
 function rowsOfYear(store: Store, userId: string, year: number, timeZone: string) {
   const from = Date.UTC(year, 0, 1) - DAY
   const to = Date.UTC(year + 1, 0, 1) + DAY
-  return store.wrappedRows(userId, from, to).filter((row) => partsIn(row.startedAt, timeZone).year === year)
+  return spokenApart(store.wrappedRows(userId, from, to).filter((row) => partsIn(row.startedAt, timeZone).year === year))
+}
+
+/** A chapter's title: "Teil 03", "Track 12 - …", "…, Kapitel 6", "Chapter 4". */
+const CHAPTER = /(?:^|[\s,:(\-–])(?:teil|track|kapitel|chapter|part|capítulo|chapitre)\s*\d+/i
+/** Said by the album's name: "Hörspiel", "Hörbuch", "ungekürzt", "Audiobook". */
+const SPOKEN_ALBUM = /h(?:ö|oe)rspiel|h(?:ö|oe)rbuch|ungek(?:ü|ue)rzt|audiobook|audio drama/i
+/** An episode's album name: "06: Abenteuer auf dem Mars", "071/Die verschwundene Seglerin", "Folge 12: …". */
+const EPISODE_ALBUM = /^(?:folge\s*)?\d{1,3}\s*[:/]|\bfolge\s*\d+/i
+
+const albumKeyOf = (row: WrappedRow, artist: string | null) => row.contextId ?? (row.album ? `name:${nameKey(row.album)}|${nameKey(artist ?? '')}` : null)
+
+/**
+ * Audio dramas and audiobooks come as songs (an album of chapters, from Spotify and from a library alike); they are
+ * marked `spoken` here so they count as what they are and not as the year's songs, artists and albums. An album is one
+ * when its name says so, at least three of its titles heard in the year are chapters (a song called "Part 2" stays a
+ * song), or it is named as an episode and three of its titles were heard; a play without an album, when its title
+ * starts as a chapter does.
+ */
+function spokenApart(rows: WrappedRow[]): WrappedRow[] {
+  const chapters = new Map<string, Set<string>>()
+  const titles = new Map<string, Set<string>>()
+  const add = (map: Map<string, Set<string>>, key: string, title: string) => {
+    const seen = map.get(key)
+    if (seen) seen.add(title)
+    else map.set(key, new Set([title]))
+  }
+  for (const row of rows) {
+    const album = row.kind === 'audio' ? albumKeyOf(row, artistOf(row)) : null
+    if (!album) continue
+    add(titles, album, row.title)
+    if (CHAPTER.test(row.title)) add(chapters, album, row.title)
+  }
+  return rows.map((row) => {
+    if (row.kind !== 'audio') return row
+    const album = albumKeyOf(row, artistOf(row))
+    const spoken = album
+      ? (chapters.get(album)?.size ?? 0) >= 3 || SPOKEN_ALBUM.test(row.album ?? '') || (EPISODE_ALBUM.test(row.album ?? '') && (titles.get(album)?.size ?? 0) >= 3)
+      : /^(?:teil|track|kapitel|chapter)\s*\d+/i.test(row.title)
+    return spoken ? { ...row, kind: 'spoken' } : row
+  })
 }
 
 /**
@@ -160,6 +206,8 @@ export function wrappedFor(store: Store, userId: string, year: number, timeZone:
   const tracks = new Map<string, WrappedTrack>()
   const albums = new Map<string, { key: string; name: string | null; artist: string | null; sampleKey: string; minutes: number; plays: number; months: number[]; songs: Set<string> }>()
   const podcasts = new Map<string, { name: string; minutes: number; plays: number }>()
+  const spoken = new Map<string, { name: string; minutes: number; plays: number; episodes: Map<string, { name: string | null; minutes: number }>; sampleKey: string; contextId: string | null }>()
+  let spokenSeconds = 0
   const days = new Map<string, number>()
   const repeats = new Map<string, number>()
   const trackDays = new Map<string, Set<string>>()
@@ -190,6 +238,18 @@ export function wrappedFor(store: Store, userId: string, year: number, timeZone:
       podcastSeconds += row.seconds
       const name = row.subtitle?.trim() || row.title
       tally(podcasts, nameKey(name), () => ({ name, minutes: 0, plays: 0 }), row.seconds)
+      continue
+    }
+    if (row.kind === 'spoken') {
+      spokenSeconds += row.seconds
+      // By series or author (the album artist); each album an episode or book.
+      const name = artistOf(row) ?? row.album ?? row.title
+      const series = tally(spoken, nameKey(name), () => ({ name, minutes: 0, plays: 0, episodes: new Map(), sampleKey: row.key, contextId: row.contextId }), row.seconds)
+      const episodeKey = albumKeyOf(row, artistOf(row)) ?? row.title
+      const episode = series.episodes.get(episodeKey) ?? { name: row.album, minutes: 0 }
+      episode.minutes += minutes
+      series.episodes.set(episodeKey, episode)
+      if (series.sampleKey.startsWith('spotify:') && !row.key.startsWith('spotify:')) Object.assign(series, { sampleKey: row.key, contextId: row.contextId })
       continue
     }
     if (row.seconds >= STREAM_SECONDS) plays += 1
@@ -304,6 +364,17 @@ export function wrappedFor(store: Store, userId: string, year: number, timeZone:
       .slice(0, 3)
       .map(({ name, minutes }) => ({ name, minutes: Math.round(minutes) })),
     podcastMinutes: Math.round(podcastSeconds / 60),
+    topSpoken: byMinutes(spoken.values())
+      .slice(0, 3)
+      .map(({ name, minutes, episodes, sampleKey, contextId }) => ({
+        name,
+        minutes: Math.round(minutes),
+        episodes: episodes.size,
+        episode: byMinutes(episodes.values())[0]?.name ?? null,
+        sampleKey,
+        contextId,
+      })),
+    spokenMinutes: Math.round(spokenSeconds / 60),
     months: months.map(Math.round),
     hours: hours.map(Math.round),
     weekdays: weekdays.map(Math.round),
