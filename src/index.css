@@ -510,6 +510,19 @@ html.panel-transition::view-transition-new(listen-cover) {
     --tw-exit-translate-x: 0 !important;
     --tw-duration: 0.25s;
   }
+  /* The grab bar: they can be pulled down to close (useSwipeDismiss). */
+  [data-slot='dropdown-menu-content']::before,
+  [data-slot='dropdown-menu-sub-content']::before,
+  [data-slot='popover-content']::before {
+    content: '';
+    display: block;
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 4px;
+    margin: 0.125rem auto 0.375rem;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--foreground) 20%, transparent);
+  }
   [data-slot='dropdown-menu-content'] :is([data-slot='dropdown-menu-item'], [data-slot='dropdown-menu-sub-trigger'], [data-slot='dropdown-menu-checkbox-item'], [data-slot='dropdown-menu-radio-item']),
   [data-slot='dropdown-menu-sub-content'] :is([data-slot='dropdown-menu-item'], [data-slot='dropdown-menu-sub-trigger'], [data-slot='dropdown-menu-checkbox-item'], [data-slot='dropdown-menu-radio-item']) {
     min-height: 3rem;

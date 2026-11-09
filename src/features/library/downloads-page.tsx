@@ -289,7 +289,7 @@ function SeriesBlock({ group, t, size }: { group: SeriesGroup; t: Messages; size
                 </Button>
               )}
             </div>
-            <ul className={cn('grid gap-1', !open && 'hidden')}>
+            <ul className={cn('grid grid-cols-1 gap-1', !open && 'hidden')}>
               {season.episodes.map((entry) => {
                 const item = entry.item!
                 const thumb = landscapeImageUrl(api, item, { fillWidth: 320 })

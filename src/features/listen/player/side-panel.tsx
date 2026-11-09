@@ -3,6 +3,7 @@ import {
   IconArrowsDiagonal,
   IconArrowsDiagonalMinimize2,
   IconChevronLeft,
+  IconGripVertical,
   IconLayoutSidebarRightCollapse,
   IconPlayerPlayFilled,
   IconSettings,
@@ -10,6 +11,7 @@ import {
 } from '@tabler/icons-react'
 import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type PointerEvent, type ReactNode } from 'react'
 import { Link } from '@/components/link'
+import { useTouch } from '@/lib/use-media-query'
 import { FadeImage } from '@/components/media/fade-image'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuthedSession } from '@/features/auth/session'
@@ -46,6 +48,7 @@ const messages = defineMessages({
     nextInQueue: 'Nächster Titel in der Warteschlange',
     clearQueue: 'Warteschlange löschen',
     removeFromQueue: 'Aus Warteschlange entfernen',
+    moveInQueue: (name: string) => `${name} verschieben`,
     nextOn: (device: string) => `Als Nächstes auf ${device}`,
     playThis: (name: string) => `${name} abspielen`,
     nextFrom: 'Nächster Titel von:',
@@ -85,6 +88,7 @@ const messages = defineMessages({
     nextInQueue: 'Next in queue',
     clearQueue: 'Clear queue',
     removeFromQueue: 'Remove from queue',
+    moveInQueue: (name: string) => `Move ${name}`,
     nextOn: (device: string) => `Next on ${device}`,
     playThis: (name: string) => `Play ${name}`,
     nextFrom: 'Next from:',
@@ -591,7 +595,7 @@ function RemoteQueue({ remote }: { remote: NonNullable<ReturnType<typeof usePlay
         <span className="relative size-10 shrink-0 overflow-hidden rounded bg-muted">
           {cover && <FadeImage src={cover} alt="" className="size-full object-cover" />}
           {!isCurrent && (
-            <span className="absolute inset-0 grid place-items-center bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100">
+            <span className="absolute inset-0 grid place-items-center bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:hidden">
               <IconPlayerPlayFilled className="size-4" />
             </span>
           )}
@@ -661,7 +665,7 @@ function LocalQueue() {
   )
 
   return (
-    <div ref={list} className="relative space-y-5">
+    <div ref={list} data-queue-list className="relative space-y-5">
       {track && state.entries[state.index] && (
         <section className="space-y-1">
           <h3 className="text-sm font-semibold">{t.currentTrack}</h3>
@@ -712,6 +716,8 @@ let draggedQueueIndex: number | null = null
 function QueueRow({ uid, item, index, kind, current }: { uid: string; item: BaseItemDto; index: number; kind: QueueKind; current?: boolean }) {
   const { api } = useAuthedSession()
   const t = useMessages(messages)
+  // Fingers move rows by their handle (the browser's drag and drop is mouse only); the menu is a long press there.
+  const touch = useTouch()
   const cover = portraitImageUrl(api, item, { fillHeight: 96 })
   // Offline, songs that need the network are greyed out (the player skips them).
   const unavailable = useUnavailable(item)
@@ -727,7 +733,10 @@ function QueueRow({ uid, item, index, kind, current }: { uid: string; item: Base
     <TrackContextMenu track={item} onRemove={current ? undefined : () => music.remove(index)} removeLabel={t.removeFromQueue}>
       <div
         data-uid={uid}
-        draggable={!current}
+        data-queue-index={index}
+        data-queue-kind={kind}
+        data-queue-current={current || undefined}
+        draggable={!current && !touch}
         onDragStart={(event) => {
           startTrackDrag(event, [item])
           event.dataTransfer.setData(QUEUE_TYPE, uid)
@@ -763,6 +772,8 @@ function QueueRow({ uid, item, index, kind, current }: { uid: string; item: Base
           // Where the dragged song would land: a line between the rows.
           mark && 'after:pointer-events-none after:absolute after:inset-x-1 after:h-0.5 after:rounded-full after:bg-listen',
           mark === 'before' ? 'after:-top-px' : mark === 'after' ? 'after:-bottom-px' : '',
+          // The same line while a finger moves a row (set by QueueHandle on the row it would land at).
+          'data-[drop]:after:pointer-events-none data-[drop]:after:absolute data-[drop]:after:inset-x-1 data-[drop]:after:h-0.5 data-[drop]:after:rounded-full data-[drop]:after:bg-listen data-[drop=after]:after:-bottom-px data-[drop=before]:after:-top-px',
         )}
       >
         {/* The cover turns into a play button on hover (as in Spotify); the title plays too, the artists lead to them. */}
@@ -774,7 +785,7 @@ function QueueRow({ uid, item, index, kind, current }: { uid: string; item: Base
         >
           {cover && <FadeImage src={cover} alt="" className="size-full object-cover" />}
           {!current && (
-            <span className="absolute inset-0 grid place-items-center bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100">
+            <span className="absolute inset-0 grid place-items-center bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:hidden">
               <IconPlayerPlayFilled className="size-4" />
             </span>
           )}
@@ -787,11 +798,87 @@ function QueueRow({ uid, item, index, kind, current }: { uid: string; item: Base
             <TrackArtists track={item} />
           </span>
         </span>
-        <span className="opacity-0 pointer-coarse:opacity-100 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-data-popup-open:opacity-100">
-          <TrackMenu track={item} visible onRemove={current ? undefined : () => music.remove(index)} removeLabel={t.removeFromQueue} />
-        </span>
+        {touch ? (
+          !current && <QueueHandle index={index} label={t.moveInQueue(item.Name ?? '')} />
+        ) : (
+          <span className="opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-data-popup-open:opacity-100">
+            <TrackMenu track={item} visible onRemove={current ? undefined : () => music.remove(index)} removeLabel={t.removeFromQueue} />
+          </span>
+        )}
       </div>
     </TrackContextMenu>
+  )
+}
+
+/**
+ * A queue row's handle for fingers: pulled up or down, the row follows and a line shows where it would land (before or
+ * after the row under the finger, in that row's part of the queue); letting go moves it there.
+ */
+function QueueHandle({ index, label }: { index: number; label: string }) {
+  const start = useRef<{ y: number; row: HTMLElement } | null>(null)
+  const target = useRef<{ row: HTMLElement; after: boolean } | null>(null)
+
+  const clearMark = () => {
+    target.current?.row.removeAttribute('data-drop')
+    target.current = null
+  }
+  const markAt = (y: number, dragged: HTMLElement) => {
+    // The row the finger is over, among the others (the dragged one moves along with it).
+    const rows = [...(dragged.closest('[data-queue-list]') ?? document).querySelectorAll<HTMLElement>('[data-queue-index]')].filter((row) => row !== dragged)
+    const row = rows.find((candidate) => y < candidate.getBoundingClientRect().bottom) ?? rows.at(-1)
+    clearMark()
+    if (!row) return
+    const rect = row.getBoundingClientRect()
+    // Nothing goes before what is playing.
+    const after = row.hasAttribute('data-queue-current') || y > rect.top + rect.height / 2
+    row.dataset.drop = after ? 'after' : 'before'
+    target.current = { row, after }
+  }
+
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      // The sheet around the queue must not take this drag for closing it.
+      data-base-ui-swipe-ignore=""
+      className="grid size-10 shrink-0 cursor-grab touch-none place-items-center text-muted-foreground"
+      onPointerDown={(event) => {
+        const row = event.currentTarget.closest<HTMLElement>('[data-queue-index]')
+        if (!row) return
+        event.stopPropagation()
+        event.currentTarget.setPointerCapture(event.pointerId)
+        start.current = { y: event.clientY, row }
+        row.style.zIndex = '10'
+        row.style.background = 'var(--muted)'
+      }}
+      onPointerMove={(event) => {
+        const at = start.current
+        if (!at) return
+        at.row.style.transform = `translateY(${event.clientY - at.y}px)`
+        markAt(event.clientY, at.row)
+      }}
+      onPointerUp={() => {
+        const at = start.current
+        if (!at) return
+        start.current = null
+        at.row.style.transform = ''
+        at.row.style.zIndex = ''
+        at.row.style.background = ''
+        const drop = target.current
+        clearMark()
+        if (!drop) return
+        const to = Number(drop.row.dataset.queueIndex)
+        music.reorder(index, drop.after ? to + 1 : to, drop.row.dataset.queueKind as QueueKind)
+      }}
+      onPointerCancel={() => {
+        const at = start.current
+        start.current = null
+        clearMark()
+        if (at) at.row.style.transform = at.row.style.zIndex = at.row.style.background = ''
+      }}
+    >
+      <IconGripVertical className="size-5" />
+    </button>
   )
 }
 

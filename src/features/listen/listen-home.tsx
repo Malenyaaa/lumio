@@ -307,7 +307,8 @@ function TileShell({
         className={cn(
           playCircle.listen,
           'size-8 shrink-0 shadow-lg shadow-black/40 transition-opacity',
-          playing ? 'opacity-100' : 'opacity-0 focus-visible:opacity-100 group-hover:opacity-100',
+          // Fingers can't hover: there it only shows while this plays (tapping the tile opens it).
+          playing ? 'opacity-100' : 'opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:hidden',
         )}
       >
         {playing ? <IconPlayerPauseFilled className="size-4" /> : <IconPlayerPlayFilled className="size-4 translate-x-px" />}

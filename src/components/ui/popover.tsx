@@ -2,6 +2,7 @@ import * as React from "react"
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
 import { cn } from "cn"
 import { usePortalContainer } from '@/components/portal-container'
+import { useSwipeDismiss } from '@/components/ui/swipe-dismiss'
 
 function Popover({ ...props }: PopoverPrimitive.Root.Props) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />
@@ -23,6 +24,7 @@ function PopoverContent({
     PopoverPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset"
   >) {
+  const swipeDismiss = useSwipeDismiss()
   return (
     <PopoverPrimitive.Portal container={usePortalContainer()}>
       {/* Phones show popovers as sheets from the bottom over a dimmed page (index.css); elsewhere this stays hidden. */}
@@ -36,6 +38,8 @@ function PopoverContent({
         className="isolate z-50"
       >
         <PopoverPrimitive.Popup
+          // On phones a sheet, pulled down to close.
+          ref={swipeDismiss}
           data-slot="popover-content"
           className={cn(
             "z-50 flex w-72 origin-(--transform-origin) flex-col gap-2.5 rounded-lg bg-popover p-2.5 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-hidden duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",

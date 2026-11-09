@@ -100,7 +100,8 @@ export function CardShell({ href, cover, title, subtitle, round, here, playing, 
             // After the circle's classes, so its `absolute` wins over their `relative`.
             playCircle.listen,
             'pointer-events-auto absolute bottom-2 right-2 z-10 size-12 transition-[opacity,translate] duration-300 ease-out',
-            playing ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0 group-hover/music:translate-y-0 group-hover/music:opacity-100 focus-visible:translate-y-0 focus-visible:opacity-100',
+            // Fingers can't hover: there it only shows while this plays (tapping the card opens it).
+            playing ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0 group-hover/music:translate-y-0 group-hover/music:opacity-100 focus-visible:translate-y-0 focus-visible:opacity-100 pointer-coarse:hidden',
           )}
         >
           {playing ? <IconPlayerPauseFilled className="size-5" /> : <IconPlayerPlayFilled className="size-5 translate-x-px" />}
