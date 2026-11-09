@@ -2,7 +2,7 @@ import { PlayMethod } from '@jellyfin/sdk/lib/generated-client/models'
 import { getSessionApi } from '@jellyfin/sdk/lib/utils/api/session-api'
 import { IconArrowLeft } from '@tabler/icons-react'
 import Hls from 'hls.js'
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { Link } from '@/components/link'
 import { FadeImage } from '@/components/media/fade-image'
@@ -63,6 +63,8 @@ const SUBTITLE_LINE_PX = 36
 const START_TOLERANCE_TICKS = 100_000_000
 /** If the start position is never reached (e.g. beyond the end), trust the element's clock after this long. */
 const START_FALLBACK_MS = 15_000
+/** Clicks this soon after the controls appeared belong to the tap that showed them. */
+const SHOW_GRACE_MS = 400
 /** Share of the loading ring each startup milestone is worth. */
 const LOAD_STAGE = { preparing: 8, info: 20, playlist: 40, metadata: 55, segment: 70, data: 85 } as const
 
@@ -475,6 +477,12 @@ function Player({ id }: { id: string }) {
   const panelOpen = settingsOpen || episodesOpen
   const spotlightVisible = spotlightArmed && state.paused && !state.waiting && !panelOpen
   const controlsVisible = (awake || state.paused || panelOpen) && !spotlightVisible
+  // When the controls last appeared (see the click guard on them).
+  const shownAt = useRef(0)
+  // A layout effect: it runs before the browser sends the click of the tap that showed them.
+  useLayoutEffect(() => {
+    if (controlsVisible) shownAt.current = performance.now()
+  }, [controlsVisible])
 
   const [fullscreen, setFullscreen] = useState(false)
   useEffect(() => {
@@ -1018,7 +1026,17 @@ function Player({ id }: { id: string }) {
         />
       )}
 
-      <div className={cn('transition-opacity duration-300', (!controlsVisible || appPip) && 'pointer-events-none opacity-0')}>
+      <div
+        className={cn('transition-opacity duration-300', (!controlsVisible || appPip) && 'pointer-events-none opacity-0')}
+        // The tap that brings the controls back must not also press the button that appears under the finger: the
+        // browser sends that tap's click after the controls are already there.
+        onClickCapture={(event) => {
+          if (event.timeStamp - shownAt.current < SHOW_GRACE_MS) {
+            event.preventDefault()
+            event.stopPropagation()
+          }
+        }}
+      >
         <div data-titlebar data-titlebar-inset className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 bg-linear-to-b from-black/70 to-transparent pt-[max(1rem,var(--safe-top))] pr-[max(1rem,var(--safe-right))] pb-4 pl-[max(1rem,var(--safe-left))] text-white">
           <Button variant="ghost" size="icon" aria-label={t.back} onClick={goBack}>
             <IconArrowLeft />

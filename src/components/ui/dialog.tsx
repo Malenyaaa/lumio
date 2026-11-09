@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { uiMessages } from "@/components/messages"
 import { useMessages } from "@/lib/i18n"
 import { IconX } from '@tabler/icons-react'
+import { returnFocus } from '@/components/ui/swipe-dismiss'
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
@@ -52,6 +53,7 @@ function DialogContent({
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Popup
+        finalFocus={returnFocus}
         data-slot="dialog-content"
         className={cn(
           "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",

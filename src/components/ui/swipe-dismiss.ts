@@ -65,3 +65,9 @@ export function useSwipeDismiss() {
     }
   }, [])
 }
+
+/**
+ * Where focus goes when a popup closes: back to what opened it with a mouse or keyboard, but not on touch screens,
+ * where that leaves the button looking pressed (its focus ring) after the popup is gone.
+ */
+export const returnFocus = () => !matchMedia('(pointer: coarse)').matches

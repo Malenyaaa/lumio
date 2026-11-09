@@ -2,6 +2,7 @@ import * as React from "react"
 import { Drawer as DrawerPrimitive } from "@base-ui/react/drawer"
 import { cn } from "cn"
 import { usePortalContainer } from '@/components/portal-container'
+import { returnFocus } from '@/components/ui/swipe-dismiss'
 
 /**
  * A panel that slides in from an edge and follows the finger: the phone's menus, the queue, the profile drawer. Bottom
@@ -67,6 +68,7 @@ function SheetContent({
       />
       <DrawerPrimitive.Viewport data-slot="sheet-viewport" className={cn("fixed inset-0 z-50 flex", VIEWPORT[side])}>
         <DrawerPrimitive.Popup
+          finalFocus={returnFocus}
           data-slot="sheet-content"
           data-side={side}
           className={cn(
