@@ -203,7 +203,8 @@ function SignedInListen() {
       {/*
         The content scrolls in a rounded panel of its own between sidebar, header, side panel and player bar. Inside it,
         "the background" is the panel's tone, so pages fading into it match. Pages leave room for a header they would
-        sit under elsewhere; here the header is outside, so that room is scrolled away (-mt-14).
+        sit under elsewhere; here the header is outside, so that room is scrolled away (-mt-14). Sticky parts (the
+        settings navigation) learn the panel's height and their offset in it, as both differ from the window's.
       */}
       {/* On phones it fills the width and scrolls on under the tabs and the player (which fade over it). */}
       <main
@@ -211,6 +212,7 @@ function SignedInListen() {
         className={cn(
           'fixed inset-x-0 top-[calc(3.5rem+var(--safe-top))] bottom-0 overflow-y-auto overflow-x-hidden bg-surface [--background:var(--surface)] [scrollbar-width:thin]',
           'md:bottom-22 md:left-[calc(var(--listen-left)+0.5rem)] md:right-2 md:top-14 md:rounded-xl lg:right-[calc(var(--listen-right)+0.5rem)]',
+          'md:[--scroll-root-height:calc(100dvh-9rem)] md:[--sticky-top:1.5rem]',
           'transition-[left,right] duration-300 ease-out [.cursor-col-resize_&]:transition-none',
         )}
       >
