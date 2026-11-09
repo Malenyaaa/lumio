@@ -66,7 +66,9 @@ export interface MusicTime {
   duration: number
 }
 
-const VOLUME_KEY = 'lumio.music.volume'
+/** The slider's position (0–1); the older key held the element's volume itself (see `loudness`). */
+const VOLUME_KEY = 'lumio.music.level'
+const OLD_VOLUME_KEY = 'lumio.music.volume'
 const SHUFFLE_KEY = 'lumio.music.shuffle'
 /** How often the position is reported while playing (also what a device steering this one moves on from). */
 const PROGRESS_EVERY_MS = 5000
@@ -77,8 +79,11 @@ const RESUME_MIN_S = 10 * 60
 
 function readVolume() {
   try {
-    const stored = Number(localStorage.getItem(VOLUME_KEY))
-    return Number.isFinite(stored) && localStorage.getItem(VOLUME_KEY) !== null ? Math.min(1, Math.max(0, stored)) : 0.8
+    const level = localStorage.getItem(VOLUME_KEY)
+    const old = localStorage.getItem(OLD_VOLUME_KEY)
+    // A volume set before the slider followed the ear: the same loudness as then.
+    const stored = level !== null ? Number(level) : old !== null ? Math.cbrt(Number(old)) : NaN
+    return Number.isFinite(stored) ? Math.min(1, Math.max(0, stored)) : 0.8
   } catch {
     return 0.8
   }
@@ -329,8 +334,76 @@ const audio = typeof Audio !== 'undefined' ? new Audio() : null
 let gainFactor = 1
 const albumGains = new Map<string, number | null>()
 
+/**
+ * The ear hears loudness logarithmically, the element's volume is linear: with the slider straight on it, the first
+ * few percent did almost everything. Cubed (as system mixers do), every step of the slider sounds about as big.
+ */
+const loudness = (level: number) => level ** 3
+
+/** Pause and play fade (0 silent – 1 full), instead of cutting the sound off. */
+let fadeLevel = 1
+let fadeTimer = 0
+const FADE_OUT_MS = 300
+const FADE_IN_MS = 400
+
 function applyVolume() {
-  if (audio) audio.volume = Math.min(1, Math.max(0, state.volume * gainFactor))
+  if (audio) audio.volume = Math.min(1, Math.max(0, loudness(state.volume * fadeLevel) * gainFactor))
+}
+
+/**
+ * Fades to `to` and then calls `done`. Steps follow the clock, so a throttled timer (a hidden window) only makes the
+ * fade coarser, never longer than it should be.
+ */
+function fade(to: number, ms: number, done?: () => void) {
+  window.clearInterval(fadeTimer)
+  const from = fadeLevel
+  const start = performance.now()
+  const step = () => {
+    const t = Math.min(1, (performance.now() - start) / ms)
+    // Eased: gentle at both ends.
+    fadeLevel = from + (to - from) * (t * t * (3 - 2 * t))
+    applyVolume()
+    if (t < 1) return
+    window.clearInterval(fadeTimer)
+    done?.()
+  }
+  fadeTimer = window.setInterval(step, 16)
+  step()
+}
+
+/** Whether a pause is fading out (still audible, but as good as paused). */
+let fadingOut = false
+
+/** Ends a fade at once at full volume (a new track, a stop). */
+function unfade() {
+  window.clearInterval(fadeTimer)
+  fadingOut = false
+  fadeLevel = 1
+  applyVolume()
+}
+
+/** Fades out, then pauses; the controls show the pause right away. */
+function fadeOut() {
+  if (!audio || audio.paused || fadingOut) return
+  fadingOut = true
+  setState({ playing: false })
+  fade(0, FADE_OUT_MS, () => {
+    audio.pause()
+    unfade()
+  })
+}
+
+/** Plays, fading in (also when a fade out is still under way: it turns back). */
+function fadeIn() {
+  if (!audio) return
+  fadingOut = false
+  if (audio.paused) {
+    window.clearInterval(fadeTimer)
+    fadeLevel = 0
+    applyVolume()
+    void audio.play().catch(() => unfade())
+  } else setState({ playing: true })
+  fade(1, FADE_IN_MS)
 }
 
 async function gainOf(item: BaseItemDto): Promise<number | null> {
@@ -509,6 +582,7 @@ async function go(index: number, startAt?: number, reason: StartReason = 'clickr
   if (key && cached) recordCachedPlay(key)
   // The position can only be set once the stream's metadata is in.
   if (startAt) audio.addEventListener('loadedmetadata', () => (audio.currentTime = startAt), { once: true })
+  unfade()
   try {
     await audio.play()
     report('start')
@@ -793,11 +867,11 @@ export const music = {
     if (!audio || state.index < 0) return
     // Restored after a reload: the track is loaded only now, from where it was left.
     if (pendingStart !== null) return void go(state.index, pendingStart, 'appload')
-    if (audio.paused) void audio.play().catch(() => undefined)
-    else audio.pause()
+    if (audio.paused || fadingOut) fadeIn()
+    else fadeOut()
   },
   pause() {
-    audio?.pause()
+    fadeOut()
   },
   /** Goes on if paused (a remote "unpause"). */
   resume() {
@@ -956,6 +1030,7 @@ function stop(reason: EndReason = 'endplay') {
   else if (item) logPlay('stopped', item, false, playSessionId, { reasonEnd: reason })
   pendingStart = null
   reportActivity(null)
+  unfade()
   audio.pause()
   audio.removeAttribute('src')
   audio.load()
