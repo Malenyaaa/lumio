@@ -1,7 +1,7 @@
 import { IconLoader2, IconPlayerPauseFilled, IconPlaylistAdd, IconReload, IconX } from '@tabler/icons-react'
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate, useParams, useSearchParams } from 'react-router'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 import { Link } from '@/components/link'
 import { Button } from '@/components/ui/button'
@@ -113,7 +113,13 @@ function WrappedStory({ year }: { year: number }) {
   const t = useMessages(messages)
   const navigate = useNavigate()
   const wrapped = useWrapped(year)
-  const close = () => void navigate('/listen/wrapped', { state: { keepScroll: true }, preventScrollReset: true })
+  const { state } = useLocation()
+  // Closing goes up to the list, never forward into history: opened from the list, it is the step back; opened
+  // directly (the start page's banner, a link), the story's entry becomes the list. Back then leaves Wrapped.
+  const close = () =>
+    (state as { fromList?: boolean } | null)?.fromList
+      ? void navigate(-1)
+      : void navigate('/listen/wrapped', { replace: true, state: { keepScroll: true }, preventScrollReset: true })
   if (wrapped.isLoading || !wrapped.data) {
     return (
       <StoryFrame onClose={close} closeLabel={t.close} style={paletteStyle(LOOKS[0]!.palettes[0]!)}>

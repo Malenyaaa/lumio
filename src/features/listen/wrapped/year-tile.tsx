@@ -25,7 +25,8 @@ export function YearTile({ year, label }: { year: number; label: string }) {
   return (
     <Link
       to={`/listen/wrapped/${year}`}
-      state={{ keepScroll: true }}
+      // Opened from the list: closing goes back to it (see WrappedStory).
+      state={{ keepScroll: true, fromList: true }}
       preventScrollReset
       // The story opens over the page at once: a page transition would keep the header over it for a moment.
       viewTransition={false}
