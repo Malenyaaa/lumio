@@ -1,4 +1,4 @@
-import { IconBook, IconBooks, IconConfetti, IconHome, IconHomeFilled, IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand, IconMicrophone, IconMusic, IconSearch, IconTicket, type Icon } from '@tabler/icons-react'
+import { IconBook, IconBooks, IconHome, IconHomeFilled, IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand, IconMicrophone, IconMusic, IconSearch, IconTicket, type Icon } from '@tabler/icons-react'
 import { useEffect, useRef, type CSSProperties } from 'react'
 import { Navigate, NavLink, Outlet, useLocation } from 'react-router'
 import { BackButton, HeaderActions, PhoneLead, SettingsEffects } from '@/components/app-shell'
@@ -15,7 +15,6 @@ import { PlayerBar } from './player/player-bar'
 import { ListenControlsProvider } from './player/player-controls'
 import { SidePanel } from './player/side-panel'
 import { concertsAvailable } from './concerts'
-import { useWrappedYears } from './wrapped/wrapped-data'
 import { LibrarySidebar } from './library-sidebar'
 import { ResizeHandle } from './resize-handle'
 import { useCategories, type CategoryId } from '@/features/library/categories'
@@ -30,7 +29,6 @@ const messages = defineMessages({
     home: 'Start',
     podcasts: 'Podcasts',
     concerts: 'Konzerte',
-    wrapped: 'Wrapped',
     library: 'Bibliothek',
     navigation: 'Listen-Navigation',
     collapse: 'Bibliothek einklappen',
@@ -42,7 +40,6 @@ const messages = defineMessages({
     home: 'Home',
     podcasts: 'Podcasts',
     concerts: 'Concerts',
-    wrapped: 'Wrapped',
     library: 'Library',
     navigation: 'Listen navigation',
     collapse: 'Collapse library',
@@ -55,7 +52,7 @@ const messages = defineMessages({
 const CATEGORY_ICONS: Partial<Record<CategoryId, Icon>> = { music: IconMusic, audiobooks: IconBook }
 
 /** The pages the Library tab covers on phones (the sidebar's place on wider screens). */
-const LIBRARY_PAGES = ['/listen/browse/', '/listen/podcasts', '/listen/concerts', '/listen/wrapped', '/listen/liked', '/listen/playlist/', '/listen/episodes']
+const LIBRARY_PAGES = ['/listen/browse/', '/listen/podcasts', '/listen/concerts', '/listen/liked', '/listen/playlist/', '/listen/episodes']
 
 /**
  * Listen's frame, built for audio rather than for cinema: a library sidebar on the left (like Spotify or Apple Music),
@@ -102,7 +99,6 @@ function SignedInListen() {
     if (!isLoading && pathname !== '/listen') markAppReady()
   }, [isLoading, pathname])
 
-  const wrappedYears = useWrappedYears()
   const links: Array<{ to: string; label: string; icon: Icon; end?: boolean }> = [
     { to: '/listen', label: t.home, icon: IconHome, end: true },
   ]
@@ -115,8 +111,6 @@ function SignedInListen() {
     // Not from the server's libraries: podcasts from Apple's directory, concerts from Ticketmaster.
     { to: '/listen/podcasts', label: t.podcasts, icon: IconMicrophone },
     ...(concertsAvailable() ? [{ to: '/listen/concerts', label: t.concerts, icon: IconTicket }] : []),
-    // Once there is a year to look back on.
-    ...(wrappedYears.data?.length ? [{ to: '/listen/wrapped', label: t.wrapped, icon: IconConfetti }] : []),
   ]
 
   return (
