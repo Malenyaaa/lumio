@@ -315,6 +315,24 @@
   }
 }
 
+/* A cover passing over the slide from one side or corner to the other (--from, --to: transforms; transition.tsx). */
+.wrapped-pass {
+  animation: wrapped-pass 640ms cubic-bezier(0.7, 0, 0.3, 1) both;
+}
+
+@keyframes wrapped-pass {
+  from {
+    transform: var(--from);
+  }
+  45%,
+  55% {
+    transform: none;
+  }
+  to {
+    transform: var(--to);
+  }
+}
+
 /* More changes between slides (transition.tsx): each covers, then uncovers, in 640ms. */
 .wrapped-rise,
 .wrapped-diagonal,
@@ -483,12 +501,17 @@
   }
 }
 
-/* A glossy light sweeping across a cover. */
+/* A glossy light crossing a cover (from off its left to off its right), then resting a while. */
+.wrapped-sheen {
+  animation: wrapped-sheen 3.6s ease-in-out 1s infinite;
+}
+
 @keyframes wrapped-sheen {
   from {
-    background-position: 120% 0;
+    transform: translateX(0) skewX(-12deg);
   }
+  45%,
   to {
-    background-position: -120% 0;
+    transform: translateX(400%) skewX(-12deg);
   }
 }

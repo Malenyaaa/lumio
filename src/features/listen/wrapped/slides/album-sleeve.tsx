@@ -21,10 +21,11 @@ export default {
           <p className="text-2xl font-bold">{t.lead}</p>
         </In>
         <div className="relative size-64 self-center animate-in fade-in-0 duration-1000 fill-mode-both [transform:rotateY(-18deg)_rotateX(8deg)] [animation-delay:200ms]">
-          <div className="size-full overflow-hidden rounded-sm bg-black/30 shadow-[20px_30px_60px_rgb(0_0_0/0.5)]">
+          <div className="relative size-full overflow-hidden rounded-sm bg-black/30 shadow-[20px_30px_60px_rgb(0_0_0/0.5)]">
             {album.cover && <FadeImage src={album.cover} alt="" className="size-full object-cover" />}
+            {/* A light passing over the cover now and then: from fully off one side to fully off the other. */}
+            <div aria-hidden className="wrapped-sheen absolute inset-y-0 -left-1/2 w-1/2 bg-[linear-gradient(105deg,transparent,rgb(255_255_255/0.5),transparent)]" />
           </div>
-          <div aria-hidden className="absolute inset-0 animate-[wrapped-sheen_3s_ease-in-out_1s_infinite] bg-[linear-gradient(115deg,transparent_35%,rgb(255_255_255/0.45)_50%,transparent_65%)] bg-[length:250%_100%]" />
         </div>
         <In delay={500}>
           <Headline look={look} className="text-4xl break-words">

@@ -311,7 +311,7 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
         </div>
         {/* The next slide's color sweeps across as it comes (not for the first). */}
         {index > 0 && transition !== 'zoom' && (
-          <TransitionLayer key={`change-${slide.id}`} kind={transition} color={palette.accent} second={look.palettes[(index + 1) % look.palettes.length]!.accent} />
+          <TransitionLayer key={`change-${slide.id}`} kind={transition} seed={`${slide.id}:${data.year}`} color={palette.accent} second={look.palettes[(index + 1) % look.palettes.length]!.accent} />
         )}
       </div>
       {last && (
