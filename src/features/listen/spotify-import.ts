@@ -82,6 +82,12 @@ interface AccountEntry {
   episodeName?: string
 }
 
+/**
+ * A play's identity: the minute it ended, and what it was. Both of Spotify's export formats give these (the account
+ * data only to the minute), so a newer export, or the other format, finds the plays already brought in.
+ */
+const playId = (end: number, by: string | null | undefined, title: string) => `${new Date(end).toISOString().slice(0, 16)}|${(by ?? '').toLowerCase()}|${title.toLowerCase()}`
+
 /** Spotify's reasons, as the server keeps them (letters only). */
 const reason = (value: string | null | undefined) => (value ? value.replace(/[^a-z]/g, '').slice(0, 20) || undefined : undefined)
 
@@ -101,7 +107,7 @@ function fromExtended(entry: ExtendedEntry): ImportPlay | null {
   if (entry.master_metadata_track_name && entry.spotify_track_uri) {
     return {
       ...common,
-      id: `${entry.ts}|${entry.spotify_track_uri}`,
+      id: playId(end, entry.master_metadata_album_artist_name, entry.master_metadata_track_name),
       kind: 'audio',
       key: entry.spotify_track_uri,
       title: entry.master_metadata_track_name,
@@ -113,7 +119,7 @@ function fromExtended(entry: ExtendedEntry): ImportPlay | null {
   if (entry.episode_name && entry.spotify_episode_uri) {
     return {
       ...common,
-      id: `${entry.ts}|${entry.spotify_episode_uri}`,
+      id: playId(end, entry.episode_show_name, entry.episode_name),
       kind: 'podcast',
       key: entry.spotify_episode_uri,
       title: entry.episode_name,
@@ -134,7 +140,7 @@ function fromAccount(entry: AccountEntry, podcast: boolean): ImportPlay | null {
   if (!title) return null
   const key = `spotify:${podcast ? 'episode' : 'track'}:${by ?? ''}|${title}`.slice(0, 200)
   return {
-    id: `${entry.endTime}|${key}`,
+    id: playId(end, by, title),
     kind: podcast ? 'podcast' : 'audio',
     key,
     title,

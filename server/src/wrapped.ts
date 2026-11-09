@@ -1,4 +1,4 @@
-import type { Store } from './store.ts'
+import type { Store, WrappedRow } from './store.ts'
 
 /**
  * Wrapped: someone's year in listening, from their plays (Lumio's own and those imported from another service), as
@@ -134,14 +134,23 @@ function rowsOfYear(store: Store, userId: string, year: number, timeZone: string
 export function wrappedYears(store: Store, userId: string, now: Date, timeZone: string) {
   return store
     .listeningYears(userId)
-    .filter((year) => wrappedReady(year, now, timeZone) && rowsOfYear(store, userId, year, timeZone).some((row) => row.kind === 'audio'))
+    .filter((year) => wrappedReady(year, now, timeZone) && enoughFor(rowsOfYear(store, userId, year, timeZone)))
     .sort((a, b) => b - a)
+}
+
+/**
+ * Enough music in a year for a Wrapped: a few dozen streams or an hour. Fewer is no year in music (a handful of plays
+ * stamped with a wrong date by a device's clock, say).
+ */
+function enoughFor(rows: WrappedRow[]) {
+  const songs = rows.filter((row) => row.kind === 'audio')
+  return songs.filter((row) => row.seconds >= STREAM_SECONDS).length >= 30 || songs.reduce((sum, row) => sum + row.seconds, 0) >= 3600
 }
 
 export function wrappedFor(store: Store, userId: string, year: number, timeZone: string): Wrapped | null {
   const rows = rowsOfYear(store, userId, year, timeZone)
   const songs = rows.filter((row) => row.kind === 'audio')
-  if (!songs.length) return null
+  if (!songs.length || !enoughFor(rows)) return null
 
   const artists = new Map<string, { name: string; minutes: number; plays: number; months: number[] }>()
   const tracks = new Map<string, WrappedTrack>()

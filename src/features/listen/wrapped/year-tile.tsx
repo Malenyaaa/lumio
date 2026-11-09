@@ -19,8 +19,9 @@ export function YearTile({ year, label }: { year: number; label: string }) {
   const next = random(year * 31 + 7)
   const palette = look.palettes[Math.floor(next() * look.palettes.length)]!
   const other = look.palettes[(look.palettes.indexOf(palette) + 1) % look.palettes.length]!
-  const pattern = PATTERNS[(year + Math.floor(next() * 3)) % PATTERNS.length]!
-  const setting = SETTINGS[Math.floor(next() * SETTINGS.length)]!
+  // Stepping by a number with no common divisor with the count, neighbouring years never share a pattern or setting.
+  const pattern = PATTERNS[(year * 3) % PATTERNS.length]!
+  const setting = SETTINGS[(year * 3 + 1) % SETTINGS.length]!
   const digits = String(year)
   return (
     <Link
@@ -33,7 +34,10 @@ export function YearTile({ year, label }: { year: number; label: string }) {
       className="group relative flex aspect-[4/5] flex-col justify-between overflow-hidden rounded-xl p-4 transition-transform duration-300 hover:-rotate-1 hover:scale-[1.02] active:scale-[0.98]"
       style={paletteStyle(palette)}
     >
-      <TilePattern pattern={pattern} color={palette.accent} second={other.accent} />
+      {/* Grows on hover as a whole; the pattern's own motion (turning, drifting) runs inside, untouched by it. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 transition-transform duration-700 group-hover:scale-110">
+        <TilePattern pattern={pattern} color={palette.accent} second={other.accent} />
+      </div>
       <span className="relative self-start rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: palette.accent, color: onAccent(palette) }}>
         {label}
       </span>
@@ -62,7 +66,7 @@ export function YearTile({ year, label }: { year: number; label: string }) {
 }
 
 function TilePattern({ pattern, color, second }: { pattern: Pattern; color: string; second: string }) {
-  const common = 'pointer-events-none absolute transition-transform duration-700 group-hover:scale-110'
+  const common = 'absolute'
   switch (pattern) {
     case 'burst':
       return <div aria-hidden className={cn(common, 'wrapped-burst wrapped-spin -top-8 -right-10 size-44')} style={{ background: color }} />
