@@ -33,8 +33,9 @@ export function PhoneMiniPlayer({ onOpen }: { onOpen?: () => void }) {
       aria-label={t.player}
       // Raises the bottom inset (index.css), so content and messages stay clear of it.
       data-mini-player
-      className="[view-transition-name:app-mini-player] fixed inset-x-2 bottom-[calc(var(--tab-bar-height)+var(--safe-bottom))] z-40 h-14 overflow-hidden rounded-lg shadow-lg animate-in fade-in-0 slide-in-from-bottom-2 duration-300 md:hidden"
-      style={{ background: `color-mix(in srgb, ${tint ?? 'var(--muted)'} 55%, var(--background))` }}
+      className="[view-transition-name:app-mini-player] fixed inset-x-2 bottom-[calc(var(--tab-bar-height)+var(--safe-bottom))] z-40 h-14 overflow-hidden rounded-lg shadow-lg ring-1 ring-foreground/10 animate-in fade-in-0 slide-in-from-bottom-2 duration-300 md:hidden"
+      // The cover's color; until it is known (or for a cover without one), a lighter grey that still stands out.
+      style={{ background: tint ? `color-mix(in srgb, ${tint} 75%, var(--background))` : 'color-mix(in srgb, var(--foreground) 16%, var(--background))' }}
     >
       <div className="flex h-full items-center gap-2.5 pr-1 pl-2">
         <button type="button" onClick={() => (onOpen ? onOpen() : void navigate(itemHref(track)))} aria-label={t.openPlayer} className="flex min-w-0 flex-1 items-center gap-2.5 text-left outline-none">

@@ -47,7 +47,19 @@ export function useDominantColor(url: string | undefined) {
           }
         }
         image.onerror = () => resolve(null)
-        image.src = url!
+        image.src = readableUrl(url!)
       }),
   })
+}
+
+/**
+ * The address to read an image's colors from. A Jellyfin picture from another address (the apps: their pages are on
+ * https://localhost) may already sit in the cache from an ordinary <img>, which wasn't fetched for reading; the canvas
+ * would get that copy and refuse. A query of its own makes it a request of its own (Jellyfin ignores the parameter).
+ */
+function readableUrl(url: string) {
+  const parsed = URL.parse(url, window.location.href)
+  if (!parsed || parsed.origin === window.location.origin || !parsed.pathname.includes('/Items/')) return url
+  parsed.searchParams.set('lumioColor', '1')
+  return parsed.toString()
 }
