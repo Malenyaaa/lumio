@@ -41,6 +41,13 @@ function dismissed() {
   }
 }
 
+/**
+ * Opened as an installed app (from the home screen or the desktop, in a window of its own): its data lives with the
+ * app, which browsers clear last, if ever; a notice there would only worry (and suggest installing what is installed).
+ */
+const installed = () =>
+  typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: window-controls-overlay)').matches || !!(navigator as { standalone?: boolean }).standalone)
+
 const supported = () => typeof navigator !== 'undefined' && !!navigator.storage?.persist && !!navigator.storage.persisted
 
 /** What the permission says without asking (Firefox and Chrome know it; null where that can't be told). */
@@ -124,7 +131,7 @@ export const persistentState = () => state
 
 /** Shows the notice again (starting a download while storage isn't kept for good). */
 export function remindPersistentStorage() {
-  if (state !== 'denied' || noticeOpen || dismissed()) return
+  if (state !== 'denied' || noticeOpen || dismissed() || installed()) return
   noticeOpen = true
   for (const listener of listeners) listener()
 }

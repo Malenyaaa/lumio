@@ -80,7 +80,8 @@ export function Section({ title, description, scope, anchor, children }: Section
         </div>
         {scope && <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs text-muted-foreground">{scope === 'account' ? t.scopeAccount : t.scopeDevice}</span>}
       </div>
-      <div className="divide-y rounded-xl border bg-card">{children}</div>
+      {/* Rows set label and control side by side by the card's own width (a panel beside it can make it narrow). */}
+      <div className="@container/settings divide-y rounded-xl border bg-card">{children}</div>
     </section>
   )
 }
@@ -123,7 +124,7 @@ interface RowProps {
 /** Label and explanation on the left, the control on the right (stacked on narrow screens). */
 export function Row({ label, hint, htmlFor, children }: RowProps) {
   return (
-    <div data-setting-row className="flex flex-col gap-2 p-4 transition-colors duration-500 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+    <div data-setting-row className="flex flex-col gap-2 p-4 transition-colors duration-500 @xl/settings:flex-row @xl/settings:items-center @xl/settings:justify-between @xl/settings:gap-6">
       <div className="min-w-0 space-y-0.5">
         <label id={htmlFor && labelId(htmlFor)} htmlFor={htmlFor} className="text-sm font-medium">
           {label}
@@ -134,7 +135,7 @@ export function Row({ label, hint, htmlFor, children }: RowProps) {
           </p>
         )}
       </div>
-      <div className="shrink-0 sm:w-72">{children}</div>
+      <div className="shrink-0 @xl/settings:w-72">{children}</div>
     </div>
   )
 }
@@ -259,7 +260,7 @@ export function ColorField({ id, label, hint, value, swatches, onChange, disable
 
   return (
     <Row label={label} hint={hint} htmlFor={id}>
-      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+      <div className="flex flex-wrap items-center gap-2 @xl/settings:justify-end">
         <div ref={group} role="radiogroup" aria-labelledby={labelId(id)} onKeyDown={onKeyDown} className="flex flex-wrap gap-1.5">
           {swatches.map((swatch, index) => {
             const checked = index === selectedIndex
@@ -317,7 +318,7 @@ interface SwitchFieldProps {
 export function SwitchField({ id, label, hint, checked, onChange, disabled }: SwitchFieldProps) {
   return (
     <Row label={label} hint={hint} htmlFor={id}>
-      <div className="flex sm:justify-end">
+      <div className="flex @xl/settings:justify-end">
         <button
           id={id}
           type="button"

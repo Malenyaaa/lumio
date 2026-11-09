@@ -11,6 +11,7 @@ import {
   IconDeviceMobile,
   IconDownload,
   IconExternalLink,
+  IconConfetti,
   IconHistory,
   IconHome,
   IconHomeFilled,
@@ -459,6 +460,10 @@ export function HeaderActions({ search = true }: { search?: boolean }) {
             )}
             <DropdownMenuItem render={<Link to={inMode(mode, '/history')} />}>
               <IconHistory /> {t.history}
+            </DropdownMenuItem>
+            {/* The year in music (Listen's), from either app. */}
+            <DropdownMenuItem render={<Link to="/listen/wrapped" />}>
+              <IconConfetti /> {t.wrapped}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             {/* One entry for all settings (their pages are listed on the settings page itself). */}

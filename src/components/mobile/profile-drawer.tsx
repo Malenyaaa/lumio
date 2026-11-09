@@ -4,6 +4,7 @@ import {
   IconDeviceMobile,
   IconDownload,
   IconExternalLink,
+  IconConfetti,
   IconHistory,
   IconLogout,
   IconMoon,
@@ -87,6 +88,7 @@ export function ProfileDrawer() {
             )}
             <Section>
               <Row icon={IconHistory} label={t.history} to={inMode(mode, '/history')} />
+              <Row icon={IconConfetti} label={t.wrapped} to="/listen/wrapped" />
               <Row icon={IconSettings} label={t.settings} to={inMode(mode, '/settings')} />
               <ThemeRow />
             </Section>

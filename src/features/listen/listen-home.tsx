@@ -26,6 +26,7 @@ import { useNewestAlbums, useRecentAlbums } from './queries'
 import { ContextMenu } from '@base-ui/react/context-menu'
 import { DropdownMenuContent } from '@/components/ui/dropdown-menu'
 import { AlbumMenuItems, ArtistMenuItems, FixedMenuItems, OfficialMenuItems, PlaylistMenuItems, PodcastMenuItems } from './library-menu'
+import { WrappedBanner } from './wrapped/wrapped-banner'
 
 const messages = defineMessages({
   de: {
@@ -127,6 +128,7 @@ export function ListenHome() {
             ? Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-14 rounded-md" />)
             : quick.map((source) => <QuickTile key={source} source={source} />)}
         </div>
+        <WrappedBanner />
       </section>
       {/* The platform's own playlists, then the user's. */}
       {(official.isLoading || official.playlists.length > 0) && (

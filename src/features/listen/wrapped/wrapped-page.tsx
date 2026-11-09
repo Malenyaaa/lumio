@@ -54,6 +54,8 @@ const messages = defineMessages({
 
 /** How long a slide stays before the next. */
 const SLIDE_MS = 8000
+/** Held this long, a slide pauses (a shorter press is a tap). */
+const HOLD_MS = 700
 
 /** Wrapped: the years to pick from (/listen/wrapped), and over it one year's story (/listen/wrapped/:year). */
 export function WrappedPage() {
@@ -175,6 +177,7 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
   const running = useRef(0)
   const [held, setHeld] = useState(false)
   const pressedAt = useRef(0)
+  const holdTimer = useRef(0)
   const last = index === slides.length - 1
   const palette = look.palettes[index % look.palettes.length]!
   const slide = slides[index]!
@@ -242,22 +245,26 @@ function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
       {look.grain && <Grain />}
       <div
         className="absolute inset-0 touch-manipulation"
-        // A tap on the left third goes back, elsewhere on; holding pauses (as in stories).
+        // A tap on the left third goes back, elsewhere on; held a moment, the slide pauses (as in stories). Tapping
+        // through never flashes the pause.
         onPointerDown={(event) => {
           if ((event.target as HTMLElement).closest('button, a')) return
           pressedAt.current = Date.now()
-          setHeld(true)
+          window.clearTimeout(holdTimer.current)
+          holdTimer.current = window.setTimeout(() => setHeld(true), HOLD_MS)
         }}
         onPointerUp={(event) => {
+          window.clearTimeout(holdTimer.current)
           setHeld(false)
           if (!pressedAt.current || (event.target as HTMLElement).closest('button, a')) return
-          const long = Date.now() - pressedAt.current > 350
+          const long = Date.now() - pressedAt.current >= HOLD_MS
           pressedAt.current = 0
           if (long) return
           const rect = event.currentTarget.getBoundingClientRect()
           go(event.clientX - rect.left < rect.width / 3 ? index - 1 : index + 1)
         }}
         onPointerCancel={() => {
+          window.clearTimeout(holdTimer.current)
           pressedAt.current = 0
           setHeld(false)
         }}
