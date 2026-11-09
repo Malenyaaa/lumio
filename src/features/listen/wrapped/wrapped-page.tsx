@@ -116,6 +116,8 @@ function WrappedStory({ year }: { year: number }) {
   const t = useMessages(messages)
   const navigate = useNavigate()
   const wrapped = useWrapped(year)
+  // The year before's (its specials aren't repeated if others stand out).
+  const previous = useWrapped(year - 1)
   const { state } = useLocation()
   // Closing goes up to the list, never forward into history: opened from the list, it is the step back; opened
   // directly (the start page's banner, a link), the story's entry becomes the list. Back then leaves Wrapped.
@@ -123,7 +125,7 @@ function WrappedStory({ year }: { year: number }) {
     (state as { fromList?: boolean } | null)?.fromList
       ? void navigate(-1)
       : void navigate('/listen/wrapped', { replace: true, state: { keepScroll: true }, preventScrollReset: true })
-  if (wrapped.isLoading || !wrapped.data) {
+  if (wrapped.isLoading || previous.isLoading || !wrapped.data) {
     return (
       <StoryFrame onClose={close} closeLabel={t.close} style={paletteStyle(LOOKS[0]!.palettes[0]!)}>
         <div className="grid h-full place-items-center p-8 text-center">
@@ -132,7 +134,7 @@ function WrappedStory({ year }: { year: number }) {
       </StoryFrame>
     )
   }
-  return <Story data={wrapped.data} onClose={close} />
+  return <Story data={wrapped.data} previous={previous.data ?? null} onClose={close} />
 }
 
 /** Over everything (the tabs and the mini player too), on the page's body; on wide screens a phone-shaped card. */
@@ -164,7 +166,7 @@ function StoryFrame({ onClose, closeLabel, style, top, children }: { onClose: ()
  * The year's slides, as the year's plan and the person's data make them (deck.ts). `?slide=<id>` shows just that slide
  * with the year's data (for working on the slides; a spotlight at `&series=<artists|songs|albums>&rank=<0…>`).
  */
-function useStorySlides(data: Wrapped): Array<StorySlide<WrappedSlide>> {
+function useStorySlides(data: Wrapped, previous: Wrapped | null): Array<StorySlide<WrappedSlide>> {
   const [params] = useSearchParams()
   const only = params.get('slide')
   const series = params.get('series')
@@ -172,17 +174,17 @@ function useStorySlides(data: Wrapped): Array<StorySlide<WrappedSlide>> {
   return useMemo(() => {
     const single = only ? SLIDES.find((slide) => slide.id === only) : undefined
     if (single) return [singleSlide(single, series, rank)]
-    return storyFor(data, SLIDES)
-  }, [data, only, series, rank])
+    return storyFor(data, SLIDES, previous)
+  }, [data, previous, only, series, rank])
 }
 
-function Story({ data, onClose }: { data: Wrapped; onClose: () => void }) {
+function Story({ data, previous, onClose }: { data: Wrapped; previous: Wrapped | null; onClose: () => void }) {
   const t = useMessages(messages)
   const navigate = useNavigate()
   const { create } = usePlaylistActions()
   // Slides that failed to draw (their data missing, say) drop out; the story goes on without them.
   const [failed, setFailed] = useState<string[]>([])
-  const drawn = useStorySlides(data)
+  const drawn = useStorySlides(data, previous)
   const slides = useMemo(() => {
     const left = drawn.filter((entry) => !failed.includes(entry.key))
     return left.length ? left : drawn.slice(-1)

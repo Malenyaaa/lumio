@@ -289,9 +289,10 @@ export interface StorySlide<S extends DeckSlide = DeckSlide> {
 /**
  * A person's story for a year: the year's plan, applied to their data. The core topics come when the data has them;
  * of the others, those the data says most about (with the year's chance in it); the year's countdowns where their
- * ranking goes deep enough; the specials the year stands out for most.
+ * ranking goes deep enough; the specials the year stands out for most, those of the year before (`previous`, when
+ * there was one) only when nothing else stands out as much.
  */
-export function storyFor<S extends DeckSlide>(data: Wrapped, slides: S[]): Array<StorySlide<S>> {
+export function storyFor<S extends DeckSlide>(data: Wrapped, slides: S[], previous?: Wrapped | null): Array<StorySlide<S>> {
   const plan = planFor(data.year, slides)
   const next = random(data.year * 31337 + 5)
   const byId = new Map(slides.map((slide) => [slide.id, slide]))
@@ -310,14 +311,8 @@ export function storyFor<S extends DeckSlide>(data: Wrapped, slides: S[]): Array
   const shown = (topic: Topic) => replaced.has(topic) || (!needless.has(topic) && (CORE.includes(topic) || optional.includes(topic)) && worth.get(topic)! > 0)
 
   // The specials the year stands out for most, each after its topic (or its part's end).
-  const specials = slides
-    .filter((slide) => slide.topic === 'special' && slide.special && (slide.since ?? FIRST_YEAR) <= data.year)
-    .map((slide) => ({ slide, strength: slide.special!(data) }))
-    .filter((entry) => entry.strength >= 1)
-    .map((entry) => ({ ...entry, draw: entry.strength * (0.8 + 0.4 * random(hash(`${entry.slide.id}:${data.year}`))()) }))
-    .sort((a, b) => b.draw - a.draw)
-    .slice(0, SPECIALS_MAX)
-    .map((entry) => entry.slide)
+  const before = new Set(previous ? specialsFor(previous, slides).map((slide) => slide.id) : [])
+  const specials = specialsFor(data, slides, before)
   const partOf = (topic: Topic) => PARTS.find((part) => part.includes(topic)) ?? [topic]
 
   const story: Array<StorySlide<S>> = []
@@ -340,6 +335,23 @@ export function storyFor<S extends DeckSlide>(data: Wrapped, slides: S[]): Array
     }
   }
   return story
+}
+
+/**
+ * The specials a year stands out for most. One the year before had (in `before`) comes again only when the year
+ * stands out for nothing else, so someone who stands out the same way every year sees it every other year.
+ */
+function specialsFor<S extends DeckSlide>(data: Wrapped, slides: S[], before = new Set<string>()) {
+  const ranked = slides
+    .filter((slide) => slide.topic === 'special' && slide.special && (slide.since ?? FIRST_YEAR) <= data.year)
+    .map((slide) => ({ slide, strength: slide.special!(data) }))
+    .filter((entry) => entry.strength >= 1)
+    // Capped, so how far one stands out doesn't decide it alone.
+    .map((entry) => ({ ...entry, draw: Math.min(2, entry.strength) * (0.8 + 0.4 * random(hash(`${entry.slide.id}:${data.year}`))()) }))
+    .sort((a, b) => b.draw - a.draw)
+    .map((entry) => entry.slide)
+  const fresh = ranked.filter((slide) => !before.has(slide.id))
+  return (fresh.length ? fresh : ranked.slice(0, 1)).slice(0, SPECIALS_MAX)
 }
 
 /** A slide on its own (`?slide=<id>`, for working on the slides): a spotlight at the place asked for, else the top. */
