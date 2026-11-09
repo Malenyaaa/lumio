@@ -1,5 +1,6 @@
 import { defineMessages, useMessages } from '@/lib/i18n'
 import { Body, type WrappedSlide, useFormats } from '../slide-kit'
+import { useBranding } from '@/features/admin/branding'
 
 const messages = defineMessages({
   de: { title: 'Dein Musikjahr', artists: 'Künstler*innen', songs: 'Songs', total: 'Summe', minutes: 'Minuten', streams: 'Streams', thanks: 'Danke fürs Zuhören!' },
@@ -13,6 +14,7 @@ export default {
   Component: ({ data }) => {
     const t = useMessages(messages)
     const { number, compact } = useFormats()
+    const { appName } = useBranding()
     const lines: Array<[string, string] | 'rule' | string> = [
       t.artists,
       ...data.topArtists.slice(0, 5).map((artist, index): [string, string] => [`${index + 1} ${artist.name}`, compact.format(artist.minutes)]),
@@ -29,7 +31,7 @@ export default {
             className="animate-in slide-in-from-top-full duration-[1600ms] ease-out fill-mode-both bg-[#fbfbf6] px-5 pt-5 pb-8 font-mono text-[13px] text-[#1a1a1a] shadow-2xl"
             style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 8px), 95% 100%, 90% calc(100% - 8px), 85% 100%, 80% calc(100% - 8px), 75% 100%, 70% calc(100% - 8px), 65% 100%, 60% calc(100% - 8px), 55% 100%, 50% calc(100% - 8px), 45% 100%, 40% calc(100% - 8px), 35% 100%, 30% calc(100% - 8px), 25% 100%, 20% calc(100% - 8px), 15% 100%, 10% calc(100% - 8px), 5% 100%, 0 calc(100% - 8px))' }}
           >
-            <p className="text-center text-base font-bold tracking-[0.2em] uppercase">Lumio</p>
+            <p className="text-center text-base font-bold tracking-[0.2em] uppercase">{appName}</p>
             <p className="text-center">
               {t.title} {data.year}
             </p>

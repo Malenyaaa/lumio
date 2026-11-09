@@ -15,15 +15,16 @@ import { contrast, Grain, paletteStyle, PausedContext, type WrappedSlide } from 
 import { SLIDES } from './slides'
 import { useWrapped, useWrappedYears, WRAPPED_RELEASE, type Wrapped } from './wrapped-data'
 import { YearTile } from './year-tile'
+import { useBranding } from '@/features/admin/branding'
 
 const messages = defineMessages({
   de: {
     title: 'Wrapped',
-    indexHint: 'Aus deinem Hörverlauf in Lumio und dem, was du von Spotify importiert hast.',
+    indexHint: (app: string) => `Aus deinem Hörverlauf in ${app} und dem, was du von Spotify importiert hast.`,
     comesOut: (date: string) => `Dein Wrapped für dieses Jahr kommt am ${date}.`,
-    empty: 'Noch kein Wrapped da. Hör Musik in Lumio oder bring deinen Spotify-Verlauf mit.',
+    empty: (app: string) => `Noch kein Wrapped da. Hör Musik in ${app} oder bring deinen Spotify-Verlauf mit.`,
     importHint: 'Spotify-Verlauf importieren',
-    unavailable: 'Der Lumio-Server ist gerade nicht erreichbar.',
+    unavailable: 'Der Server ist gerade nicht erreichbar.',
     nothing: (year: number) => `Für ${year} gibt es noch kein Wrapped.`,
     close: 'Schließen',
     paused: 'Angehalten',
@@ -36,11 +37,11 @@ const messages = defineMessages({
   },
   en: {
     title: 'Wrapped',
-    indexHint: 'From your listening history in Lumio and what you imported from Spotify.',
+    indexHint: (app: string) => `From your listening history in ${app} and what you imported from Spotify.`,
     comesOut: (date: string) => `This year's Wrapped comes out on ${date}.`,
-    empty: 'No Wrapped yet. Listen to music in Lumio or bring over your Spotify history.',
+    empty: (app: string) => `No Wrapped yet. Listen to music in ${app} or bring over your Spotify history.`,
     importHint: 'Import your Spotify history',
-    unavailable: 'The Lumio server can’t be reached right now.',
+    unavailable: 'The server can’t be reached right now.',
     nothing: (year: number) => `There’s no Wrapped for ${year} yet.`,
     close: 'Close',
     paused: 'Paused',
@@ -72,6 +73,7 @@ export function WrappedPage() {
 
 function WrappedIndex() {
   const t = useMessages(messages)
+  const { appName } = useBranding()
   const locale = getLocaleTag(useLocale())
   const years = useWrappedYears()
   const now = new Date()
@@ -80,7 +82,7 @@ function WrappedIndex() {
     <div className="space-y-6 px-4 pt-20 pb-12 sm:px-8">
       <div className="space-y-1">
         <h1 className="text-4xl font-extrabold tracking-tight">{t.title}</h1>
-        <p className="text-muted-foreground">{t.indexHint}</p>
+        <p className="text-muted-foreground">{t.indexHint(appName)}</p>
       </div>
       {now < release && <p className="rounded-lg bg-muted/60 px-4 py-3 text-sm">{t.comesOut(new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(release))}</p>}
       {years.isLoading ? (
@@ -93,7 +95,7 @@ function WrappedIndex() {
         <p className="text-sm text-muted-foreground">{t.unavailable}</p>
       ) : !years.data?.length ? (
         <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">{t.empty}</p>
+          <p className="text-sm text-muted-foreground">{t.empty(appName)}</p>
           <Button variant="outline" nativeButton={false} render={<Link to="/listen/settings/music" />}>
             {t.importHint}
           </Button>

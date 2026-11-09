@@ -10,11 +10,12 @@ import { useLumioFetch } from '@/features/social/social'
 import { importSpotify, removeSpotifyImport, spotifyImportSummary, type ImportStep } from '@/features/listen/spotify-import'
 import { defineMessages, getLocaleTag, useLocale, useMessages } from '@/lib/i18n'
 import { Row, Section } from './fields'
+import { useBranding } from '@/features/admin/branding'
 
 export const listeningHistoryMessages = defineMessages({
   de: {
     title: 'Hörverlauf',
-    description: 'Deine Wiedergaben in Lumio, und was du von Spotify mitbringst. Daraus entsteht dein Wrapped.',
+    description: (app: string) => `Deine Wiedergaben in ${app}, und was du von Spotify mitbringst. Daraus entsteht dein Wrapped.`,
     spotifyLabel: 'Spotify-Verlauf importieren',
     spotifyHint:
       'Lade deinen Spotify-Datenexport hoch (die Zip-Datei oder die JSON-Dateien darin). Am vollständigsten ist der „Erweiterte Streamingverlauf“; anfordern kannst du ihn in deinem Spotify-Konto unter Datenschutz. Die Dateien werden auf diesem Gerät gelesen, hochgeladen werden nur die Wiedergaben.',
@@ -31,9 +32,9 @@ export const listeningHistoryMessages = defineMessages({
     done: (count: string) => `${count} Wiedergaben importiert`,
     noHistory: 'In den Dateien ist kein Spotify-Hörverlauf.',
     failed: 'Der Import hat nicht geklappt. Versuch es noch einmal.',
-    unavailable: 'Der Lumio-Server ist gerade nicht erreichbar.',
+    unavailable: 'Der Server ist gerade nicht erreichbar.',
     removeTitle: 'Spotify-Verlauf entfernen?',
-    removeDescription: 'Alle importierten Spotify-Wiedergaben verschwinden aus deinem Verlauf und aus Wrapped. Was du in Lumio gehört hast, bleibt.',
+    removeDescription: (app: string) => `Alle importierten Spotify-Wiedergaben verschwinden aus deinem Verlauf und aus Wrapped. Was du in ${app} gehört hast, bleibt.`,
     cancel: 'Abbrechen',
     removed: 'Spotify-Verlauf entfernt',
     wrappedLabel: 'Wrapped',
@@ -42,7 +43,7 @@ export const listeningHistoryMessages = defineMessages({
   },
   en: {
     title: 'Listening history',
-    description: 'What you play in Lumio, and what you bring over from Spotify. Your Wrapped is made from it.',
+    description: (app: string) => `What you play in ${app}, and what you bring over from Spotify. Your Wrapped is made from it.`,
     spotifyLabel: 'Import your Spotify history',
     spotifyHint:
       'Upload your Spotify data export (the zip file or the JSON files in it). The “Extended streaming history” is the most complete; request it in your Spotify account under Privacy. The files are read on this device; only the plays are uploaded.',
@@ -59,9 +60,9 @@ export const listeningHistoryMessages = defineMessages({
     done: (count: string) => `${count} plays imported`,
     noHistory: 'There is no Spotify listening history in these files.',
     failed: 'The import didn’t work. Please try again.',
-    unavailable: 'The Lumio server can’t be reached right now.',
+    unavailable: 'The server can’t be reached right now.',
     removeTitle: 'Remove your Spotify history?',
-    removeDescription: 'All imported Spotify plays disappear from your history and from Wrapped. What you played in Lumio stays.',
+    removeDescription: (app: string) => `All imported Spotify plays disappear from your history and from Wrapped. What you played in ${app} stays.`,
     cancel: 'Cancel',
     removed: 'Spotify history removed',
     wrappedLabel: 'Wrapped',
@@ -74,6 +75,7 @@ export const listeningHistoryMessages = defineMessages({
 export function ListeningHistorySection() {
   const { api, session } = useAuthedSession()
   const t = useMessages(listeningHistoryMessages)
+  const { appName } = useBranding()
   const number = new Intl.NumberFormat(getLocaleTag(useLocale()))
   const month = new Intl.DateTimeFormat(getLocaleTag(useLocale()), { month: 'short', year: 'numeric' })
   const queryClient = useQueryClient()
@@ -114,7 +116,7 @@ export function ListeningHistorySection() {
   const data = summary.data
 
   return (
-    <Section anchor="listening-history" title={t.title} description={t.description} scope="account">
+    <Section anchor="listening-history" title={t.title} description={t.description(appName)} scope="account">
       <Row label={t.spotifyLabel} hint={t.spotifyHint} htmlFor="spotify-import">
         <div className="space-y-2">
           <input
@@ -178,7 +180,7 @@ export function ListeningHistorySection() {
       <Dialog open={confirming} onOpenChange={setConfirming}>
         <DialogContent className="sm:max-w-md">
           <DialogTitle>{t.removeTitle}</DialogTitle>
-          <DialogDescription>{t.removeDescription}</DialogDescription>
+          <DialogDescription>{t.removeDescription(appName)}</DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirming(false)}>
               {t.cancel}

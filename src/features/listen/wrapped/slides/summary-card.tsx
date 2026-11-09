@@ -1,5 +1,6 @@
 import { defineMessages, useMessages } from '@/lib/i18n'
 import { Body, In, Picture, displayClass, useArtistImage, useFormats, type WrappedSlide } from '../slide-kit'
+import { useBranding } from '@/features/admin/branding'
 
 const messages = defineMessages({
   de: { artists: 'Top-Künstler*innen', songs: 'Top-Songs', minutes: 'Minuten gehört', streams: 'Streams' },
@@ -14,6 +15,7 @@ export default {
     const t = useMessages(messages)
     const { number } = useFormats()
     const photo = useArtistImage(data.topArtists[0]?.name, 480)
+    const { appName } = useBranding()
     return (
       <Body className="justify-center pb-24">
         <In from="zoom" className="overflow-hidden rounded-2xl shadow-2xl" style={{ background: '#2a0a52', color: '#fff' }}>
@@ -46,7 +48,7 @@ export default {
               <p className={`text-3xl text-[#f1ff47] tabular-nums ${displayClass(look)}`}>{number.format(data.plays)}</p>
             </div>
           </div>
-          <p className="border-t border-white/15 px-5 py-2.5 text-xs font-bold tracking-[0.2em] uppercase">Lumio Wrapped {data.year}</p>
+          <p className="border-t border-white/15 px-5 py-2.5 text-xs font-bold tracking-[0.2em] uppercase">{appName} Wrapped {data.year}</p>
         </In>
       </Body>
     )
