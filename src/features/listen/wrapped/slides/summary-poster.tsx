@@ -2,52 +2,59 @@ import { defineMessages, useMessages } from '@/lib/i18n'
 import { Body, In, displayClass, onAccent, useFormats, type WrappedSlide } from '../slide-kit'
 
 const messages = defineMessages({
-  de: { minutes: 'Minuten', streams: 'Streams', songs: 'Songs', artists: 'Künstler*innen', top: 'Ganz vorn', song: 'Song', artist: 'Künstler*in' },
-  en: { minutes: 'Minutes', streams: 'Streams', songs: 'Songs', artists: 'Artists', top: 'On top', song: 'Song', artist: 'Artist' },
+  de: { minutes: 'Minuten', streams: 'Streams', artists: 'Top-Künstler*innen', songs: 'Top-Songs' },
+  en: { minutes: 'Minutes', streams: 'Streams', artists: 'Top artists', songs: 'Top songs' },
 })
 
-/** A poster: the year as a giant outline, a grid of tiles with the year's numbers, a striped band (op-art). */
+/** A poster: the year as a giant outline, the top five artists and songs on two panels, the year's numbers (op-art). */
 export default {
   id: 'summary-poster',
   topic: 'summary',
   Component: ({ data, look, palette }) => {
     const t = useMessages(messages)
     const { compact } = useFormats()
-    const tiles: Array<[string, string]> = [
-      [t.minutes, compact.format(data.minutes)],
-      [t.streams, compact.format(data.plays)],
-      [t.songs, compact.format(data.tracks)],
-      [t.artists, compact.format(data.artists)],
+    const lists: Array<[string, string[]]> = [
+      [t.artists, data.topArtists.slice(0, 5).map((artist) => artist.name)],
+      [t.songs, data.topTracks.slice(0, 5).map((track) => track.title)],
     ]
     return (
       <>
         <div aria-hidden className="wrapped-stripes absolute inset-x-0 top-0 h-16 opacity-25" />
-        <Body className="justify-center gap-4 pb-24">
+        <Body className="justify-center gap-3 pb-24">
           <In from="fade">
-            <p className={`wrapped-outline text-[6.5rem] leading-[0.85] ${displayClass(look)}`} style={{ WebkitTextStrokeColor: palette.color }}>{data.year}</p>
+            <p className={`wrapped-outline text-[5.5rem] leading-[0.85] ${displayClass(look)}`} style={{ WebkitTextStrokeColor: palette.color }}>
+              {data.year}
+            </p>
           </In>
-          <div className="grid grid-cols-2 gap-2">
-            {tiles.map(([label, value], index) => (
-              <In key={label} delay={200 + index * 120} from="zoom" className="rounded-xl p-3" style={index % 3 === 0 ? { background: palette.accent, color: onAccent(palette) } : { background: 'rgb(0 0 0 / 0.22)' }}>
+          {lists.map(([label, names], panel) => (
+            <In
+              key={label}
+              delay={200 + panel * 180}
+              from={panel ? 'right' : 'left'}
+              className="rounded-xl p-3"
+              style={panel ? { background: 'rgb(0 0 0 / 0.28)' } : { background: palette.accent, color: onAccent(palette) }}
+            >
+              <p className="text-xs font-bold tracking-wide uppercase">{label}</p>
+              <ol className="mt-1 space-y-0.5">
+                {names.map((name, index) => (
+                  <li key={`${index}${name}`} className="flex gap-2 truncate text-base font-extrabold">
+                    <span className={`w-4 shrink-0 ${displayClass(look)}`}>{index + 1}</span>
+                    <span className="truncate">{name}</span>
+                  </li>
+                ))}
+              </ol>
+            </In>
+          ))}
+          <In delay={600} className="grid grid-cols-2 gap-2">
+            {[
+              [t.minutes, compact.format(data.minutes)],
+              [t.streams, compact.format(data.plays)],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl bg-black/20 p-3">
                 <p className="text-xs font-bold tracking-wide uppercase">{label}</p>
-                <p className={`text-4xl tabular-nums ${displayClass(look)}`}>{value}</p>
-              </In>
+                <p className={`text-3xl tabular-nums ${displayClass(look)}`}>{value}</p>
+              </div>
             ))}
-          </div>
-          <In delay={800} className="space-y-1 rounded-xl bg-black/20 p-3">
-            <p className="text-xs font-bold tracking-wide uppercase">{t.top}</p>
-            {data.topArtists[0] && (
-              <p className="truncate text-lg">
-                <span className="opacity-75">{t.artist}: </span>
-                <span className="font-extrabold">{data.topArtists[0].name}</span>
-              </p>
-            )}
-            {data.topTracks[0] && (
-              <p className="truncate text-lg">
-                <span className="opacity-75">{t.song}: </span>
-                <span className="font-extrabold">{data.topTracks[0].title}</span>
-              </p>
-            )}
           </In>
         </Body>
       </>
