@@ -14,6 +14,7 @@ import {
   subtitlesMessages,
 } from './messages'
 import { useSettingsPages } from './settings-pages'
+import { listeningHistoryMessages } from './spotify-import-section'
 
 /** One searchable setting: where it lives, the id of its row (or section), and what it is called. */
 export interface SearchResult {
@@ -34,6 +35,7 @@ function useEntries(): Entry[] {
   const controls = useMessages(controlsMessages)
   const ui = useMessages(interfaceMessages)
   const play = useMessages(playbackMessages)
+  const history = useMessages(listeningHistoryMessages)
   const music = useMessages(musicMessages)
   const subs = useMessages(subtitlesMessages)
   const home = useMessages(homeSettingsMessages)
@@ -80,6 +82,7 @@ function useEntries(): Entry[] {
     cellular && ['music', 'music-quality-cellular', play.musicQualityCellularLabel, play.musicQualityCellularHint],
     ['music', 'concerts', music.locationLabel, `${music.concerts} ${music.locationHint}`],
     ['music', 'taste', music.taste],
+    ['music', 'spotify-import', history.spotifyLabel, `${history.title} ${history.wrappedLabel} Spotify`],
     ['home', 'home-layout', home.layoutLabel, home.layoutHint],
     ['home', 'libraries', home.libraries, home.librariesHint],
     ['interface', 'theme', ui.themeLabel, ui.themeHint],

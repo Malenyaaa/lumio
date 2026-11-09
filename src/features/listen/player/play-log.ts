@@ -41,6 +41,9 @@ interface Session {
   shuffle?: boolean
   offline?: boolean
   bufferingMs: number
+  /** A song's main artist and album (for Wrapped). */
+  artist?: string
+  album?: string
 }
 
 const PENDING_KEY = 'lumio.plays.pending'
@@ -127,6 +130,8 @@ export function logPlay(
       shuffle: details.context?.shuffle,
       offline: details.context?.offline,
       bufferingMs: 0,
+      artist: external ? undefined : (item.Artists?.[0] ?? item.AlbumArtist ?? undefined),
+      album: external ? undefined : (item.Album ?? undefined),
     }
     bufferingSince = 0
     lastTick = now

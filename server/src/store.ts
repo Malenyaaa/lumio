@@ -381,6 +381,13 @@ export class Store {
       .all(userId, before) as Array<{ artist: string | null; subtitle: string | null; first: number }>
   }
 
+  /** The distinct songs someone heard before a moment (key, and title and artist for imported ones). */
+  songsBefore(userId: string, before: number) {
+    return this.db
+      .prepare("SELECT DISTINCT item_key AS key, title, artist, subtitle FROM plays WHERE user_id = ? AND kind = 'audio' AND seconds >= 30 AND started_at < ?")
+      .all(userId, before) as Array<{ key: string; title: string; artist: string | null; subtitle: string | null }>
+  }
+
   /** The years someone listened in (as UTC years; Wrapped settles the edges in the person's time zone). */
   listeningYears(userId: string): number[] {
     const rows = this.db

@@ -16,6 +16,7 @@ import { SocialHost } from '@/features/social/social-host'
 import { HomePage } from '@/features/home/home-page'
 import { LikedSongsPage, OfficialPlaylistPage, PlaylistPage } from '@/features/listen/collection-pages'
 import { ConcertPage, ConcertsPage } from '@/features/listen/concert-pages'
+import { WrappedPage } from '@/features/listen/wrapped/wrapped-page'
 import { ArtistDiscographyPage } from '@/features/listen/artist-discography'
 import { ArtistLikedPage } from '@/features/listen/artist-liked'
 import { GuestArtistPage } from '@/features/listen/guest-artist-page'
@@ -171,6 +172,8 @@ const router = createBrowserRouter(
         <Route path="concert/:id" element={<ConcertPage />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="history" element={<HistoryPage />} />
+        <Route path="wrapped" element={<WrappedPage />} />
+        <Route path="wrapped/:year" element={<WrappedPage />} />
         {settingsRoutes()}
         <Route path="*" element={<NotFound />} />
       </Route>

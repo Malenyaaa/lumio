@@ -137,6 +137,19 @@ export function reportActivity(activity: Omit<SocialActivity, 'at'> | null) {
 
 // ---- hooks ----
 
+/** A request to the Lumio server from React, ready from the first render (the connection above is set a moment later). */
+export type LumioFetch = (path: string, init?: RequestInit) => Promise<Response>
+
+export function useLumioFetch(): LumioFetch {
+  const { session } = useAuthedSession()
+  const base = useSocialUrl()
+  return (path, init) =>
+    fetch(`${base}${path}`, {
+      ...init,
+      headers: { Authorization: `MediaBrowser Token="${session.accessToken}"`, ...(init?.body ? { 'Content-Type': 'application/json' } : {}), ...init?.headers },
+    })
+}
+
 function useCaller() {
   const { session } = useAuthedSession()
   const base = useSocialUrl()

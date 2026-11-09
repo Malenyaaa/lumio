@@ -10,7 +10,8 @@ import { isJellyfinRequest, proxyToJellyfin, proxyUpgrade } from './proxy.ts'
 import { isPrivateAddress } from './addresses.ts'
 import { latestApps } from './apps.ts'
 import { creditsOfRecording, lookupCredits, sameName, searchRecordings, type Failure, type JobState, type TrackCredits, type TrackMeta } from './credits.ts'
-import { DEFAULT_PRIVACY, Store, type Activity, type Person, type Privacy } from './store.ts'
+import { DEFAULT_PRIVACY, Store, type Activity, type ImportedPlay, type Person, type Privacy } from './store.ts'
+import { validTimeZone, wrappedFor, wrappedReady, wrappedYears } from './wrapped.ts'
 import { LANGS, detectLanguage, localizeTitle, type Lang, type LanguageDeps, type LocalImage, type LocalImageKind, type Localized, type LocalizedMeta, type Texts, type VideoItem } from './languages.ts'
 
 /**
@@ -65,6 +66,12 @@ const IMAGE_DIR = join(DATA_DIR, 'images')
 const UPLOAD_DIR = join(DATA_DIR, 'localized-images')
 /** Largest text body (an item's texts in both languages). */
 const TEXT_BODY_LIMIT = 64 * 1024
+/** Largest part of an imported listening history (the app sends it in parts of a few thousand plays). */
+const IMPORT_BODY_LIMIT = 4 * 1024 * 1024
+/** Most plays in one part of an import. */
+const IMPORT_BATCH = 5000
+/** Services whose listening history can be imported. */
+const IMPORT_SOURCES = new Set(['spotify'])
 const RELAY_DIR = join(DATA_DIR, 'relay')
 /** Largest podcast feed, chapter list or transcript relayed (bytes). */
 const FEED_LIMIT = 15 * 1024 * 1024
@@ -1428,6 +1435,8 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
         shuffle: typeof body?.shuffle === 'boolean' ? body.shuffle : undefined,
         offline: typeof body?.offline === 'boolean' ? body.offline : undefined,
         bufferingMs: Number.isFinite(Number(body?.bufferingMs)) ? Math.max(0, Math.round(Number(body?.bufferingMs))) : undefined,
+        artist: text(body?.artist),
+        album: text(body?.album),
       })
       return send(response, 204)
     }
@@ -1436,6 +1445,69 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
       const before = Number(url.searchParams.get('before')) || undefined
       return send(response, 200, store.plays(me.id, limit, before))
     }
+  }
+
+  // POST /me/imports/:source {plays: [...]}: a part of the person's listening history from another service (Spotify),
+  // read from its export by the app, which also found the songs in the library. Imported again, nothing doubles.
+  // GET /me/imports/:source: how much was brought in. DELETE /me/imports/:source: takes it all out again.
+  const imports = path.match(/^\/me\/imports\/([a-z]+)$/)
+  if (imports) {
+    const source = imports[1]!
+    if (!IMPORT_SOURCES.has(source)) return send(response, 404, { error: 'Unknown service' })
+    if (request.method === 'GET') return send(response, 200, store.importedSummary(me.id, source))
+    if (request.method === 'DELETE') {
+      store.deleteImported(me.id, source)
+      return send(response, 204)
+    }
+    if (request.method === 'POST') {
+      const body = await readJson<{ plays?: unknown }>(request, IMPORT_BODY_LIMIT).catch(() => null)
+      if (!Array.isArray(body?.plays) || body.plays.length > IMPORT_BATCH) return send(response, 400, { error: 'Bad import' })
+      const text = (value: unknown, max = 300) => (typeof value === 'string' && value.trim() ? value.slice(0, max) : undefined)
+      const reason = (value: unknown) => (typeof value === 'string' && /^[a-z]{2,20}$/.test(value) ? value : undefined)
+      const plays: ImportedPlay[] = []
+      for (const raw of body.plays as Array<Record<string, unknown>>) {
+        const id = text(raw?.id, 120)
+        const key = text(raw?.key, 200)
+        const title = text(raw?.title)
+        const startedAt = Number(raw?.startedAt)
+        const seconds = Math.round(Number(raw?.seconds))
+        if (!id || !key || !title || !Number.isFinite(startedAt) || startedAt > Date.now() || !Number.isFinite(seconds) || seconds <= 0 || seconds > 24 * 3600) continue
+        plays.push({
+          // The same play imported again (same time and track) keeps its session.
+          session: `import:${source}:${createHash('sha1').update(`${me.id}|${id}`).digest('hex')}`,
+          kind: raw.kind === 'podcast' ? 'podcast' : 'audio',
+          key,
+          title,
+          subtitle: text(raw.subtitle),
+          artist: text(raw.artist),
+          album: text(raw.album),
+          contextId: text(raw.contextId, 100),
+          client: text(raw.client, 100) ?? source,
+          startedAt,
+          seconds,
+          reasonStart: reason(raw.reasonStart),
+          reasonEnd: reason(raw.reasonEnd),
+          shuffle: typeof raw.shuffle === 'boolean' ? raw.shuffle : undefined,
+          offline: typeof raw.offline === 'boolean' ? raw.offline : undefined,
+        })
+      }
+      store.importPlays(me.id, source, plays)
+      return send(response, 200, { imported: plays.length })
+    }
+  }
+
+  // GET /me/wrapped?tz=: the years whose Wrapped is ready (the running one from 12 December on).
+  // GET /me/wrapped/:year?tz=: that year's Wrapped (404 when there was nothing, 403 before it is ready).
+  if (path === '/me/wrapped' && request.method === 'GET') {
+    return send(response, 200, { years: wrappedYears(store, me.id, new Date(), validTimeZone(url.searchParams.get('tz'))) })
+  }
+  const wrappedYear = path.match(/^\/me\/wrapped\/(\d{4})$/)
+  if (wrappedYear && request.method === 'GET') {
+    const year = Number(wrappedYear[1])
+    const timeZone = validTimeZone(url.searchParams.get('tz'))
+    if (!wrappedReady(year, new Date(), timeZone)) return send(response, 403, { error: 'Not yet' })
+    const wrapped = wrappedFor(store, me.id, year, timeZone)
+    return wrapped ? send(response, 200, wrapped) : send(response, 404, { error: 'Nothing played that year' })
   }
 
   // GET /admin/plays?from=&to=: everyone's plays in a time span (ms), with who played them.

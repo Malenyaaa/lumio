@@ -10,6 +10,7 @@ import { Row, Section, SelectField, SettingsPage, SwitchField } from './fields'
 import { SAME_AS_WIFI, useLocalSettings } from './local-settings'
 import { networkTypeKnown } from '@/lib/network'
 import { playbackMessages, musicMessages } from './messages'
+import { ListeningHistorySection } from './spotify-import-section'
 
 const QUALITIES = [320, 256, 192, 128]
 
@@ -95,6 +96,7 @@ export function MusicPage() {
         </Row>
       </Section>
 
+      <ListeningHistorySection />
       <TasteExclusionsSection />
       <LocationDialog open={picking} onOpenChange={setPicking} />
     </SettingsPage>
