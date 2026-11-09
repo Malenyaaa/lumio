@@ -59,8 +59,9 @@ const PARTS: Topic[][] = [
 /** The topics with a slide for every year (when the data has something for them). */
 const CORE: Topic[] = ['intro', 'minutes', 'top-artist', 'top-artists', 'top-song', 'top-songs', 'summary']
 
-/** The topics a ranking's countdown takes the place of. */
+/** The topics a ranking's countdown takes the place of, and the list it makes needless when it goes five deep. */
 const COUNTDOWN_OF: Record<Series, Topic> = { artists: 'top-artist', songs: 'top-song', albums: 'album' }
+const LIST_OF: Partial<Record<Series, Topic>> = { artists: 'top-artists', songs: 'top-songs' }
 
 /** The countdowns a year can have (one drawn per year, never the same as the year before's). */
 const COUNTDOWNS: Array<Array<{ series: Series; count: number }>> = [
@@ -292,6 +293,7 @@ export function storyFor<S extends DeckSlide>(data: Wrapped, slides: S[]): Array
   const byId = new Map(slides.map((slide) => [slide.id, slide]))
   const countdowns = plan.countdowns.map((countdown) => ({ ...countdown, count: spotsOf(countdown.series, data, countdown.count) })).filter((countdown) => countdown.count >= 2)
   const replaced = new Map(countdowns.map((countdown) => [COUNTDOWN_OF[countdown.series], countdown]))
+  const needless = new Set(countdowns.filter((countdown) => countdown.count >= 5).map((countdown) => LIST_OF[countdown.series]))
   const spotSlides = sum(countdowns.map((countdown) => countdown.count))
 
   const worth = new Map(plan.order.map((topic) => [topic, topicWorth(topic, data)]))
@@ -301,7 +303,7 @@ export function storyFor<S extends DeckSlide>(data: Wrapped, slides: S[]): Array
     .sort((a, b) => b.draw - a.draw)
     .slice(0, Math.max(3, OPTIONAL_MAX - Math.floor(spotSlides / 3)))
     .map((entry) => entry.topic)
-  const shown = (topic: Topic) => replaced.has(topic) || ((CORE.includes(topic) || optional.includes(topic)) && worth.get(topic)! > 0)
+  const shown = (topic: Topic) => replaced.has(topic) || (!needless.has(topic) && (CORE.includes(topic) || optional.includes(topic)) && worth.get(topic)! > 0)
 
   // The specials the year stands out for most, each after its topic (or its part's end).
   const specials = slides

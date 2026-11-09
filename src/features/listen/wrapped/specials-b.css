@@ -1,0 +1,59 @@
+/* Wrapped: the motion of some special and month slides (slides/special-*.tsx, slides/months-*.tsx). */
+
+/* A tile turning over to its face. */
+.wrapped-sb-flip {
+  backface-visibility: hidden;
+  animation: wrapped-sb-flip 700ms cubic-bezier(0.2, 0.85, 0.25, 1.2) both;
+}
+
+@keyframes wrapped-sb-flip {
+  from {
+    opacity: 0;
+    transform: perspective(600px) rotateY(-100deg);
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+/* The sun coming up over the horizon. */
+.wrapped-sb-sunrise {
+  animation: wrapped-sb-sunrise 2.4s cubic-bezier(0.2, 0.8, 0.2, 1) 200ms both;
+}
+
+@keyframes wrapped-sb-sunrise {
+  from {
+    transform: translateY(70%);
+    filter: saturate(0.4) brightness(0.7);
+  }
+}
+
+/* A star blinking now and then. */
+.wrapped-sb-twinkle {
+  animation: wrapped-sb-twinkle 2.8s ease-in-out infinite alternate;
+}
+
+@keyframes wrapped-sb-twinkle {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.35;
+  }
+}
+
+/* A tick of the ring lighting up as the loop comes round. */
+.wrapped-sb-tick {
+  animation: wrapped-sb-tick 3s linear infinite;
+}
+
+@keyframes wrapped-sb-tick {
+  0%,
+  6% {
+    opacity: 1;
+  }
+  30%,
+  to {
+    opacity: 0.3;
+  }
+}

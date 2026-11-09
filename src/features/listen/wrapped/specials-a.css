@@ -1,0 +1,58 @@
+/* Wrapped: the motion of some special slides (slides/special-*.tsx). */
+
+/* An SVG arc (pathLength 100, its dash set inline) filling up from nothing. */
+.wrapped-sa-arc {
+  animation: wrapped-sa-arc 1.6s cubic-bezier(0.3, 0.8, 0.3, 1) both;
+}
+
+@keyframes wrapped-sa-arc {
+  from {
+    stroke-dasharray: 0 100;
+  }
+}
+
+/* A sleeve dealt onto the stack from above. */
+.wrapped-sa-deal {
+  animation: wrapped-sa-deal 700ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+@keyframes wrapped-sa-deal {
+  from {
+    opacity: 0;
+    transform: translateY(-140px) rotate(-20deg) scale(1.15);
+  }
+}
+
+/* A star twinkling. */
+.wrapped-sa-twinkle {
+  animation: wrapped-sa-twinkle 3s ease-in-out infinite alternate;
+}
+
+@keyframes wrapped-sa-twinkle {
+  from {
+    opacity: 0.15;
+  }
+}
+
+/* The moon rising and glowing. */
+.wrapped-sa-moon {
+  animation: wrapped-sa-moon 1.6s cubic-bezier(0.2, 0.85, 0.25, 1) both;
+}
+
+@keyframes wrapped-sa-moon {
+  from {
+    opacity: 0;
+    transform: translateY(60px) rotate(-30deg);
+  }
+}
+
+/* A marker bobbing over its spot. */
+.wrapped-sa-bob {
+  animation: wrapped-sa-bob 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes wrapped-sa-bob {
+  to {
+    transform: translateY(-5px);
+  }
+}
