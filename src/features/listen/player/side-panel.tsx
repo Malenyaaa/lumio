@@ -528,9 +528,13 @@ function QualityView({ track }: { track: BaseItemDto }) {
     ]
       .filter(Boolean)
       .join(' · ')
-  // Data per hour from the bitrate (lossless files: the file's own).
-  const perHour = (playing.bitrate ?? source.bitrate ?? 0) * 3600 / 8
-  const amount = perHour >= 1e9 ? `${number.format(perHour / 1e9)} GB` : `${Math.round(perHour / 1e6)} MB`
+  // Data per hour, as Spotify gives it: lossless at most what the PCM would be (FLAC never weighs more), rounded up
+  // to a tenth of a GB; lossy from the bitrate.
+  const pcm = quality.lossless && playing.bitDepth && playing.sampleRate ? playing.bitDepth * playing.sampleRate * (source.channels ?? 2) : 0
+  const perHour = (pcm || playing.bitrate || source.bitrate || 0) * 3600 / 8
+  const amount = pcm
+    ? `${number.format(Math.ceil(perHour / 1e8) / 10)} GB`
+    : perHour >= 1e9 ? `${number.format(perHour / 1e9)} GB` : `${Math.round(perHour / 1e6)} MB`
   return (
     <div className="space-y-4">
       <div className="space-y-4 rounded-xl bg-muted/60 p-5">
