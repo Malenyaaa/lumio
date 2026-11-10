@@ -99,7 +99,7 @@ export function PlayerControls({
 
   return (
     <div className="absolute inset-x-0 bottom-0 z-10 bg-linear-to-t from-black/80 via-black/40 to-transparent pt-16 pr-[max(1rem,var(--safe-right))] pb-[max(1rem,var(--safe-bottom))] pl-[max(1rem,var(--safe-left))] text-white sm:pr-[max(2rem,var(--safe-right))] sm:pl-[max(2rem,var(--safe-left))]">
-      <SeekBar currentTime={state.currentTime} duration={state.duration} buffered={state.buffered} onSeek={onSeek} frameAt={frameAt} pictureArea={pictureArea} onScrub={onScrub} />
+      <SeekBar currentTime={state.currentTime} duration={state.duration} buffered={state.buffered} ranges={state.ranges} onSeek={onSeek} frameAt={frameAt} pictureArea={pictureArea} onScrub={onScrub} />
 
       <div className="flex items-center gap-1">
         {!touch && (
@@ -209,7 +209,11 @@ export function TouchTransport({
   const BackIcon = BACK_ICONS[skipBackSeconds as keyof typeof BACK_ICONS] ?? IconRewindBackward10
   const ForwardIcon = FORWARD_ICONS[skipForwardSeconds as keyof typeof FORWARD_ICONS] ?? IconRewindForward10
   // Hidden controls can't be hit: a tap on the picture then only brings them back.
-  const round = cn(visible ? 'pointer-events-auto' : 'pointer-events-none', 'grid place-items-center rounded-full bg-black/35 text-white outline-none backdrop-blur-sm active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-white/70')
+  // Each button fades by itself (not a parent): see the player, the blur must stay on while it fades in.
+  const round = cn(
+    visible ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0',
+    'grid place-items-center rounded-full bg-black/35 text-white outline-none backdrop-blur-sm active:scale-95 transition-[opacity,scale] duration-300 focus-visible:ring-2 focus-visible:ring-white/70',
+  )
   return (
     // Taps beside the buttons reach the picture (show/hide the controls, double tap to skip).
     <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-10">

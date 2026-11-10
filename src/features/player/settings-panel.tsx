@@ -8,6 +8,7 @@ import { settingsPanelMessages } from './messages'
 import { moveMenuFocus, usePanelFocus } from './panel-focus'
 import { QUALITY_OPTIONS, type StreamOption } from './playback'
 import { DownloadGlyph } from '@/features/listen/download-ui'
+import { setVideoSleepTimer, useVideoSleepTimer } from './watch-timers'
 
 interface SettingsPanelProps {
   audio: StreamOption[]
@@ -45,7 +46,25 @@ interface SettingsPanelProps {
   audioOnly?: boolean
 }
 
-type Page = 'main' | 'audio' | 'subtitles' | 'quality' | 'speed' | 'fit'
+type Page = 'main' | 'audio' | 'subtitles' | 'quality' | 'speed' | 'fit' | 'sleep'
+
+const SLEEP_MINUTES = [15, 30, 45, 60, 90, 120]
+
+/** Minutes left on the sleep timer, updated while it runs. */
+function useMinutesLeft(endsAt: number | null) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!endsAt) return
+    // Right away too: a timer just set is counted from now, not from when the panel opened.
+    const first = window.setTimeout(() => setNow(Date.now()), 0)
+    const tick = window.setInterval(() => setNow(Date.now()), 15_000)
+    return () => {
+      window.clearTimeout(first)
+      window.clearInterval(tick)
+    }
+  }, [endsAt])
+  return endsAt ? Math.max(0, Math.ceil((endsAt - now) / 60_000)) : null
+}
 
 
 
@@ -125,6 +144,9 @@ export function SettingsPanel({
   const fitNames = useMessages(fitLabels)
   const locale = useLocale()
   const [page, setPage] = useState<Page>('main')
+  const sleep = useVideoSleepTimer()
+  const sleepLeft = useMinutesLeft(sleep.endsAt)
+  const sleepActive = sleep.endsAt !== null || sleep.endOfVideo
   // Which way the content slides: into a submenu from the right, back to the overview from the left. Nothing on open.
   const [direction, setDirection] = useState<'forward' | 'back' | null>(null)
   const open = (next: Exclude<Page, 'main'>) => {
@@ -180,6 +202,10 @@ export function SettingsPanel({
     { page: 'speed', label: t.speed, value: speedLabel(speed, locale), disabled: speedLocked },
     ...(fit && onFit
       ? [{ page: 'fit' as const, label: t.fit, value: fit === 'auto' && autoFitLabel ? t.autoShort(autoFitLabel) : fitNames[fit] }]
+      : []),
+    // Music has its own; the timer is for falling asleep in front of a film or a series.
+    ...(!audioOnly
+      ? [{ page: 'sleep' as const, label: t.sleep, value: sleep.endOfVideo ? t.sleepAtEnd : sleepLeft !== null ? t.sleepLeft(sleepLeft) : t.off }]
       : []),
   ]
   const rows = audioOnly ? allRows.filter((row) => row.page === 'speed' || (row.page === 'audio' && audio.length > 1)) : allRows
@@ -290,6 +316,22 @@ export function SettingsPanel({
               {speedLabel(option, locale)}
             </Choice>
           ))}
+        </Submenu>
+      )}
+
+      {page === 'sleep' && (
+        <Submenu title={t.sleep} onBack={back}>
+          <Choice selected={!sleepActive} onSelect={pick(() => setVideoSleepTimer(null))}>
+            {t.off}
+          </Choice>
+          {SLEEP_MINUTES.map((minutes) => (
+            <Choice key={minutes} selected={false} onSelect={pick(() => setVideoSleepTimer(minutes))}>
+              {t.minutes(minutes)}
+            </Choice>
+          ))}
+          <Choice selected={sleep.endOfVideo} onSelect={pick(() => setVideoSleepTimer('video'))}>
+            {t.endOfVideo}
+          </Choice>
         </Submenu>
       )}
 

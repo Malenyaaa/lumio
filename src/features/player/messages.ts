@@ -101,6 +101,23 @@ export const episodeMessages = defineMessages({
   },
 })
 
+export const breakMessages = defineMessages({
+  de: {
+    title: 'Zeit für eine Pause?',
+    body: (hours: string) => `Du schaust seit ${hours} Videos. Die Wiedergabe ist angehalten – steh kurz auf, trink etwas oder gönn den Augen eine Pause.`,
+    hours: (minutes: number) => (minutes === 60 ? 'einer Stunde' : `${String(minutes / 60).replace('.', ',')} Stunden`),
+    resume: 'Weiterschauen',
+    leave: 'Player schließen',
+  },
+  en: {
+    title: 'Time for a break?',
+    body: (hours: string) => `You've been watching for ${hours}. Playback is paused: stand up, have a drink or give your eyes a rest.`,
+    hours: (minutes: number) => (minutes === 60 ? 'an hour' : `${minutes / 60} hours`),
+    resume: 'Keep watching',
+    leave: 'Close the player',
+  },
+})
+
 export const settingsPanelMessages = defineMessages({
   de: {
     onDevice: 'Auf dem Gerät: spielt offline',
@@ -116,6 +133,11 @@ export const settingsPanelMessages = defineMessages({
     autoShort: (fit: string) => `Auto (${fit})`,
     autoLong: (fit: string) => `Automatisch (${fit})`,
     stats: 'Statistik für Interessierte',
+    sleep: 'Sleep-Timer',
+    minutes: (n: number) => (n === 60 ? '1 Stunde' : n % 60 === 0 ? `${n / 60} Stunden` : `${n} Minuten`),
+    endOfVideo: 'Ende dieses Videos',
+    sleepLeft: (n: number) => (n <= 1 ? '< 1 Min.' : `${n} Min.`),
+    sleepAtEnd: 'Am Ende',
   },
   en: {
     onDevice: 'On the device: plays offline',
@@ -131,6 +153,11 @@ export const settingsPanelMessages = defineMessages({
     autoShort: (fit: string) => `Auto (${fit})`,
     autoLong: (fit: string) => `Automatic (${fit})`,
     stats: 'Stats for nerds',
+    sleep: 'Sleep timer',
+    minutes: (n: number) => (n === 60 ? '1 hour' : n % 60 === 0 ? `${n / 60} hours` : `${n} minutes`),
+    endOfVideo: 'End of this video',
+    sleepLeft: (n: number) => (n <= 1 ? '< 1 min' : `${n} min`),
+    sleepAtEnd: 'At the end',
   },
 })
 

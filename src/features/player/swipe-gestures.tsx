@@ -24,6 +24,10 @@ const SLOP = 12
 /** Pulled this far below no brightness, it switches to the system's automatic brightness. */
 const AUTO_BELOW = -0.12
 
+/** Handing the screen its own brightness back waits this long: the next episode's player keeps it instead (no flash). */
+const RESET_DELAY_MS = 400
+let pendingReset: number | undefined
+
 /** The levels set last, for the next film or episode: brightness ('auto' = the system's), volume. */
 const STORE_KEY = 'lumio.player.levels'
 
@@ -63,6 +67,7 @@ export function useSwipeGestures(enabled: boolean, deadzone: number) {
 
   useEffect(() => {
     if (!enabled) return
+    window.clearTimeout(pendingReset)
     const saved = readStored()
     if (typeof saved.brightness === 'number') {
       auto.current = false
@@ -73,8 +78,10 @@ export function useSwipeGestures(enabled: boolean, deadzone: number) {
       current.current.volume = saved.volume
       void SystemControls.setVolume({ value: saved.volume }).catch(() => undefined)
     } else void SystemControls.getVolume().then(({ value }) => (current.current.volume = value)).catch(() => undefined)
-    // Leaving the player gives the screen back its own brightness.
-    return () => void SystemControls.resetBrightness().catch(() => undefined)
+    // Leaving the player gives the screen back its own brightness (not between two episodes, see RESET_DELAY_MS).
+    return () => {
+      pendingReset = window.setTimeout(() => void SystemControls.resetBrightness().catch(() => undefined), RESET_DELAY_MS)
+    }
   }, [enabled])
 
   // The bar fades a moment after the finger lifts.

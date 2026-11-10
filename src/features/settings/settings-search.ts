@@ -96,6 +96,7 @@ function useEntries(): Entry[] {
     ['controls', 'keyboard-shortcuts', controls.shortcutsLabel, controls.shortcutsHint],
     ['controls', 'controls-hide', controls.hideLabel, controls.hideHint],
     ['controls', 'pause-spotlight', controls.spotlightLabel, controls.spotlightHint],
+    ['controls', 'break-reminder', controls.breakLabel, controls.breakHint],
     inCapacitor() && ['controls', 'player-gestures', controls.gesturesLabel, controls.gesturesHint],
     inCapacitor() && ['controls', 'player-gesture-deadzone', controls.deadzoneLabel, controls.deadzoneHint],
     ['downloads', 'storage', play.storage, play.storageDescription],

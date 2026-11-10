@@ -80,6 +80,8 @@ export interface LocalSettings {
   controlsHideSeconds: number
   /** Show the title and description overlay on a paused video (0 = never). */
   pauseSpotlightSeconds: number
+  /** After this many minutes of watching videos without a break, playback pauses and suggests one (0 = never). */
+  breakReminderMinutes: number
   /** Lumio's Android app: leaving it while a video plays shrinks the video into a floating window. */
   autoPip: boolean
   /** Lumio's Android app: swiping up and down in the video player sets the brightness (left) and the volume (right). */
@@ -159,6 +161,7 @@ export const ACCOUNT_SETTINGS = [
   'hoverDelayMs',
   'controlsHideSeconds',
   'pauseSpotlightSeconds',
+  'breakReminderMinutes',
   'pageAnimations',
   'toasts',
   'smoothScrolling',
@@ -209,6 +212,7 @@ export const DEFAULT_SETTINGS: LocalSettings = {
   hoverDelayMs: 550,
   controlsHideSeconds: 3,
   pauseSpotlightSeconds: 10,
+  breakReminderMinutes: 120,
   autoPip: true,
   playerGestures: true,
   playerGestureDeadzone: 10,

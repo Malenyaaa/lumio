@@ -7,6 +7,8 @@ export interface VideoState {
   duration: number
   /** End of the buffered range that contains the playhead. */
   buffered: number
+  /** Every buffered stretch, [start, end] in seconds: parts further on that were loaded before (jumped to and back) too. */
+  ranges: Array<[number, number]>
   volume: number
   muted: boolean
   waiting: boolean
@@ -16,18 +18,21 @@ const BUFFER_POLL_MS = 250
 const VOLUME_KEY = 'lumio.player.volume'
 const MUTED_KEY = 'lumio.player.muted'
 
-const initial: VideoState = { paused: true, currentTime: 0, duration: 0, buffered: 0, volume: 1, muted: false, waiting: true }
+const initial: VideoState = { paused: true, currentTime: 0, duration: 0, buffered: 0, ranges: [], volume: 1, muted: false, waiting: true }
 
 function read(el: HTMLVideoElement, waiting: boolean): VideoState {
   let buffered = 0
+  const ranges: Array<[number, number]> = []
   for (let i = 0; i < el.buffered.length; i++) {
     if (el.buffered.start(i) <= el.currentTime && el.buffered.end(i) >= el.currentTime) buffered = el.buffered.end(i)
+    ranges.push([el.buffered.start(i), el.buffered.end(i)])
   }
   return {
     paused: el.paused,
     currentTime: el.currentTime,
     duration: Number.isFinite(el.duration) ? el.duration : 0,
     buffered,
+    ranges,
     // The slider's position, not the element's (linear) volume.
     volume: levelOf(el.volume),
     muted: el.muted,
@@ -45,7 +50,9 @@ function changed(a: VideoState, b: VideoState) {
     a.volume !== b.volume ||
     a.duration !== b.duration ||
     quarter(a.currentTime) !== quarter(b.currentTime) ||
-    quarter(a.buffered) !== quarter(b.buffered)
+    quarter(a.buffered) !== quarter(b.buffered) ||
+    a.ranges.length !== b.ranges.length ||
+    a.ranges.some(([start, end], i) => quarter(start) !== quarter(b.ranges[i][0]) || quarter(end) !== quarter(b.ranges[i][1]))
   )
 }
 

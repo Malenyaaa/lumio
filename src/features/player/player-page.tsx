@@ -43,7 +43,7 @@ import { forgetVideo, isVideoCached, isVideoPinned, storedAudio, storedQuality, 
 import { useOffline } from '@/lib/network'
 import { useBackLayer } from '@/lib/back'
 import { useTouch } from '@/lib/use-media-query'
-import { inNativeApp, setAppFullscreen } from '@/lib/native-app'
+import { holdAppFullscreen, inNativeApp } from '@/lib/native-app'
 import { inCapacitor, onPipEvents, setAutoPip } from '@/lib/capacitor'
 import { startAfterIntro, useMediaSegments } from './segments'
 import { fitLabels } from './labels'
@@ -54,6 +54,8 @@ import { usePreloadTrickplay, useTrickplay } from './trickplay'
 import { useVideoState } from './use-video-state'
 import { resolveFit, useElementSize, usePictureArea, useVideoDimensions, videoLayout } from './video-fit'
 import { useLumioConfig } from '@/features/admin/branding'
+import { BreakReminder } from './break-reminder'
+import { noteWatched, setVideoPauseHandler, sleepsAfterVideo } from './watch-timers'
 
 const PROGRESS_INTERVAL_MS = 10_000
 /** Seconds of video that count as "enough buffered" for the loading percentage. */
@@ -94,11 +96,26 @@ export function PlayerPage() {
     return <RemoteHandoff id={id} ticks={ticks} audio={numberParam(search.get('a'))} subtitle={numberParam(search.get('s'))} target={remote.target} />
   }
   if (!playsHere && remote.group) return <SyncPlayHandoff id={id} ticks={ticks} />
-  // Keyed per navigation, not per item: a new start position or track choice for the same item starts fresh.
-  return <Player key={location.key} id={id} />
+  // Keyed per navigation, not per item: a new start position or track choice for the same item starts fresh. The shell
+  // around it stays from one episode to the next, so a browser's fullscreen (and the phone's turn) lasts across them.
+  return <PlayerShell id={id} navigationKey={location.key} />
 }
 
-function Player({ id }: { id: string }) {
+function PlayerShell({ id, navigationKey }: { id: string; navigationKey: string }) {
+  const shell = useRef<HTMLDivElement>(null)
+  return (
+    <div ref={shell} className="relative h-svh overflow-clip bg-black">
+      <Player key={navigationKey} id={id} shell={shell} />
+    </div>
+  )
+}
+
+/** Set on the way to the next episode from the player: it starts on black, not on the title's picture again. */
+interface ContinuingState {
+  continuing?: boolean
+}
+
+function Player({ id, shell }: { id: string; shell: React.RefObject<HTMLDivElement | null> }) {
   const [search] = useSearchParams()
   const initialTicks = Number(search.get('t') ?? 0)
   const navigate = useNavigate()
@@ -195,6 +212,7 @@ function Player({ id }: { id: string }) {
     ...rawState,
     currentTime: rawState.currentTime + timelineOffset,
     buffered: rawState.buffered + timelineOffset,
+    ranges: rawState.ranges.map(([start, end]): [number, number] => [start + timelineOffset, end + timelineOffset]),
     duration: timelineOffset || !rawState.duration ? runtimeSeconds || rawState.duration : rawState.duration,
   }
   const frameAt = useTrickplay(item.data, data?.mediaSourceId)
@@ -214,7 +232,7 @@ function Player({ id }: { id: string }) {
   const autoplayNext = isAudio || (userConfig.data?.Configuration?.EnableNextEpisodeAutoPlay ?? true)
 
   const playNext = useCallback(() => {
-    if (next?.Id) void navigate(`/play/${next.Id}`, { replace: true })
+    if (next?.Id) void navigate(`/play/${next.Id}`, { replace: true, state: { continuing: true } satisfies ContinuingState })
   }, [next, navigate])
   // Playback speed: starts at the default from the settings; a SyncPlay group always plays at normal speed.
   const [rate, setRate] = useState(settings.playbackRate)
@@ -235,9 +253,36 @@ function Player({ id }: { id: string }) {
     if (item.data && !isAudio) logOfflineWatch(item.data, watch.startedAt, watch.seconds, watch.sessionId)
   })
 
+  // The sleep timer and the break reminder pause whichever player is open (in a group: ask the group to).
+  const pauseForSleep = useRef(() => undefined as void)
+  useEffect(() => {
+    pauseForSleep.current = () => {
+      const el = video.current
+      if (!el || el.paused) return
+      if (syncActive) remote.syncRequests.pause()
+      else el.pause()
+    }
+  })
+  useEffect(() => {
+    if (isAudio) return
+    setVideoPauseHandler(() => pauseForSleep.current())
+    return () => setVideoPauseHandler(null)
+  }, [isAudio])
+  // Watched long enough without a break: pause and suggest one (the minutes it was due after).
+  const [breakDue, setBreakDue] = useState<number | null>(null)
+  const onWatchedStep = useEffectEvent((seconds: number) => {
+    if (isAudio || !noteWatched(seconds, settings.breakReminderMinutes)) return
+    pauseForSleep.current()
+    setSettingsOpen(false)
+    setEpisodesOpen(false)
+    setBreakDue(settings.breakReminderMinutes)
+  })
+
   const handleEnded = useEffectEvent(() => {
     // Watched to the end: a copy stored ahead has done its job (episodes are rarely watched twice); downloads stay.
     if (isVideoCached(id) && !isVideoPinned(id)) void forgetVideo(id)
+    // The sleep timer was set to the end of this video: it stops here instead of going on.
+    if (!isAudio && sleepsAfterVideo()) return
     // In a group the server advances the queue for everyone; each member doing it would race.
     if (autoplayNext && !syncActive) playNext()
   })
@@ -278,7 +323,10 @@ function Player({ id }: { id: string }) {
     const onTime = () => {
       if (!element.paused && lastTime !== null) {
         const step = element.currentTime - lastTime
-        if (step > 0 && step < 3) watch.seconds += step
+        if (step > 0 && step < 3) {
+          watch.seconds += step
+          onWatchedStep(step)
+        }
       }
       lastTime = element.currentTime
     }
@@ -476,7 +524,7 @@ function Player({ id }: { id: string }) {
     }
   }, [state.paused, activity, settings.pauseSpotlightSeconds])
   const panelOpen = settingsOpen || episodesOpen
-  const spotlightVisible = spotlightArmed && state.paused && !state.waiting && !panelOpen
+  const spotlightVisible = spotlightArmed && state.paused && !state.waiting && !panelOpen && breakDue === null
   const controlsVisible = (awake || state.paused || panelOpen) && !spotlightVisible
   // When the controls last appeared (see the click guard on them).
   const shownAt = useRef(0)
@@ -485,12 +533,13 @@ function Player({ id }: { id: string }) {
     if (controlsVisible) shownAt.current = performance.now()
   }, [controlsVisible])
 
-  const [fullscreen, setFullscreen] = useState(false)
+  // The shell, not this player, is what goes fullscreen: the next episode's player is born into it.
+  const [fullscreen, setFullscreen] = useState(() => typeof document !== 'undefined' && !!document.fullscreenElement && document.fullscreenElement === shell.current)
   useEffect(() => {
-    const onChange = () => setFullscreen(document.fullscreenElement === container.current)
+    const onChange = () => setFullscreen(document.fullscreenElement === shell.current)
     document.addEventListener('fullscreenchange', onChange)
     return () => document.removeEventListener('fullscreenchange', onChange)
-  }, [])
+  }, [shell])
 
   const togglePlay = useCallback(() => {
     const el = video.current
@@ -535,7 +584,7 @@ function Player({ id }: { id: string }) {
   }, [])
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) return void document.exitFullscreen()
-    const element = container.current
+    const element = shell.current
     const el = video.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null
     // iPhone Safari can only put the video itself fullscreen (with its own controls).
     if (!element?.requestFullscreen) return el?.webkitEnterFullscreen?.()
@@ -547,19 +596,15 @@ function Player({ id }: { id: string }) {
         if (el && el.videoWidth > el.videoHeight) void orientation.lock?.('landscape').catch(() => undefined)
       })
       .catch(() => undefined)
-  }, [])
+  }, [shell])
   // Leaving fullscreen lets the phone turn freely again.
   useEffect(() => {
     if (!fullscreen) (window.screen.orientation as ScreenOrientation & { unlock?: () => void } | undefined)?.unlock?.()
   }, [fullscreen])
   // Inside an app (Jellyfin's or Lumio's) the player is always fullscreen (no system bars, turned to landscape); there
-  // is no fullscreen to toggle.
+  // is no fullscreen to toggle. Held across episodes, so the screen stays turned the way the phone is held.
   const inApp = inNativeApp()
-  useEffect(() => {
-    if (!inApp) return
-    setAppFullscreen(true)
-    return () => void setAppFullscreen(false)
-  }, [inApp])
+  useEffect(() => (inApp ? holdAppFullscreen() : undefined), [inApp])
 
   // Picture-in-picture, where the browser offers it (Chromium, Safari; Firefox only has its own overlay button).
   const pipSupported = typeof document !== 'undefined' && document.pictureInPictureEnabled === true
@@ -862,7 +907,10 @@ function Player({ id }: { id: string }) {
     })
   }, [registerPlayer, seekLocal, progressiveTranscode, goBack, playNext, setVolume, toggleMute])
 
-  const openItem = useCallback((target: string) => void navigate(`/play/${target}`, { replace: true }), [navigate])
+  const openItem = useCallback(
+    (target: string) => void navigate(`/play/${target}`, { replace: true, state: { continuing: true } satisfies ContinuingState }),
+    [navigate],
+  )
   const closeEpisodes = useCallback(() => setEpisodesOpen(false), [])
   // Stays mounted while it slides back out.
   const episodesPresence = usePresence(episodesOpen)
@@ -893,9 +941,19 @@ function Player({ id }: { id: string }) {
 
   const cover = isAudio && item.data ? portraitImageUrl(api, item.data, { fillHeight: 640 }) : undefined
   // Until the video's first frame, the title's backdrop (as Jellyfin's own apps do); admins can turn it off.
+  // Not on the way from one episode to the next: the picture would flash up between them.
+  const continuing = !!(location.state as ContinuingState | null)?.continuing
   const loadingArt =
-    lumioConfig?.playerLoadingArt !== false && !isAudio && item.data ? (backdropImageUrl(api, item.data) ?? landscapeImageUrl(api, item.data, { fillWidth: 1600 })) : undefined
+    lumioConfig?.playerLoadingArt !== false && !isAudio && !continuing && item.data ? (backdropImageUrl(api, item.data) ?? landscapeImageUrl(api, item.data, { fillWidth: 1600 })) : undefined
   const firstFrame = startedFor === id
+  // The tap that brings the controls back must not also press the button that appears under the finger: the browser
+  // sends that tap's click after the controls are already there.
+  const guardShowingTap = (event: React.MouseEvent) => {
+    if (event.timeStamp - shownAt.current < SHOW_GRACE_MS) {
+      event.preventDefault()
+      event.stopPropagation()
+    }
+  }
   const delivery = !data ? '…' : data.hls ? t.deliveryHls : data.transcoded ? t.deliveryTranscoded : t.deliveryDirect
 
   return (
@@ -1004,10 +1062,25 @@ function Player({ id }: { id: string }) {
         <Button
           variant="secondary"
           className="absolute bottom-[4.75rem] right-4 z-20 animate-in fade-in-0 slide-in-from-right-4 duration-300 sm:right-8"
+          // Skipping leaves the controls as they are: hidden ones stay hidden (the focus would wake them), shown ones stay.
+          onFocus={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          onPointerUp={(event) => event.stopPropagation()}
           onClick={() => seek(activeSegment.end)}
         >
           {skipLabels[activeSegment.kind]}
         </Button>
+      )}
+
+      {breakDue !== null && (
+        <BreakReminder
+          minutes={breakDue}
+          onResume={() => {
+            setBreakDue(null)
+            if (video.current?.paused) togglePlay()
+          }}
+          onLeave={goBack}
+        />
       )}
 
       {scrubFrame && <ScrubPreview frame={scrubFrame} pictureArea={pictureArea} fit={settings.videoFit} screen={screen} />}
@@ -1028,16 +1101,24 @@ function Player({ id }: { id: string }) {
         />
       )}
 
+      {/* Outside the fading layer below: an ancestor that is see-through mid-fade hides the video from the buttons'
+          backdrop blur, which then only set in once the fade was over. They fade by themselves instead. */}
+      {touch && !panelOpen && (
+        <div onClickCapture={guardShowingTap}>
+          <TouchTransport
+            visible={controlsVisible && !appPip}
+            paused={state.paused}
+            onTogglePlay={togglePlay}
+            onSeekBy={seekBy}
+            skipBackSeconds={settings.skipBackSeconds}
+            skipForwardSeconds={settings.skipForwardSeconds}
+          />
+        </div>
+      )}
+
       <div
         className={cn('transition-opacity duration-300', (!controlsVisible || appPip) && 'pointer-events-none opacity-0')}
-        // The tap that brings the controls back must not also press the button that appears under the finger: the
-        // browser sends that tap's click after the controls are already there.
-        onClickCapture={(event) => {
-          if (event.timeStamp - shownAt.current < SHOW_GRACE_MS) {
-            event.preventDefault()
-            event.stopPropagation()
-          }
-        }}
+        onClickCapture={guardShowingTap}
       >
         <div data-titlebar data-titlebar-inset className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 bg-linear-to-b from-black/70 to-transparent pt-[max(1rem,var(--safe-top))] pr-[max(1rem,var(--safe-right))] pb-4 pl-[max(1rem,var(--safe-left))] text-white">
           <Button variant="ghost" size="icon" aria-label={t.back} onClick={goBack}>
@@ -1086,17 +1167,6 @@ function Player({ id }: { id: string }) {
             fit={isAudio ? undefined : settings.videoFit}
             autoFitLabel={autoFit}
             onFit={isAudio ? undefined : (videoFit) => updateSettings({ videoFit })}
-          />
-        )}
-
-        {touch && !panelOpen && (
-          <TouchTransport
-            visible={controlsVisible && !appPip}
-            paused={state.paused}
-            onTogglePlay={togglePlay}
-            onSeekBy={seekBy}
-            skipBackSeconds={settings.skipBackSeconds}
-            skipForwardSeconds={settings.skipForwardSeconds}
           />
         )}
 

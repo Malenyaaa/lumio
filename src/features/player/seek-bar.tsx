@@ -10,6 +10,8 @@ interface SeekBarProps {
   currentTime: number
   duration: number
   buffered: number
+  /** All buffered stretches (also ones further on, loaded before); without them, up to `buffered` from the start. */
+  ranges?: Array<[number, number]>
   onSeek: (seconds: number) => void
   /** Preview thumbnails; without it only the time is shown. */
   frameAt?: TrickplayLookup | null
@@ -22,7 +24,7 @@ interface SeekBarProps {
 /** Display width of a trickplay thumbnail in the preview bubble. */
 const PREVIEW_WIDTH = 176
 
-export function SeekBar({ currentTime, duration, buffered, onSeek, frameAt, pictureArea = FULL_FRAME, onScrub }: SeekBarProps) {
+export function SeekBar({ currentTime, duration, buffered, ranges, onSeek, frameAt, pictureArea = FULL_FRAME, onScrub }: SeekBarProps) {
   const t = useMessages(controlsMessages)
   const track = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<number | null>(null)
@@ -85,7 +87,14 @@ export function SeekBar({ currentTime, duration, buffered, onSeek, frameAt, pict
       onPointerLeave={() => setHover(null)}
     >
       <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-white/25 transition-[height] group-hover:h-1.5">
-        <div className="absolute inset-y-0 left-0 bg-white/35" style={{ width: `${duration ? (buffered / duration) * 100 : 0}%` }} />
+        {duration > 0 &&
+          (ranges ?? [[0, buffered]]).map(([start, end]) => (
+            <div
+              key={start}
+              className="absolute inset-y-0 bg-white/35"
+              style={{ left: `${(Math.max(0, start) / duration) * 100}%`, width: `${(Math.max(0, Math.min(end, duration) - Math.max(0, start)) / duration) * 100}%` }}
+            />
+          ))}
         <div className="absolute inset-y-0 left-0 bg-white" style={{ width: `${played * 100}%` }} />
       </div>
       <div

@@ -39,6 +39,32 @@ export function setAppFullscreen(on: boolean) {
   else native()?.disableFullscreen()
 }
 
+let fullscreenHolds = 0
+let fullscreenOn = false
+let fullscreenRelease: number | undefined
+
+/**
+ * The video player keeps the app fullscreen while it is open (returns the release). Letting go waits a moment: the next
+ * episode's player takes over at once, and the screen must not turn upright and back in between (landing on the
+ * default side of landscape rather than the one the phone was held at).
+ */
+export function holdAppFullscreen() {
+  fullscreenHolds++
+  window.clearTimeout(fullscreenRelease)
+  if (!fullscreenOn) {
+    fullscreenOn = true
+    setAppFullscreen(true)
+  }
+  return () => {
+    if (--fullscreenHolds > 0) return
+    fullscreenRelease = window.setTimeout(() => {
+      if (fullscreenHolds > 0 || !fullscreenOn) return
+      fullscreenOn = false
+      setAppFullscreen(false)
+    }, 400)
+  }
+}
+
 /** Leaving from the start page: Jellyfin's app goes to the background while music plays (else closes), Lumio's always. */
 export function exitApp() {
   if (inCapacitor()) return minimizeCapacitorApp()

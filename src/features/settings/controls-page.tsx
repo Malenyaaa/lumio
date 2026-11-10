@@ -21,13 +21,14 @@ function Key({ children }: { children: string }) {
   return <kbd className="rounded-md border bg-muted px-1.5 py-0.5 font-mono text-xs">{children}</kbd>
 }
 
-const RESET_KEYS = ['keyboardShortcuts', 'controlsHideSeconds', 'pauseSpotlightSeconds', 'playerGestures', 'playerGestureDeadzone'] as const
+const RESET_KEYS = ['keyboardShortcuts', 'controlsHideSeconds', 'pauseSpotlightSeconds', 'breakReminderMinutes', 'playerGestures', 'playerGestureDeadzone'] as const
 
 export function ControlsPage() {
   const { settings, update } = useLocalSettings()
   const t = useMessages(controlsMessages)
   const { seconds } = useMessages(fieldMessages)
   const hideOptions = [2, 3, 5, 8].map((value) => ({ value, label: seconds(value) }))
+  const breakOptions = [{ value: 0, label: t.never }, ...[60, 90, 120, 180].map((value) => ({ value, label: t.afterHours(value / 60) }))]
   const spotlightOptions = [{ value: 0, label: t.never }, ...[5, 10, 20, 30].map((value) => ({ value, label: t.afterSeconds(value) }))]
 
   return (
@@ -73,6 +74,14 @@ export function ControlsPage() {
           value={settings.pauseSpotlightSeconds}
           options={spotlightOptions}
           onChange={(value) => update({ pauseSpotlightSeconds: value })}
+        />
+        <SelectField
+          id="break-reminder"
+          label={t.breakLabel}
+          hint={t.breakHint}
+          value={settings.breakReminderMinutes}
+          options={breakOptions}
+          onChange={(value) => update({ breakReminderMinutes: value })}
         />
       </Section>
 
