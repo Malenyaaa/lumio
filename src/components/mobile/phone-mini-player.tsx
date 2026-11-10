@@ -1,3 +1,4 @@
+import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models'
 import { IconHeart, IconHeartFilled, IconLoader2, IconPlayerPauseFilled, IconPlayerPlayFilled } from '@tabler/icons-react'
 import { useRef, useState, type PointerEvent } from 'react'
 import { useNavigate } from 'react-router'
@@ -17,24 +18,30 @@ import { cn } from '@/lib/utils'
 
 /** Movement before a touch counts as a swipe (shorter ones stay taps). */
 const SLOP = 10
-/** A swipe this far (px) skips to the next or previous track. */
-const SKIP_AT = 70
+/** A swipe over this share of the text's width skips to the next or previous track. */
+const SKIP_SHARE = 0.3
+const SLIDE_MS = 200
 
 /**
- * Swiping the card sideways, as in Spotify: to the left skips to the next track, to the right goes back one. The
- * content follows the finger and slides out the way it was swiped; a short or vertical move snaps back (and scrolls).
+ * Swiping the card sideways, as in Spotify: only the title and artist move, the neighbouring track's following them in
+ * from the side, at most until it stands where the current one did. Let go past `SKIP_SHARE`, it slides the rest of
+ * the way and that track plays; otherwise it springs back. A side without a track (the queue's start or end) doesn't
+ * move; vertical moves scroll the page.
  */
-function useTrackSwipe(onNext: () => void, onPrevious: () => void) {
-  const start = useRef<{ x: number; y: number; id: number } | null>(null)
+function useTrackSwipe(hasPrevious: boolean, hasNext: boolean, onSkip: (side: 'previous' | 'next') => void) {
+  const start = useRef<{ x: number; y: number; id: number; width: number } | null>(null)
   const swiped = useRef(false)
+  const busy = useRef(false)
+  const lane = useRef<HTMLSpanElement>(null)
   const [offset, setOffset] = useState(0)
-  const [leaving, setLeaving] = useState<'left' | 'right' | null>(null)
-  const [dragging, setDragging] = useState(false)
+  // 'drag' follows the finger, 'slide' animates, 'jump' sets without animating (the new track taking its place).
+  const [motion, setMotion] = useState<'drag' | 'slide' | 'jump'>('slide')
+  const clamp = (dx: number, width: number) => Math.max(hasNext ? -width : 0, Math.min(hasPrevious ? width : 0, dx))
   const handlers = {
     onPointerDown: (event: PointerEvent) => {
       swiped.current = false
-      if (event.pointerType === 'mouse' || leaving) return
-      start.current = { x: event.clientX, y: event.clientY, id: event.pointerId }
+      if (event.pointerType === 'mouse' || busy.current || !lane.current) return
+      start.current = { x: event.clientX, y: event.clientY, id: event.pointerId, width: lane.current.clientWidth }
     },
     onPointerMove: (event: PointerEvent) => {
       const at = start.current
@@ -45,31 +52,31 @@ function useTrackSwipe(onNext: () => void, onPrevious: () => void) {
         // Mostly vertical: the page scrolls, this is no swipe.
         if (Math.abs(event.clientY - at.y) > Math.abs(dx)) return void (start.current = null)
         swiped.current = true
-        setDragging(true)
+        setMotion('drag')
         event.currentTarget.setPointerCapture(event.pointerId)
       }
-      setOffset(dx)
+      setOffset(clamp(dx, at.width))
     },
     onPointerUp: (event: PointerEvent) => {
       const at = start.current
       start.current = null
-      setDragging(false)
       if (!at || !swiped.current) return
-      const dx = event.clientX - at.x
-      if (Math.abs(dx) < SKIP_AT) return setOffset(0)
-      const side = dx < 0 ? 'left' : 'right'
-      setLeaving(side)
-      if (side === 'left') onNext()
-      else onPrevious()
-      // Out to the side, then the new track comes in from the other one.
+      const dx = clamp(event.clientX - at.x, at.width)
+      setMotion('slide')
+      if (Math.abs(dx) < at.width * SKIP_SHARE) return setOffset(0)
+      // The rest of the way; then the new track stands in the middle and the strip is set back underneath it.
+      busy.current = true
+      setOffset(dx < 0 ? -at.width : at.width)
       window.setTimeout(() => {
-        setLeaving(null)
+        onSkip(dx < 0 ? 'next' : 'previous')
+        setMotion('jump')
         setOffset(0)
-      }, 180)
+        busy.current = false
+      }, SLIDE_MS)
     },
     onPointerCancel: () => {
       start.current = null
-      setDragging(false)
+      setMotion('slide')
       setOffset(0)
     },
     // A swipe ends on one of the buttons: it must not also press it.
@@ -80,10 +87,24 @@ function useTrackSwipe(onNext: () => void, onPrevious: () => void) {
       event.stopPropagation()
     },
   }
-  const style = leaving
-    ? { transform: `translateX(${leaving === 'left' ? '-60%' : '60%'})`, opacity: 0, transition: 'transform 180ms ease-in, opacity 180ms ease-in' }
-    : { transform: offset ? `translateX(${offset}px)` : undefined, opacity: 1 - Math.min(0.6, Math.abs(offset) / 300), transition: dragging ? 'none' : 'transform 200ms ease-out, opacity 200ms ease-out' }
-  return { handlers, style }
+  const style = {
+    transform: offset ? `translateX(${offset}px)` : undefined,
+    transition: motion === 'slide' ? `transform ${SLIDE_MS}ms ease-out` : 'none',
+  }
+  return { handlers, lane, style }
+}
+
+/** Title and artists of one track (or, playing elsewhere, which device). */
+function TrackText({ track, remote }: { track: BaseItemDto; remote?: { name: string } | null }) {
+  const t = useMessages(playerBarMessages)
+  return (
+    <>
+      <span className="block truncate text-sm font-semibold">{track.Name}</span>
+      <span className={cn('block truncate text-xs', remote ? 'font-medium text-listen' : 'text-foreground/70')}>
+        {remote ? t.playingOn(remote.name) : <TrackArtists track={track} linked={false} />}
+      </span>
+    </>
+  )
 }
 
 /**
@@ -95,10 +116,13 @@ export function PhoneMiniPlayer({ onOpen }: { onOpen?: () => void }) {
   const { api } = useAuthedSession()
   const navigate = useNavigate()
   const t = useMessages(playerBarMessages)
-  const { track, playing, buffering, toggle, remote, next, previous } = usePlayerControls()
-  const { index } = useMusic()
-  // Back a whole track, as the swipe suggests (the button's "previous" restarts the track a few seconds in).
-  const swipe = useTrackSwipe(next, () => (!remote && index > 0 ? music.jump(index - 1) : previous()))
+  const { track, playing, buffering, toggle, remote } = usePlayerControls()
+  const { queue, index, repeat } = useMusic()
+  // The neighbours are known from this device's queue only (another device's isn't swiped).
+  const previousTrack = !remote && index > 0 ? queue[index - 1] : undefined
+  const nextTrack = remote ? undefined : (queue[index + 1] ?? (repeat === 'all' && queue.length > 1 ? queue[0] : undefined))
+  // A whole track back, as the swipe shows (the button's "previous" restarts the track a few seconds in).
+  const swipe = useTrackSwipe(!!previousTrack, !!nextTrack, (side) => (side === 'next' ? music.next() : music.jump(index - 1)))
   const cover = track ? portraitImageUrl(api, track, { fillHeight: 96 }) : undefined
   const tint = useDominantColor(cover).data
   if (!track) return null
@@ -113,15 +137,25 @@ export function PhoneMiniPlayer({ onOpen }: { onOpen?: () => void }) {
       // The cover's color; until it is known (or for a cover without one), a lighter grey that still stands out.
       style={{ background: tint ? `color-mix(in srgb, ${tint} 75%, var(--background))` : 'color-mix(in srgb, var(--foreground) 22%, var(--background))' }}
     >
-      <div className="flex h-full items-center gap-2.5 pr-1 pl-2 will-change-transform" style={swipe.style}>
-        <button type="button" onClick={() => (onOpen ? onOpen() : void navigate(itemHref(track)))} aria-label={t.openPlayer} className="flex min-w-0 flex-1 items-center gap-2.5 text-left outline-none">
+      <div className="flex h-full items-center gap-2.5 pr-1 pl-2">
+        <button type="button" onClick={() => (onOpen ? onOpen() : void navigate(itemHref(track)))} aria-label={t.openPlayer} className="flex min-w-0 flex-1 items-center gap-2.5 self-stretch text-left outline-none">
           <span className="size-10 shrink-0 overflow-hidden rounded-md bg-muted">
             {cover && <FadeImage key={cover} src={cover} alt="" className="size-full object-cover" />}
           </span>
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold">{track.Name}</span>
-            <span className={cn('block truncate text-xs', remote ? 'font-medium text-listen' : 'text-foreground/70')}>
-              {remote ? t.playingOn(remote.name) : <TrackArtists track={track} linked={false} />}
+          {/* Only the text moves: the neighbours wait one width to either side, outside the clipped lane. */}
+          <span ref={swipe.lane} className="relative min-w-0 flex-1 self-stretch overflow-hidden">
+            <span className="absolute inset-0 flex flex-col justify-center will-change-transform" style={swipe.style}>
+              <TrackText track={track} remote={remote} />
+              {previousTrack && (
+                <span aria-hidden className="absolute inset-0 flex -translate-x-full flex-col justify-center">
+                  <TrackText track={previousTrack} />
+                </span>
+              )}
+              {nextTrack && (
+                <span aria-hidden className="absolute inset-0 flex translate-x-full flex-col justify-center">
+                  <TrackText track={nextTrack} />
+                </span>
+              )}
             </span>
           </span>
         </button>
